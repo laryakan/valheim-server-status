@@ -13,14 +13,15 @@ function replace_env_value() {
   source "$CWD/.env"
 }
 
-function setup_vhserverdir() {
+# param1=value_label, param2=value_variable_in_.env
+function setup_value_prompt() {
   echo ""
-	echo '**Valheim Server Directory**'
-	echo "example : /home/steam/vhserver"
-	echo "current value : $VHSERVERDIR"
-	read VHSERVERDIR
-	replace_env_value 'VHSERVERDIR' "$VHSERVERDIR"
-	echo "new value set : $VHSERVERDIR"
+	echo "**$1**"
+	echo "current value : ${!2}"
+	echo "enter new value :"
+	read NEWVALUE
+	replace_env_value "$2" "$NEWVALUE"
+	echo "new value set : ${!2}"
 	echo ""
 }
 
@@ -50,7 +51,7 @@ $(ColorGreen '0)') Quit
 $(ColorBlue 'Choose an option:') "
         read a
         case $a in
-	        1) setup_vhserverdir ; menu ;;
+	        1) setup_value_prompt 'Valheim Server Directory' 'VHSERVERDIR' ; menu ;;
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
         esac
