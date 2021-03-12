@@ -76,6 +76,11 @@ $(ColorGreen '6)') setup $(ColorCyan 'wanted') last logs on your $(ColorMagenta 
 $(ColorGreen '7)') force $(ColorMagenta 'Discord') webhook update
 $(ColorGreen '8)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook status message id
 $(ColorGreen '9)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook last logs message id
+
+=== Setting up custom launcher ===
+$(ColorGreen '10)') setup $(ColorCyan 'wanted') Valheim server listening port
+
+
 $(ColorGreen '0)') quit
 $(ColorBlue 'choose an option:') "
         read a
