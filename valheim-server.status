@@ -1,15 +1,7 @@
 #!/bin/bash
-
-CWD=$(dirname "$0")
-
-# Valheim server PID
-VALSERVERPID=`pgrep valheim_server`
-
-# Connected players list
-CONNECTEDPLAYERSFILE="$CWD/valheim-server.online-players"
-
-# Offline players list
-OFFLINEPLAYERSFILE="$CWD/valheim-server.offline-players"
+# Basic env init
+VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$VMSDIR/env.sh"
 
 # Stats
 CPUUSAGE=$(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /4))

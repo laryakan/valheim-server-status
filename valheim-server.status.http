@@ -1,7 +1,7 @@
 #!/bin/bash
-
-CWD=$(dirname "$0")
-STATUSPORT=8181 #can be changed
+# Basic env init
+VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$VMSDIR/env.sh"
 
 echo -e "Valheim server status HTTP provider listening on port : $STATUSPORT..."
 ncat -vc "echo -e 'HTTP/1.1 200 OK\r\n'; $CWD/valheim-server.status" -kl $STATUSPORT -m 5 2>&1

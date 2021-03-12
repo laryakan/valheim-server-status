@@ -1,10 +1,11 @@
 #!/bin/bash
-
-CWD=$(dirname "$0")
+# Basic env init
+VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+#source "$VMSDIR/env.sh" #not usefull here, atm
 # Update server status
-"$CWD/valheim-server.status" --for-webhook | "$CWD/valheim-server.webhook.json.sender" --status
+"$VMSDIR/valheim-server.status" --for-webhook | "$VMSDIR/valheim-server.webhook.json.sender" --status
 
 # Output the 10 last stdout logs
-tail -10 < $(ls -1 $CWD/valheim-logs.d/*.stdout.log | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
+tail -10 < $(ls -1 $VMSDIR/valheim-logs.d/*.stdout.log | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
 {\"title\":\"Last Logs\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
-]}" | "$CWD/valheim-server.webhook.json.sender" "$(head -1 $CWD/valheim-server.webhook.last-logs-message-id)"
+]}" | "$CWD/valheim-server.webhook.json.sender" "$(head -1 $VMSDIR/valheim-server.webhook.last-logs-message-id)"

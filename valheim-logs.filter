@@ -1,22 +1,12 @@
 #!/bin/bash
-
+# Basic env init
+VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$VMSDIR/env.sh"
 # Valheim logs filters configuration
 # Read logs lines from STDIN to filter server logs dans distribute them
-
-CWD=$(dirname "$0")
-
-# Logs dir
-VALHEIMSERVERLOGSDIR="$CWD/valheim-logs.d"
-
-# Connected players list
-CONNECTEDPLAYERSFILE="$CWD/valheim-server.online-players"
-
-# Offline players list
-OFFLINEPLAYERSFILE="$CWD/valheim-server.offline-players"
-
-#Filter to remove debug dans blanks
+# This file is registering online/offline players
+# Filter to remove debug dans blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
-
 
 while read LINE; do
    # Remove debug and blank lines

@@ -1,8 +1,7 @@
 #!/bin/bash
+# Basic env init
+VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$VMSDIR/env.sh"
 
-CWD=$(dirname "$0")
-
-# Logs dir
-VALHEIMSERVERLOGSDIR="$CWD/valheim-logs.d"
-
+# Log search tool
 cat "$VALHEIMSERVERLOGSDIR"/*.log | grep "$1"
