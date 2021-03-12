@@ -66,34 +66,54 @@ menu(){
 echo -ne "
 ---------------------------------------
 === Valheim Server Monitoring - VSM ===
-$(ColorGreen '1)') setup $(ColorYellow 'current') Valheim server directory
-$(ColorGreen '2)') setup $(ColorCyan 'wanted') Valheim server logs directory
-$(ColorRed 'Please, pipe your valheim server start script on ./valheim-logs.filter or use my launcher')
-$(ColorGreen '3)') setup $(ColorCyan 'wanted') Valheim server status over HTTP port
-$(ColorGreen '4)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook ID
-$(ColorGreen '5)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook token
-$(ColorGreen '6)') setup $(ColorCyan 'wanted') last logs on your $(ColorMagenta 'Discord') channel
-$(ColorGreen '7)') force $(ColorMagenta 'Discord') webhook update
-$(ColorGreen '8)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook status message id
-$(ColorGreen '9)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook last logs message id
+$(ColorRed 'Please, pipe your valheim server start script on ./valheim-logs.filter or use my launcher, starting at 10)')
+$(ColorGreen '1)') setup $(ColorCyan 'wanted') Valheim server logs directory
+$(ColorGreen '2)') setup $(ColorCyan 'wanted') Valheim server status over HTTP port
 
-=== Setting up custom launcher ===
-$(ColorGreen '10)') setup $(ColorCyan 'wanted') Valheim server listening port
+=> Setting up $(ColorMagenta 'Discord') webhook <==
+$(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (appereance menu)')
+$(ColorGreen '3)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook ID
+$(ColorGreen '4)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook token
+$(ColorGreen '5)') setup 'how many' $(ColorCyan 'wanted') last logs on your $(ColorMagenta 'Discord') channel
+$(ColorGreen '6)') force $(ColorMagenta 'Discord') webhook update
+$(ColorGreen '7)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook status message id
+$(ColorGreen '8)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook last logs message id
 
+=> Setting up custom launcher <==
+$(ColorGreen '10)') setup $(ColorYellow 'current') Valheim server directory
+$(ColorGreen '11)') setup $(ColorCyan 'wanted') Valheim server listening port
+$(ColorGreen '12)') setup $(ColorCyan 'wanted') Valheim server name
+$(ColorGreen '13)') setup $(ColorCyan 'wanted') Valheim server world name
+$(ColorGreen '14)') setup $(ColorCyan 'wanted') Valheim server password
+$(ColorBlue 'You can find the launcher inside "launcher" directory or create a service')
+
+=> Advanced options, may require sudo <==
+$(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron
+$(ColorGreen '21)') setup a a logrotate
+$(ColorGreen '22)') setup a Valheim server systemd service
+$(ColorGreen '23)') setup a Valheim server status over HTTP systemd service
 
 $(ColorGreen '0)') quit
 $(ColorBlue 'choose an option:') "
         read a
         case $a in
-	        1) setup_value_prompt 'where is your dedicated server ?' 'VHSERVERDIR' ; menu ;;
-	        2) setup_value_prompt 'where do you want to put logs ?' 'VALHEIMSERVERLOGSDIR' ; menu ;;
-	        3) setup_value_prompt 'on which port do you want to provide your server status ?' 'STATUSPORT' ; menu ;;
-	        4) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook id ?" 'WEBHOOKID' ; menu ;;
-	        5) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook token ?" 'WEBHOOKTOKEN' ; menu ;;
-	        6) setup_value_prompt "how many logs do you want on your $(ColorMagenta 'Discord') ? set '0' if you dont want any" 'SENDLASTLOGS' ; menu ;;
-	        7) $CWD/discord/update ; menu ;;
-	        8) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook status message id ?" 'STATUSMESSAGEID' ; menu ;;
-	        9) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook 'last logs' message id ?" 'LASTLOGMESSAGEID' ; menu ;;
+	        1) setup_value_prompt 'where do you want to put logs ?' 'VALHEIMSERVERLOGSDIR' ; menu ;;
+	        2) setup_value_prompt 'on which port do you want to provide your server status ?' 'STATUSPORT' ; menu ;;
+	        3) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook id ?" 'WEBHOOKID' ; menu ;;
+	        4) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook token ?" 'WEBHOOKTOKEN' ; menu ;;
+	        5) setup_value_prompt "how many logs do you want on your $(ColorMagenta 'Discord') ? set '0' if you dont want any" 'SENDLASTLOGS' ; menu ;;
+	        6) $CWD/discord/update ; menu ;;
+	        7) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook status message id ?" 'STATUSMESSAGEID' ; menu ;;
+	        8) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook 'last logs' message id ?" 'LASTLOGMESSAGEID' ; menu ;;
+	        10) setup_value_prompt 'where is located your dedicated server ?' 'VHSERVERDIR' ; menu ;;
+	        11) setup_value_prompt 'on which port do you want your server to listen (default: 2456) ?' 'VHSERVERPORT' ; menu ;;
+	        12) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?' 'VHSERVERNAME' ; menu ;;
+	        13) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; menu ;;
+	        14) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?' 'VHSERVERPASSWD' ; menu ;;
+	        20) echo "not yet implemented, you can add it manually with \e[1mcrontab -e\e[21" ; menu ;;
+	        21) echo "not yet implemented, you can find examples in the example directory" ; menu ;;
+	        22) echo "not yet implemented, you can find examples in the example directory" ; menu ;;
+	        23) echo "not yet implemented, you can find examples in the example directory" ; menu ;;
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
         esac
