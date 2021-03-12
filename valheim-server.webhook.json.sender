@@ -1,7 +1,8 @@
 #!/bin/bash
+# author: laryakan, date 2021/03/12
 # Basic env init
-VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$VMSDIR/env.sh"
+VSMDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$VSMDIR/env.sh"
 
 # Sending status messages on Discord script
 CWD=$(dirname "$0")

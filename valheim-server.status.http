@@ -1,7 +1,8 @@
 #!/bin/bash
+# author: laryakan, date 2021/03/12
 # Basic env init
 VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$VMSDIR/env.sh"
+source "$VSMDIR/env.sh"
 
 echo -e "Valheim server status HTTP provider listening on port : $STATUSPORT..."
 ncat -vc "echo -e 'HTTP/1.1 200 OK\r\n'; $CWD/valheim-server.status" -kl $STATUSPORT -m 5 2>&1

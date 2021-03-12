@@ -1,15 +1,17 @@
+#!/bin/bash
+# author: laryakan, date 2021/03/12
 # VMS env file, everything between "set -o allexport" and "set +o allexport" will be exported
 set -o allexport
 # Root dir
-VMSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+VSMDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 # Valheim server dir
 VHSERVERDIR=''
 # Logs dir
-VALHEIMSERVERLOGSDIR="$VMSDIR/valheim-logs.d"
+VALHEIMSERVERLOGSDIR="$VSMDIR/valheim-logs.d"
 # Connected players list
-CONNECTEDPLAYERSFILE="$VMSDIR/valheim-server.online-players"
+CONNECTEDPLAYERSFILE="$VSMDIR/valheim-server.online-players"
 # Offline players list
-OFFLINEPLAYERSFILE="$VMSDIR/valheim-server.offline-players"
+OFFLINEPLAYERSFILE="$VSMDIR/valheim-server.offline-players"
 # Valheim server PID; If you run more than one server, please add a PID file
 
 ### STATUS ###

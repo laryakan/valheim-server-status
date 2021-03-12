@@ -1,4 +1,4 @@
-# ln -s </path/to/this/file> /etc/systemd/system/valheim-server.service
+# ln -s </path/to/this/valheim-server.service> /etc/systemd/system/valheim-server.service
 # sudo systemctl daemon-reload
 # sudo service valheim-server.status.http start
 # Your Valheim Server is running on the specified port
