@@ -2,15 +2,25 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/env.sh"
+if [ ! -f "$CWD/env" ]
+then
+  cp "$CWD/env.dist" "$CWD/env"
+fi
+source "$CWD/env"
 # VSM Setup menu
+function replace_env_value() {
+  cat "$CWD/env"|grep "$1="|xargs -I {} -t sed -i "s~{}~$1=\"$2\"~ig" "$CWD/env"
+  source "$CWD/env"
+}
+
 function setup_vhserverdir() {
   echo ""
 	echo '**Valheim Server Directory**'
 	echo "example : /home/steam/vhserver"
 	echo "current value : $VHSERVERDIR"
 	read VHSERVERDIR
-	echo $VHSERVERDIR
+	replace_env_value 'VHSERVERDIR' "$VHSERVERDIR"
+	echo "new value set : $VHSERVERDIR"
 	echo ""
 }
 
