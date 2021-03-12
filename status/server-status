@@ -5,7 +5,9 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$CWD/../.env"
 
 # Stats
-CPUUSAGE=$(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /4))
+TOTALCPU=$(cat /proc/cpuinfo|grep processor|wc -l) # Cores
+TOTALRAM=$(($(grep MemTotal /proc/meminfo|cut -d' ' -f9)/1024)) #(MB)
+CPUUSAGE=$(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /$TOTALCPU))
 RAMUSAGE=$(top -p $VALSERVERPID -b -n1 | awk '{print $10}' | tail -n1)
 
 if [ "$1" = '--for-webhook' ]
@@ -48,8 +50,8 @@ echo -e "\n**Server session running since**"
 ps -p $VALSERVERPID -o lstart,etime
 
 echo -e "\n**Server consumption**"
-echo -e "CPU (4 cores) : $(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /4))%"
-echo -e "RAM (8Go MAX) : `top -p $VALSERVERPID -b -n1 | awk '{print $10}' | tail -n1`%"
+echo -e "CPU ($TOTALCPU cores) : $CPUUSAGE%"
+echo -e "RAM ($TOTALRAM MB) : $RAMUSAGE%"
 
 echo -e "\n**Connected players**"
 cat "$CONNECTEDPLAYERSFILE"

@@ -6,9 +6,13 @@ source "$CWD/../.env"
 # Update server status
 "$VSMDIR/status/server-status" --for-webhook | "$CWD/webhook.json-sender" --status
 
-# Output the 10 last stdout logs if asked
+# Output the last stdout logs if asked
 if [ ! -z "$SENDLASTLOGS" ]
 then
+  if [ -z $(ls -1 $VALHEIMSERVERLOGSDIR/*.stdout.log) ]
+  then
+    echo 'no logs to send'
+  fi
   tail -$SENDLASTLOGS < $(ls -1 $VALHEIMSERVERLOGSDIR/*.stdout.log | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
 {\"title\":\"Last Logs\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
 ]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
