@@ -63,12 +63,14 @@ ColorMagenta(){
 }
 
 menu(){
+clear
 echo -ne "
 ---------------------------------------
 === Valheim Server Monitoring - VSM ===
 $(ColorRed 'Please, pipe your valheim server start script on ./valheim-logs.filter or use my launcher, starting at 10)')
 $(ColorGreen '1)') setup $(ColorCyan 'wanted') Valheim server logs directory
 $(ColorGreen '2)') setup $(ColorCyan 'wanted') Valheim server status over HTTP port
+$(ColorBlue 'You can find the script to launch VSM HTTP in status directory, or create a service')
 
 => Setting up $(ColorMagenta 'Discord') webhook <==
 $(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (appereance menu)')
@@ -85,9 +87,9 @@ $(ColorGreen '11)') setup $(ColorCyan 'wanted') Valheim server listening port
 $(ColorGreen '12)') setup $(ColorCyan 'wanted') Valheim server name
 $(ColorGreen '13)') setup $(ColorCyan 'wanted') Valheim server world name
 $(ColorGreen '14)') setup $(ColorCyan 'wanted') Valheim server password
-$(ColorBlue 'You can find the launcher inside "launcher" directory or create a service')
+$(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
 
-=> Advanced options, may require sudo <==
+=> Advanced options, may require sudo (not yet automated/implemented) <==
 $(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron
 $(ColorGreen '21)') setup a a logrotate
 $(ColorGreen '22)') setup a Valheim server systemd service
@@ -110,10 +112,10 @@ $(ColorBlue 'choose an option:') "
 	        12) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?' 'VHSERVERNAME' ; menu ;;
 	        13) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; menu ;;
 	        14) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?' 'VHSERVERPASSWD' ; menu ;;
-	        20) echo "not yet implemented, you can add it manually with \e[1mcrontab -e\e[21" ; menu ;;
-	        21) echo "not yet implemented, you can find examples in the example directory" ; menu ;;
-	        22) echo "not yet implemented, you can find examples in the example directory" ; menu ;;
-	        23) echo "not yet implemented, you can find examples in the example directory" ; menu ;;
+	        20) echo "not yet implemented, you can add it manually with \"crontab -e\"" ; sleep 2 ; menu ;;
+	        21) echo "not yet implemented, you can find examples in the example directory" ; sleep 2 ; menu ;;
+	        22) echo "not yet implemented, you can find examples in the example directory" ; sleep 2 ; menu ;;
+	        23) echo "not yet implemented, you can find examples in the example directory" ; sleep 2 ; menu ;;
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
         esac
