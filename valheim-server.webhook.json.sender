@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Sending status messages on Discord script
+
+CWD=$(dirname "$0")
+MESSAGEID=$(cat "$CWD/valheim-server.webhook.status-message-id")
+WEBHOOKID='<your-webhook-id>'
+WEBHOOKTOKEN='<you-webhook-token>'
+
+# help
+if [ "$1" = "-h" ]
+then
+	echo -e "usage:\n\
+json_to_send |./script <--status|message_id>"
+	exit 0
+fi
+
+# Not status send
+if [ "$1" != "--status" ]
+then
+	MESSAGEID="$1"
+fi
+CONTENT="$(</dev/stdin)"
+
+# Discord URL Webhook, chan "valheim-server" on Superf*ckfriends
+WHURL="https://discord.com/api/webhooks/$WEBHOOKID/$WEBHOOKTOKEN"
+
+# Check if a status message_id has been filled
+if [ ! -z "$MESSAGEID" ]
+then
+	#PATCH
+	CURL=$(curl -sH "Content-Type: application/json" -X PATCH -d "$CONTENT" "$WHURL/messages/$MESSAGEID" | grep '"code": 10008')
+	# You asked for a status update but the status message id doesnt exist
+	if [ ! -z "$CURL" ] && [ "$1" = "--status" ]
+	then
+		echo -e "Status message has been deleted from the server, \
+a new message will be sent, please fille the new id in ./valheim-server.webhook.status-message-id"
+	else
+		exit 0
+	fi
+
+fi
+
+
+
+#'{"content":"'"${domain} : ${status_code}"'"}'
+curl -sH "Content-Type: application/json" -X POST -d "$CONTENT" "$WHURL"
+

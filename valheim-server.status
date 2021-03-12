@@ -1,0 +1,65 @@
+#!/bin/bash
+
+CWD=$(dirname "$0")
+
+# Valheim server PID
+VALSERVERPID=`pgrep valheim_server`
+
+# Connected players list
+CONNECTEDPLAYERSFILE="$CWD/valheim-server.online-players"
+
+# Offline players list
+OFFLINEPLAYERSFILE="$CWD/valheim-server.offline-players"
+
+# Stats
+CPUUSAGE=$(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /4))
+RAMUSAGE=$(top -p $VALSERVERPID -b -n1 | awk '{print $10}' | tail -n1)
+
+if [ "$1" = '--for-webhook' ]
+then
+	if [ -z "$VALSERVERPID" ]
+	then
+		echo -n "{\"embeds\":[{\"title\":\"offline\",\"color\":15158332,\"url\":\"</url/to/your/status/page>:8181/\",\"fields\":[\
+{\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"}\
+]}]}"
+		exit 1
+	else
+		LIGHTONLINELIST=$(cat $CONNECTEDPLAYERSFILE|cut -d';' -f2|sed 1d|sed ':a;N;$!ba;s/\n/, /g')
+		LIGHTOFFLINELIST=$(cat $OFFLINEPLAYERSFILE|cut -d';' -f2|sed 1d|sed ':a;N;$!ba;s/\n/, /g')
+		echo -n "{\
+\"title\":\"Valheim server status\",\
+\"embeds\":[\
+{\"title\":\"online\",\"color\":3066993,\"url\":\"</url/to/your/status/page>:8181/\",\"fields\":[\
+{\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"},\
+{\"name\":\"CPU\",\"value\": \"$CPUUSAGE%\",\"inline\":true},\
+{\"name\":\"RAM\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\
+{\"name\":\"Online\",\"value\": \"${LIGHTONLINELIST:-nobody}\"},\
+{\"name\":\"Offline\",\"value\": \"${LIGHTOFFLINELIST:-nobody}\"}\
+]}\
+]}"
+	fi
+	exit 0
+fi
+
+
+echo -e ">=VALHEIM SERVER STATUS @ `date +'%F.%T'`=<"
+if [ -z "$VALSERVERPID" ]
+then
+	echo -e "SERVER OFFLINE !"
+	exit 1
+else
+	echo -e "SERVER ONLINE !"
+fi
+
+echo -e "\n**Server session running since**"
+ps -p $VALSERVERPID -o lstart,etime
+
+echo -e "\n**Server consumption**"
+echo -e "CPU (4 cores) : $(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /4))%"
+echo -e "RAM (8Go MAX) : `top -p $VALSERVERPID -b -n1 | awk '{print $10}' | tail -n1`%"
+
+echo -e "\n**Connected players**"
+cat "$CONNECTEDPLAYERSFILE"
+
+echo -e "\n**Offline players**"
+cat "$OFFLINEPLAYERSFILE"

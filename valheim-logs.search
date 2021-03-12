@@ -1,0 +1,8 @@
+#!/bin/bash
+
+CWD=$(dirname "$0")
+
+# Logs dir
+VALHEIMSERVERLOGSDIR="$CWD/valheim-logs.d"
+
+cat "$VALHEIMSERVERLOGSDIR"/*.log | grep "$1"

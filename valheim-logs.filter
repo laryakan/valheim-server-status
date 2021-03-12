@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Valheim logs filters configuration
+# Read logs lines from STDIN to filter server logs dans distribute them
+
+CWD=$(dirname "$0")
+
+# Logs dir
+VALHEIMSERVERLOGSDIR="$CWD/valheim-logs.d"
+
+# Connected players list
+CONNECTEDPLAYERSFILE="$CWD/valheim-server.online-players"
+
+# Offline players list
+OFFLINEPLAYERSFILE="$CWD/valheim-server.offline-players"
+
+#Filter to remove debug dans blanks
+NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
+
+
+while read LINE; do
+   # Remove debug and blank lines
+   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stdout.log"
+   
+   # Get connected players
+   CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`
+   if [ ! -z "$CONNECTION" ]
+   then
+	PZ=`echo "$CONNECTION"|cut -d' ' -f7,9|cut -d':' -f1`
+	CHOUR=`date +'%F.%T'`
+	PLAYERNAME=`echo $PZ|cut -d' ' -f1`
+	ZDOID=`echo $PZ|cut -d' ' -f2`
+
+	# Remove from offline players list
+	sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
+
+	# detect respawn (double connection and/or death) for the same Character
+	ALREADYREGISTEREDSTR=`grep "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
+	if [ -z "$ALREADYREGISTEREDSTR" ]
+	then
+		# new connection
+		echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
+	fi
+   fi
+
+   # Get disconnected players
+   DISCOZDOID=`echo ${LINE} |grep "Destroying abandoned non persistent zdo"|head -1|cut -d' ' -f10`
+   if [ ! -z "$DISCOZDOID" ]
+   then
+     # Add to offline players list
+     grep "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
+     # Delete from online players   
+     sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
+   fi
+
+done
+

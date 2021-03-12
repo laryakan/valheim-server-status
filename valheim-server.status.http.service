@@ -1,0 +1,26 @@
+# ln -s </path/to/this/file> /etc/systemd/system/valheim-server.status.http.service
+# sudo systemctl daemon-reload
+# sudo service valheim-server.status.http start
+# Listening on configured port to display server status
+[Unit]
+Description=Valheim Server Status over HTTP
+Wants=network-online.target
+After=syslog.target network.target nss-lookup.target network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+User=<steam-user>
+Group=<steam-user>
+ExecStart=</path/to/valheim-server.status.http>
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s INT $MAINPID
+WorkingDirectory=<path/to/valheim-server.status.http/dir>
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target
+
