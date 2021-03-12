@@ -36,12 +36,16 @@ function show_config() {
 ##
 # Colors
 ##
+red='\e[31m'
 green='\e[32m'
 blue='\e[34m'
 cyan='\e[36m'
 yellow='\e[93m'
 magenta='\e[35m'
 clear='\e[0m'
+ColorRed(){
+	echo -ne $red$1$clear
+}
 ColorGreen(){
 	echo -ne $green$1$clear
 }
@@ -54,7 +58,7 @@ ColorCyan(){
 ColorYellow(){
 	echo -ne $yellow$1$clear
 }
-ColorMagenta){
+ColorMagenta(){
 	echo -ne $magenta$1$clear
 }
 
@@ -64,6 +68,7 @@ echo -ne "
 === Valheim Server Monitoring - VSM ===
 $(ColorGreen '1)') setup $(ColorYellow 'current') Valheim server directory
 $(ColorGreen '2)') setup $(ColorCyan 'wanted') Valheim server logs directory
+$(ColorRed 'Please, pipe your valheim server start script on ./valheim-logs.filter or use my launcher')
 $(ColorGreen '3)') setup $(ColorCyan 'wanted') Valheim server status over HTTP port
 $(ColorGreen '4)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook ID
 $(ColorGreen '5)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook token
