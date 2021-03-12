@@ -1,0 +1,16 @@
+#!/bin/bash
+# author: laryakan, date 2021/03/12
+# Basic env init
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/../env.sh"
+# Update server status
+"$VSMDIR/status/server-status" --for-webhook | "$CWD/webhook.json-sender" --status
+
+# Output the 10 last stdout logs if asked
+if [ ! -z "$SENDLASTLOGS" ]
+then
+  tail -$SENDLASTLOGS < $(ls -1 $VALHEIMSERVERLOGSDIR/*.stdout.log | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
+{\"title\":\"Last Logs\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
+]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
+fi
+

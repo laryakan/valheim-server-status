@@ -1,8 +1,8 @@
 #!/bin/bash
 # author: laryakan, date 2021/03/12
 # Basic env init
-VSMDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$VSMDIR/env.sh"
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/env.sh"
 
 # Log search tool
 cat "$VALHEIMSERVERLOGSDIR"/*.log | grep "$1"
