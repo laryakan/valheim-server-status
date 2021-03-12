@@ -2,7 +2,7 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/../env"
+source "$CWD/../.env"
 
 echo -e "Valheim server status HTTP provider listening on port : $STATUSPORT..."
 ncat -vc "echo -e 'HTTP/1.1 200 OK\r\n'; $CWD/valheim-server.status" -kl $STATUSPORT -m 5 2>&1

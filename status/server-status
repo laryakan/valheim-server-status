@@ -2,7 +2,7 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/../env"
+source "$CWD/../.env"
 
 # Stats
 CPUUSAGE=$(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /4))

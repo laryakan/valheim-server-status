@@ -3,7 +3,7 @@
 
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/../env"
+source "$CWD/../.env"
 # Valheim Server logs filter
 # This script brings a Valheim Logs Management which doesn't exist derectly through steamcmd and Valheim server ATM
 # YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how
