@@ -162,10 +162,10 @@ $(ColorGreen '1)') setup a user for executing services
 $(ColorGreen '2)') setup Valheim server launcher (recommended to user default custom launcher)
 
 => Advanced options <=
-$(ColorGreen '10)') $(ColorRed 'sudo required'), activate logrotate on Valheim server logs
-$(ColorGreen '11)') $(ColorRed 'sudo required'), desactivate logrotate on Valheim server logs
-$(ColorGreen '20)') $(ColorRed 'sudo required'), update and activate valheim-server.service
-$(ColorGreen '21)') $(ColorRed 'sudo required'), update and activate vsm.http.service (server status over HTTP)
+$(ColorGreen '10)') $(ColorYellow 'sudo recommended'), activate logrotate on Valheim server logs
+$(ColorGreen '11)') $(ColorYellow 'sudo recommended'), desactivate logrotate on Valheim server logs
+$(ColorGreen '20)') $(ColorYellow 'sudo recommended'), update and activate valheim-server.service
+$(ColorGreen '21)') $(ColorYellow 'sudo recommended'), update and activate vsm.http.service (server status over HTTP)
 
 $(ColorGreen '0)') return to previous menu
 $(ColorBlue 'choose an option:') "
@@ -216,7 +216,7 @@ $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a 
 
 => Advanced options <==
 $(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron frequency
-$(ColorGreen '30)') $(ColorRed 'sudo required'), service menu
+$(ColorGreen '30)') $(ColorYellow 'sudo recommended'), service menu
 
 $(ColorGreen '0)') quit (CTRL+C)
 $(ColorBlue 'choose an option:') "
