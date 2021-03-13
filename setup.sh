@@ -48,7 +48,7 @@ if [ ! -z $VALSERVERPID ];then echo -ne "Valheim Server $(ColorGreen online)";el
 
 # env conf value changing function
 function replace_env_value() {
-  cat "$CWD/.env"|grep "$1="|xargs -I {} -t sed -i "s~{}~$1=\"$2\"~ig" "$CWD/.env"
+  cat "$CWD/.env"|grep "$1="|xargs -I {} -t sed -i "s[{}[$1=\"$2\"[ig" "$CWD/.env"
   source "$CWD/.env"
 }
 
@@ -98,26 +98,26 @@ function set_service(){
 	cp "$CWD/examples/$SERVICENAME" "$CWD/systemd/$SERVICENAME"
 
 	# steam real exec user
-	sed -i "s/###EXECUSER###/$USERSERVICE/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###EXECUSER###[$USERSERVICE[g" "$CWD/systemd/$SERVICENAME"
 
 	if [ "$SERVICENAME" = 'valheim-server.service' ]
 	then
 	# set steamcmd path for server update
-	sed -i "s/###STEAMCMDPATH###/$STEAMCMD/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###STEAMCMDPATH###[$STEAMCMD[g" "$CWD/systemd/$SERVICENAME"
 	# set valheim server dir for server update
-	sed -i "s/###STEAMCMDPATH###/$STEAMCMD/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###STEAMCMDPATH###[$STEAMCMD[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher path
-	sed -i "s/###VHSERVERLAUNCHER###/$VHSERVERLAUNCHER/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VHSERVERLAUNCHER###[$VHSERVERLAUNCHER[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher dir
-	sed -i "s/###VHSERVERLAUNCHERDIR###/$VHSERVERLAUNCHERDIR/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VHSERVERLAUNCHERDIR###[$VHSERVERLAUNCHERDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
 
 	if [ "$SERVICENAME" = 'vsm.http.service' ]
 	then
 	# set steamcmd path for server update
-	sed -i "s/###VSMHTTP###/$VSMHTTP/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VSMHTTP###[$VSMHTTP[g" "$CWD/systemd/$SERVICENAME"
 	# set valheim server dir for server update
-	sed -i "s/###VSMHTTPDIR###/$VSMHTTPDIR/g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VSMHTTPDIR###[$VSMHTTPDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
 	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
 	NOSUDO=$?
@@ -141,7 +141,7 @@ function set_logrotate(){
 	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
 
 	# set real path
-	sed -i "s/###VALHEIMSERVERLOGSDIR###/$VALHEIMSERVERLOGSDIR/g" "$CWD/systemd/valheim.logrotate"
+	sed -i "s/###VALHEIMSERVERLOGSDIR###/${VALHEIMSERVERLOGSDIR}/g" "$CWD/systemd/valheim.logrotate"
 	sudo ln -s "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
 	NOSUDO=$?
 	# missing sudo fallback
