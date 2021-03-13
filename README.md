@@ -88,9 +88,10 @@ If you want to remove component that the setup has created :
 - head
 - echo
 - ps
-#### in the future
-- trap
-- inotifywait (maybe)
+#### in the future (maybe)
+- trap 
+- inotifywait
+- jq
 
 ### Logs filter through custom Valheim Server Launch
 - tee (not mandatory if you redirect logs by other means)
