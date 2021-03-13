@@ -53,6 +53,11 @@ if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE") ];then echo -e "Webh
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSMHTTPSERVICENAME" ];then echo -e "$VSMHTTPSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VSMHTTPSERVICENAME is $(ColorRed 'missing') in system";fi
 
+echo ""
+echo "--Ports--"
+echo -e "Please, run \e[1msudo ufw status\e[0m (firewall) to see if these ports are open:"
+echo -e "- $VHSERVERPORT to $(($VHSERVERPORT+2))/tcp/udp (Valheim server)"
+echo -e "- $STATUSPORT/tcp (VSM over HTTP)"
 }
 
 # env conf value changing function
@@ -183,9 +188,10 @@ $(ColorGreen '2)') setup a user for executing services
 $(ColorGreen '3)') setup Valheim server launcher (recommended to user default custom launcher)
 
 => Advanced options <=
-$(ColorGreen '10)') $(ColorYellow 'sudo recommended'), activate logrotate on Valheim server logs
-$(ColorGreen '20)') $(ColorYellow 'sudo recommended'), update and activate valheim-server.service (your server through service)
-$(ColorGreen '21)') $(ColorYellow 'sudo recommended'), update and activate vsm.http.service (server status over HTTP)
+$(ColorGreen '4)') setup $(ColorMagenta 'Discord') webhook update cron frequency
+$(ColorGreen '5)') $(ColorYellow 'sudo recommended'), activate logrotate on Valheim server logs
+$(ColorGreen '6)') $(ColorYellow 'sudo recommended'), add and activate valheim-server.service (your server through service)
+$(ColorGreen '7)') $(ColorYellow 'sudo recommended'), add and activate vsm.http.service (server status over HTTP)
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -197,9 +203,10 @@ mkdir -p "$CWD/systemd"
 			1) clear ; setup_status ; service_menu ;;
 	        2) setup_value_prompt 'whats the user you want to execute service ?' 'VALHEIMSERVERLOGSDIR' ; clear ; service_menu ;;
 			3) setup_value_prompt "which launcher do you want to use ? remember to put server output on $( basename $VSMLOGFILTER ) stdin" 'VHSERVERLAUNCHER' ; clear ; service_menu ;;
-			10) set_logrotate ; sleep 5 ; clear ;  service_menu ;;
-			20) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
-			21) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
+			4) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; service_menu ;;
+			5) set_logrotate ; sleep 5 ; clear ;  service_menu ;;
+			6) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
+			7) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
@@ -212,11 +219,13 @@ echo -ne "
 === Valheim Server Monitoring - VSM ===
 *** Uninstall menu ***
 $(ColorGreen '1) get the setup status')
-$(ColorGreen '2) remove webhook crontab (no more auto-update)')
-$(ColorGreen '3) $(ColorRed 'sudo required') remove logrotate on server logs')
-$(ColorGreen '4) $(ColorRed 'sudo required') remove valheim-server.service (your server through service)')
-$(ColorGreen '5) $(ColorRed 'sudo required') remove vsm.http.service (server status over HTTP)')
-$(ColorGreen '10) $(ColorRed 'sudo required') remove all previously listed components')
+$(ColorGreen '2)') remove webhook crontab (no more auto-update)
+$(ColorGreen '3)') $(ColorRed 'sudo required') remove logrotate on server logs
+$(ColorGreen '4)') $(ColorRed 'sudo required') remove valheim-server.service (your server through service)
+$(ColorGreen '5)') $(ColorRed 'sudo required') remove vsm.http.service (server status over HTTP)
+
+=> Uninstall all <==
+$(ColorGreen '10)') $(ColorRed 'sudo required') remove all previously listed components
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -246,7 +255,7 @@ $(ColorBlue 'If its a new install, follow steps in order.')
 $(ColorBlue 'If you have setted things manually for version <2, please reset your server state')
 $(ColorRed 'Please, pipe your valheim server start script (launcher) on')
 $(ColorRed $VSMLOGFILTER)
-$(ColorRed 'or use my launcher, starting at 10)')
+$(ColorRed 'or use my launcher, steps 10),11),12),13) and 14) + service setup -> 20) then 6) in service menu')
 $(ColorGreen '1) get the setup status')
 $(ColorGreen '2)') setup wanted Valheim server logs directory
 $(ColorGreen '3)') setup wanted Valheim server status over HTTP port
@@ -269,9 +278,8 @@ $(ColorGreen '14)') setup wanted Valheim server password
 $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
 
 => Advanced options <==
-$(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron frequency
-$(ColorGreen '30)') $(ColorYellow 'sudo recommended'), service menu
-$(ColorGreen '50)') $(ColorYellow 'sudo recommended'), uninstall menu
+$(ColorGreen '20)') $(ColorYellow 'sudo recommended'), service menu
+$(ColorGreen '30)') $(ColorYellow 'sudo recommended'), uninstall menu
 
 $(ColorGreen '0)') quit
 $(ColorGreen 'CTRL+C)') quit
@@ -292,9 +300,8 @@ $(ColorBlue 'choose an option:') "
 	        12) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?' 'VHSERVERNAME' ; clear ; menu ;;
 	        13) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; menu ;;
 	        14) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?' 'VHSERVERPASSWD' ; clear ; menu ;;
-	        20) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; menu ;;
-	        30) clear ; service_menu ;;
-			50) clear ; uninstall_menu ;;
+	        20) clear ; service_menu ;;
+			30) clear ; uninstall_menu ;;
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
         esac
