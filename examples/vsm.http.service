@@ -1,6 +1,7 @@
-# ln -s </path/to/this/file> /etc/systemd/system/valheim-server.status.http.service
+# ln -s </path/to/this/vsm.http.service> /etc/systemd/system/vsm.http.service
 # sudo systemctl daemon-reload
-# sudo service valheim-server.status.http start
+# sudo service vsm.http start
+# systemctl enable vsm.http.service -> this to auto-start at system reboot
 # Listening on configured port to display server status
 [Unit]
 Description=Valheim Server Status over HTTP
@@ -13,12 +14,12 @@ Restart=on-failure
 RestartSec=5
 StartLimitInterval=60s
 StartLimitBurst=3
-User=<steam-user>
-Group=<steam-user>
-ExecStart=</path/to/valheim-server.status.http>
+User=###EXECUSER###
+Group=###EXECUSER###
+ExecStart=###VSMHTTP###
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID
-WorkingDirectory=<path/to/valheim-server.status.http/dir>
+WorkingDirectory=###VSMHTTPDIR###
 LimitNOFILE=100000
 
 [Install]
