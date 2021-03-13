@@ -61,7 +61,7 @@ function set_service(){
 	// TODO
 }
 
-# Setup service with conf values
+# Setup service with conf values, setup is $1=1; setdown is $1=2
 function set_logrotate(){
 	// TODO
 }
@@ -76,7 +76,7 @@ function show_config() {
 ##
 red='\e[31m'
 green='\e[32m'
-blue='\e[34m'
+blue='\e[94m'
 cyan='\e[36m'
 yellow='\e[93m'
 magenta='\e[35m'
@@ -117,7 +117,7 @@ $(ColorGreen '21)') $(ColorRed 'sudo required'), update and activate vsm.http.se
 
 $(ColorGreen '0)') return to previous menu
 $(ColorBlue 'choose an option:') "
-mkdir "$CWD/systemd"
+mkdir -p "$CWD/systemd"
         read a
         case $a in
 	        1) setup_value_prompt 'whats the user you want to execute service ?' 'VALHEIMSERVERLOGSDIR' ; service_menu ;;
@@ -137,33 +137,35 @@ clear
 echo -ne "
 ---------------------------------------
 === Valheim Server Monitoring - VSM ===
-$(ColorBlue 'If it\'s a new install, follow steps in order. If you have setted things manually for version <2, please reset your server state')
-$(ColorRed 'Please, pipe your valheim server start script (launcher) on ./valheim-logs.filter or use my launcher, starting at 10)')
-$(ColorGreen '1)') setup $(ColorCyan 'wanted') Valheim server logs directory
-$(ColorGreen '2)') setup $(ColorCyan 'wanted') Valheim server status over HTTP port
+$(ColorBlue 'If its a new install, follow steps in order.')
+$(ColorBlue 'If you have setted things manually for version <2, please reset your server state')
+$(ColorRed 'Please, pipe your valheim server start script (launcher) on ./valheim-logs.filter')
+$(ColorRed 'or use my launcher, starting at 10)')
+$(ColorGreen '1)') setup wanted Valheim server logs directory
+$(ColorGreen '2)') setup wanted Valheim server status over HTTP port
 $(ColorBlue 'You can find the script to launch VSM HTTP in status directory, or create a service in service menu')
 
 => Setting up $(ColorMagenta 'Discord') webhook <==
 $(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (appereance menu)')
-$(ColorGreen '3)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook URL
-$(ColorGreen '4)') setup 'how many' $(ColorCyan 'wanted') last logs on your $(ColorMagenta 'Discord') channel
+$(ColorGreen '3)') setup current $(ColorMagenta 'Discord') webhook URL
+$(ColorGreen '4)') setup 'how many' wanted last logs on your $(ColorMagenta 'Discord') channel
 $(ColorGreen '5)') force $(ColorMagenta 'Discord') webhook update
-$(ColorGreen '6)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook status message id
-$(ColorGreen '7)') setup $(ColorYellow 'current') $(ColorMagenta 'Discord') webhook last logs message id
+$(ColorGreen '6)') setup current $(ColorMagenta 'Discord') webhook status message id
+$(ColorGreen '7)') setup current $(ColorMagenta 'Discord') webhook last logs message id
 
 => Setting up custom launcher <==
-$(ColorGreen '10)') setup $(ColorYellow 'current') Valheim server directory
-$(ColorGreen '11)') setup $(ColorCyan 'wanted') Valheim server listening port
-$(ColorGreen '12)') setup $(ColorCyan 'wanted') Valheim server name
-$(ColorGreen '13)') setup $(ColorCyan 'wanted') Valheim server world name
-$(ColorGreen '14)') setup $(ColorCyan 'wanted') Valheim server password
+$(ColorGreen '10)') setup current Valheim server directory
+$(ColorGreen '11)') setup wanted Valheim server listening port
+$(ColorGreen '12)') setup wanted Valheim server name
+$(ColorGreen '13)') setup wanted Valheim server world name
+$(ColorGreen '14)') setup wanted Valheim server password
 $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
 
 => Advanced options <==
 $(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron frequency
 $(ColorGreen '30)') $(ColorRed 'sudo required'), service menu
 
-$(ColorGreen '0)') quit
+$(ColorGreen '0)') quit (CTRL+C)
 $(ColorBlue 'choose an option:') "
         read a
         case $a in
