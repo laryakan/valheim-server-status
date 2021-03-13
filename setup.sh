@@ -43,7 +43,16 @@ function setup_status(){
 ---------------------------------------
 ========== VSM- Setup status ==========
 "
-if [ ! -z $VALSERVERPID ];then echo -ne "Valheim Server $(ColorGreen online)";else echo -ne "Valheim Server $(ColorRed offline)";fi
+if [ ! -z $VALSERVERPID ];then echo -e "Valheim Server $(ColorGreen online)";else echo -e "Valheim Server $(ColorRed offline)";fi
+if [ ! -z $(pgrep $(basename $VSMLOGFILTER)) ];then echo -e "VSM logs filter $(ColorGreen running)";else echo -e "VSM logs filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
+if [ "$VHSERVERWORLD" != 'server.world' ];then echo -e "Custom launcher world $(ColorGreen 'is set')";else echo -e "Custom launcher world $(ColorRed 'has default value')";fi
+if [ -e '/etc/logrotate.d/valheim' ];then echo -e "logrotate $(ColorGreen set)";else echo -e "logrotate $(ColorRed 'not set')";fi
+if [ "$WEBHOOKTOKEN" != 'webhookToken' ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen ready)";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'not ready')";fi
+if [ ! -z "$STATUSMESSAGEID" ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'can update status')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'cannot update status')";fi
+if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE") ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
+if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME is $(ColorRed 'missing') in system";fi
+if [ -e "/etc/systemd/system/$VSMHTTPSERVICENAME" ];then echo -e "$VSMHTTPSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VSMHTTPSERVICENAME is $(ColorRed 'missing') in system";fi
+
 }
 
 # env conf value changing function
@@ -100,7 +109,7 @@ function set_service(){
 	# steam real exec user
 	sed -i "s[###EXECUSER###[$USERSERVICE[g" "$CWD/systemd/$SERVICENAME"
 
-	if [ "$SERVICENAME" = 'valheim-server.service' ]
+	if [ "$SERVICENAME" = "$VHSERVERSERVICENAME" ]
 	then
 	# set steamcmd path for server update
 	sed -i "s[###STEAMCMDPATH###[$STEAMCMD[g" "$CWD/systemd/$SERVICENAME"
@@ -112,13 +121,14 @@ function set_service(){
 	sed -i "s[###VHSERVERLAUNCHERDIR###[$VHSERVERLAUNCHERDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
 
-	if [ "$SERVICENAME" = 'vsm.http.service' ]
+	if [ "$SERVICENAME" = "$VSMHTTPSERVICENAME" ]
 	then
 	# set steamcmd path for server update
 	sed -i "s[###VSMHTTP###[$VSMHTTP[g" "$CWD/systemd/$SERVICENAME"
 	# set valheim server dir for server update
 	sed -i "s[###VSMHTTPDIR###[$VSMHTTPDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
+	# binding with systemd
 	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
 	NOSUDO=$?
 	# missing sudo fallback
@@ -176,8 +186,8 @@ mkdir -p "$CWD/systemd"
 	        1) setup_value_prompt 'whats the user you want to execute service ?' 'VALHEIMSERVERLOGSDIR' ; clear ; service_menu ;;
 			2) setup_value_prompt "which launcher do you want to use ? remember to put server output on $( basename $VSMLOGFILTER ) stdin" 'VHSERVERLAUNCHER' ; clear ; service_menu ;;
 			10) set_logrotate ; sleep 10 ; clear ;  service_menu ;;
-			20) set_service 'valheim-server.service'; sleep 10 ; clear ;  service_menu ;;
-			21) set_service 'vsm.http.service'; sleep 10 ; clear ;  service_menu ;;
+			20) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
+			21) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;

@@ -4,7 +4,7 @@
 # systemctl enable vsm.http.service -> this to auto-start at system reboot
 # Listening on configured port to display server status
 [Unit]
-Description=Valheim Server Status over HTTP
+Description=Valheim Server Monitoring over HTTP
 Wants=network-online.target
 After=syslog.target network.target nss-lookup.target network-online.target
 
