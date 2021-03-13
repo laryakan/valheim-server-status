@@ -141,7 +141,7 @@ function set_logrotate(){
 	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
 
 	# set real path
-	sed -i "s/###VALHEIMSERVERLOGSDIR###/${VALHEIMSERVERLOGSDIR}/g" "$CWD/systemd/valheim.logrotate"
+	sed -i "s[###VALHEIMSERVERLOGSDIR###[${VALHEIMSERVERLOGSDIR}[g" "$CWD/systemd/valheim.logrotate"
 	sudo ln -s "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
 	NOSUDO=$?
 	# missing sudo fallback
