@@ -46,7 +46,7 @@ You can also scroll up to previous views.
 
 
 ### Discord Valheim Server Status
-![discord-status](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-discord-status.JPG?raw=true)
+![discord-status](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-discord-status.JPG?raw=true)![discord-logs](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-discord-logs.JPG?raw=true)
 - If you want to have info like online player and incoming new features, you absolutely need to use the logs filter to manage logs
 - Go to Discord, create a webhook [How to ?](https://help.dashe.io/en/articles/2521940-how-to-create-a-discord-webhook-url) and enable developer mode [How to ?](https://www.followchain.org/copy-message-id-discord/)
 - Copy your webhook URL (containing webhook id and webhook token)
@@ -60,7 +60,7 @@ You can also scroll up to previous views.
 - Force a Discord update with option **6** to check if messages are updated and not created
 - Go into the **./setup**, then option **20** (to enter the service menu), then option **4** to setup update frequency (integer in minutes)
 > Setting up a frequency >0 will automatically create a cron to update your server status on Discord. Set the frequency to 0 to remove auto-update.
-![discord-logs](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-discord-logs.JPG?raw=true)
+
 
 ## Uninstall
 If you want to remove component that the setup has created :
