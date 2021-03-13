@@ -14,7 +14,7 @@ if [ "$1" = '--for-webhook' ]
 then
 	if [ -z "$VALSERVERPID" ]
 	then
-		echo -n "{\"embeds\":[{\"title\":\"offline\",\"color\":15158332,\"url\":\"</url/to/your/status/page>:8181/\",\"fields\":[\
+		echo -n "{\"embeds\":[{\"title\":\"offline\",\"color\":15158332,\"url\":\"$STATUSURL/\",\"fields\":[\
 {\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"}\
 ]}]}"
 		exit 1
@@ -24,7 +24,7 @@ then
 		echo -n "{\
 \"title\":\"Valheim server status\",\
 \"embeds\":[\
-{\"title\":\"online\",\"color\":3066993,\"url\":\"</url/to/your/status/page>:8181/\",\"fields\":[\
+{\"title\":\"online\",\"color\":3066993,\"url\":\"$STATUSURL/\",\"fields\":[\
 {\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"},\
 {\"name\":\"CPU\",\"value\": \"$CPUUSAGE%\",\"inline\":true},\
 {\"name\":\"RAM\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\
