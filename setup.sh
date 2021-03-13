@@ -127,12 +127,11 @@ function set_service(){
 		echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
 		echo -ne "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
 	else 
-		echo "$(ColorGreen 'service set')"
+		sudo systemctl daemon-reload
+		sudo service $SERVICENAME start
+		echo "$(ColorGreen 'service set and started')"
 	fi
-	echo -ne "if the service is set, 
-	please exec \"sudo systemctl daemon-reload\"
-	you can then start it using the command \"sudo service $SERVICENAME start\", 
-	and auto-start after reboot using \"systemctl enable $SERVICENAME\""
+	echo -ne "if the service is set, you can auto-start after reboot using \"systemctl enable $SERVICENAME\""
 }
 
 # Setup service with conf values, setup is $1=1; setdown is $1=2
@@ -141,7 +140,7 @@ function set_logrotate(){
 
 	# set real path
 	sed -i "s/###VALHEIMSERVERLOGSDIR###/$VALHEIMSERVERLOGSDIR/g" "$CWD/systemd/valheim.logrotate"
-	sudo ln -s "$CWD/systemd/valheim.logrotate" /etc/logrotate.d/valheim
+	sudo ln -s "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
 	NOSUDO=$?
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
