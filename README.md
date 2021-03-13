@@ -67,7 +67,7 @@ If you want to remove component that the setup has created :
 - ./setup.sh
 - go in the uninstall menu with option **30**
   - you can remove evething at once with option **10** or use individual options **2**,**3**,**4**,**5**
->The ./setup can only remove things he has done for you. You can check up what the setup has automated by using option **1**.
+>The ./setup.sh can only remove things he has done for you. You can check up what the setup has automated by using option **1**.
 
 ## Mandatory
 ### All
