@@ -94,17 +94,58 @@ function set_cron() {
 
 # Setup service with conf values
 function set_service(){
-	// TODO
+	SERVICENAME="$1"
+	cp "$CWD/examples/$SERVICENAME" "$CWD/systemd/$SERVICENAME"
+
+	# steam real exec user
+	sed -i "s/###EXECUSER###/$USERSERVICE/g" "$CWD/systemd/$SERVICENAME"
+
+	if [ "$SERVICENAME" = 'valheim-server.service' ]
+	then
+	# set steamcmd path for server update
+	sed -i "s/###STEAMCMDPATH###/$STEAMCMD/g" "$CWD/systemd/$SERVICENAME"
+	# set valheim server dir for server update
+	sed -i "s/###STEAMCMDPATH###/$STEAMCMD/g" "$CWD/systemd/$SERVICENAME"
+	# important : set launcher path
+	sed -i "s/###VHSERVERLAUNCHER###/$VHSERVERLAUNCHER/g" "$CWD/systemd/$SERVICENAME"
+	# important : set launcher dir
+	sed -i "s/###VHSERVERLAUNCHERDIR###/$VHSERVERLAUNCHERDIR/g" "$CWD/systemd/$SERVICENAME"
+	fi
+
+	if [ "$SERVICENAME" = 'vsm.http.service' ]
+	then
+	# set steamcmd path for server update
+	sed -i "s/###VSMHTTP###/$VSMHTTP/g" "$CWD/systemd/$SERVICENAME"
+	# set valheim server dir for server update
+	sed -i "s/###VSMHTTPDIR###/$VSMHTTPDIR/g" "$CWD/systemd/$SERVICENAME"
+	fi
+	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
+	NOSUDO=$?
+	# missing sudo fallback
+	if [ $NOSUDO -gt 0 ];then echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";\
+echo -ne "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\"";else echo "$(ColorGreen 'service set')";fi
+	echo -ne "if the service is set, 
+	please exec \"sudo systemctl daemon-reload\"
+	you can then start it using the command \"sudo service $SERVICENAME start\", 
+	and auto-start after reboot using \"systemctl enable $SERVICENAME\""
 }
 
 # Setup service with conf values, setup is $1=1; setdown is $1=2
 function set_logrotate(){
-	// TODO
+	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
+
+	# set real path
+	sed -i "s/###VALHEIMSERVERLOGSDIR###/$VALHEIMSERVERLOGSDIR/g" "$CWD/systemd/valheim.logrotate"
+	sudo ln -s "$CWD/systemd/valheim.logrotate" /etc/logrotate.d/valheim
+	NOSUDO=$?
+	# missing sudo fallback
+	if [ $NOSUDO -gt 0 ];then echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";\
+echo -ne "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"";else echo -ne "$(ColorGreen 'logrotate set')";fi
 }
 
 # Show actual conf
 function show_config() {
-  // TODO
+  # TODO
 }
 
 service_menu(){
