@@ -126,6 +126,8 @@ function set_service(){
 	then 
 		echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
 		echo -ne "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
+		echo -ne "sudo systemctl daemon-reload"
+		echo -ne "sudo service $SERVICENAME start"
 	else 
 		sudo systemctl daemon-reload
 		sudo service $SERVICENAME start
