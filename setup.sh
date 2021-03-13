@@ -124,16 +124,16 @@ function set_service(){
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
-		echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
-		echo -ne "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
-		echo -ne "sudo systemctl daemon-reload"
-		echo -ne "sudo service $SERVICENAME start"
+		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
+		echo -e "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
+		echo -e "sudo systemctl daemon-reload"
+		echo -e "sudo service $SERVICENAME start"
 	else 
 		sudo systemctl daemon-reload
 		sudo service $SERVICENAME start
-		echo "$(ColorGreen 'service set and started')"
+		echo -e "$(ColorGreen 'service set and started')"
 	fi
-	echo -ne "if the service is set, you can auto-start after reboot using \"systemctl enable $SERVICENAME\""
+	echo -e "if the service is set, you can auto-start after reboot using \"systemctl enable $SERVICENAME\""
 }
 
 # Setup service with conf values, setup is $1=1; setdown is $1=2
@@ -147,10 +147,10 @@ function set_logrotate(){
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
-		echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";
-		echo -ne "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"";
+		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";
+		echo -e "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"";
 	else 
-		echo -ne "$(ColorGreen 'logrotate set')"
+		echo -e "$(ColorGreen 'logrotate set')"
 	fi
 }
 
@@ -164,21 +164,20 @@ $(ColorGreen '2)') setup Valheim server launcher (recommended to user default cu
 
 => Advanced options <=
 $(ColorGreen '10)') $(ColorYellow 'sudo recommended'), activate logrotate on Valheim server logs
-$(ColorGreen '11)') $(ColorYellow 'sudo recommended'), desactivate logrotate on Valheim server logs
 $(ColorGreen '20)') $(ColorYellow 'sudo recommended'), update and activate valheim-server.service
 $(ColorGreen '21)') $(ColorYellow 'sudo recommended'), update and activate vsm.http.service (server status over HTTP)
 
 $(ColorGreen '0)') return to previous menu
+$(ColorBlue 'You can scroll up to see previous screens')
 $(ColorBlue 'choose an option:') "
 mkdir -p "$CWD/systemd"
         read a
         case $a in
 	        1) setup_value_prompt 'whats the user you want to execute service ?' 'VALHEIMSERVERLOGSDIR' ; clear ; service_menu ;;
 			2) setup_value_prompt "which launcher do you want to use ? remember to put server output on $( basename $VSMLOGFILTER ) stdin" 'VHSERVERLAUNCHER' ; clear ; service_menu ;;
-			10) set_logrotate 1 ; clear ;  service_menu ;;
-			11) set_logrotate 0 ; clear ;  service_menu ;;
-			20) set_service 'valheim-server.service'; clear ;  service_menu ;;
-			21) set_service 'vsm.http.service'; clear ;  service_menu ;;
+			10) set_logrotate ; sleep 10 ; clear ;  service_menu ;;
+			20) set_service 'valheim-server.service'; sleep 10 ; clear ;  service_menu ;;
+			21) set_service 'vsm.http.service'; sleep 10 ; clear ;  service_menu ;;
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
@@ -220,6 +219,7 @@ $(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron frequenc
 $(ColorGreen '30)') $(ColorYellow 'sudo recommended'), service menu
 
 $(ColorGreen '0)') quit (CTRL+C)
+$(ColorBlue 'You can scroll up to see previous screens')
 $(ColorBlue 'choose an option:') "
         read a
         case $a in
