@@ -122,8 +122,13 @@ function set_service(){
 	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
 	NOSUDO=$?
 	# missing sudo fallback
-	if [ $NOSUDO -gt 0 ];then echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";\
-echo -ne "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\"";else echo "$(ColorGreen 'service set')";fi
+	if [ $NOSUDO -gt 0 ]
+	then 
+		echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
+		echo -ne "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
+	else 
+		echo "$(ColorGreen 'service set')"
+	fi
 	echo -ne "if the service is set, 
 	please exec \"sudo systemctl daemon-reload\"
 	you can then start it using the command \"sudo service $SERVICENAME start\", 
@@ -139,13 +144,13 @@ function set_logrotate(){
 	sudo ln -s "$CWD/systemd/valheim.logrotate" /etc/logrotate.d/valheim
 	NOSUDO=$?
 	# missing sudo fallback
-	if [ $NOSUDO -gt 0 ];then echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";\
-echo -ne "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"";else echo -ne "$(ColorGreen 'logrotate set')";fi
-}
-
-# Show actual conf
-function show_config() {
-  # TODO
+	if [ $NOSUDO -gt 0 ]
+	then 
+		echo -ne "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";
+		echo -ne "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"";
+	else 
+		echo -ne "$(ColorGreen 'logrotate set')"
+	fi
 }
 
 service_menu(){
