@@ -178,6 +178,7 @@ $(ColorGreen '20)') $(ColorYellow 'sudo recommended'), update and activate valhe
 $(ColorGreen '21)') $(ColorYellow 'sudo recommended'), update and activate vsm.http.service (server status over HTTP)
 
 $(ColorGreen '0)') return to previous menu
+$(ColorGreen 'CTRL+C)') quit
 $(ColorBlue 'You can scroll up to see previous screens')
 $(ColorBlue 'choose an option:') "
 mkdir -p "$CWD/systemd"
@@ -188,6 +189,28 @@ mkdir -p "$CWD/systemd"
 			10) set_logrotate ; sleep 10 ; clear ;  service_menu ;;
 			20) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
 			21) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
+
+		0) clear ; menu ;;
+		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+        esac
+}
+
+uninstall_menu(){
+echo -ne "
+---------------------------------------
+=== Valheim Server Monitoring - VSM ===
+*** Uninstall menu ***
+$(ColorGreen '1) get the setup status')
+
+$(ColorGreen '0)') return to previous menu
+$(ColorGreen 'CTRL+C)') quit
+$(ColorBlue 'You can scroll up to see previous screens')
+$(ColorBlue 'choose an option:') "
+mkdir -p "$CWD/systemd"
+        read a
+        case $a in
+	        1) clear ; setup_status ; uninstall_menu ;;
+
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
@@ -227,8 +250,10 @@ $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a 
 => Advanced options <==
 $(ColorGreen '20)') setup $(ColorMagenta 'Discord') webhook update cron frequency
 $(ColorGreen '30)') $(ColorYellow 'sudo recommended'), service menu
+$(ColorGreen '50)') $(ColorYellow 'sudo recommended'), uninstall menu
 
-$(ColorGreen '0)') quit (CTRL+C)
+$(ColorGreen '0)') quit
+$(ColorGreen 'CTRL+C)') quit
 $(ColorBlue 'You can scroll up to see previous screens')
 $(ColorBlue 'choose an option:') "
         read a
@@ -247,7 +272,8 @@ $(ColorBlue 'choose an option:') "
 	        13) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; menu ;;
 	        14) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?' 'VHSERVERPASSWD' ; clear ; menu ;;
 	        20) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; clear ; menu ;;
-	        30) service_menu ;;
+	        30) clear ; service_menu ;;
+			50) clear ; uninstall_menu ;;
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
         esac
