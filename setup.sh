@@ -258,7 +258,7 @@ $(ColorRed $VSMLOGFILTER)
 $(ColorRed 'or use my launcher, steps 10),11),12),13) and 14) + service setup -> 20) then 6) in service menu')
 $(ColorGreen '1) get the setup status')
 $(ColorGreen '2)') setup wanted Valheim server logs directory
-$(ColorGreen '3)') setup wanted Valheim server status over HTTP port
+$(ColorGreen '3)') setup wanted Valheim server status over HTTP URL (host:port)
 $(ColorBlue 'You can find the script to launch VSM HTTP in status directory, or create a service in service menu')
 
 => Setting up $(ColorMagenta 'Discord') webhook <==
@@ -289,7 +289,7 @@ $(ColorBlue 'choose an option:') "
         case $a in
 			1) clear ; setup_status ; menu ;;
 	        2) setup_value_prompt 'where do you want to put logs ?' 'VALHEIMSERVERLOGSDIR' ; clear ; menu ;;
-	        3) setup_value_prompt 'on which port do you want to provide your server status ?' 'STATUSPORT' ; clear ; menu ;;
+	        3) setup_value_prompt 'set the public URL of your VSM over HTTP status (http://host:port) ?' 'STATUSURL' ; clear ; menu ;;
 			4) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook url ?" 'WEBHOOKURL' ; clear ; menu ;;
 	        5) setup_value_prompt "how many logs do you want on your $(ColorMagenta 'Discord') ? set '0' if you dont want any" 'SENDLASTLOGS' ; clear ; menu ;;
 	        6) "$CWD/discord/update" ; clear ; menu ;;
