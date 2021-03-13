@@ -1,0 +1,10 @@
+###VALHEIMSERVERLOGSDIR###*
+{
+	rotate 4
+	weekly
+	missingok
+	notifempty
+	compress
+	delaycompress
+	size 10M
+}
