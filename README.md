@@ -67,8 +67,8 @@ or
 
 ```bash
 your_valheim_server_launch \
-1> >( tee -a >("$VSMLOGFILTER") ) \
-2> >( tee -a "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log" >&2 )
+1> >( tee -a >("${<path/to/logfilter>}") ) \
+2> >( tee -a "${<path/to/valheim-logs.d>}/`date +%Y-%m-%d`.stderr.log" >&2 )
 ```
 
 - setup vsm.http.service in **./setup** option **20** then **7** (only if you want your server status displaying over HTTP)
