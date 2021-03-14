@@ -122,30 +122,18 @@ function auto_conf(){
 # Setup cron
 function set_cron() {
 	# Check a and old cron exists
-	$OLDLINE="$( crontab -l 2>/dev/null|grep \"$WEBHOOKUPDATE\" )"
-	if [ $? -gt 0 ]
-	then
-		echo "$(ColorRed 'Cant get crontab, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
-		return 1
-	fi
+	OLDLINE="$( crontab -l 2>/dev/null | grep $WEBHOOKUPDATE )"
 	if [ ! -z "$OLDLINE" ]
 	then
-		if [ $CRONTABWEBHOOKFREQ -eq 0 ]
-		then
-			# remove line
-			crontab -l 2>/dev/null | grep -v "$OLDLINE" | crontab -
-		else 
-			# remove line, add new one
-			(crontab -l 2>/dev/null | grep -v "$OLDLINE" ; echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE") | crontab -
-		fi
-	else
-		if [ $CRONTABWEBHOOKFREQ -gt 0 ]
-		then
-			# add new one
-			(crontab -l 2>/dev/null ; echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE") | crontab -
-		fi
+		# remove line
+		crontab -l 2>/dev/null | grep -v "$WEBHOOKUPDATE" | crontab -
 	fi
-	echo "$(ColorGreen crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*)"
+	if [ $CRONTABWEBHOOKFREQ -gt 0 ]
+	then
+		# add new one
+		echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE" | crontab -
+	fi
+	echo "$(ColorGreen 'crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
 }
 
 # Setup service with conf values
