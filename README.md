@@ -64,8 +64,9 @@ You have 2 way to activate **VSM - Valheim server monitoring** if you already ha
 
 or
 - Pipe your launcher on our log filter, by adding this at the end of the line of your launcher
-> 1\> \>( tee -a \>("<path/to/logfilter>") ) \
-> 2\> \>( tee -a "<path/to/logdir>/`date +%Y-%m-%d`.stderr.log" \>&2 )
+> your_valheim_server_launch \\
+> 1\> \>( tee -a \>("<path/to/logfilter>") ) \\
+> 2\> \>( tee -a "<path/to/logdir>/\`date +%Y-%m-%d\`.stderr.log" \>&2 )
 
 - setup vsm.http.service in **./setup** option **20** then **7** (only if you want your server status displaying over HTTP)
 - follow **Discord Valheim Server Status** chapter steps
