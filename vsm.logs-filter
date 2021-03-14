@@ -3,7 +3,7 @@
 
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/../.env"
+source "$CWD/.env"
 # Valheim Server logs filter
 # This script brings a Valheim Logs Management which doesn't exist derectly through steamcmd and Valheim server ATM
 # YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how
@@ -13,11 +13,12 @@ source "$CWD/../.env"
 # Filter to remove debug dans blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
+mkdir -p "$VALHEIMSERVERLOGSDIR"
+
 while read LINE; do
    # Remove debug and blank lines
    echo ${LINE} |sed "$NO_DEBUG_FILTER"\
->> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stdout.log"\
-2>> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log"\
+>> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stdout.log" #2>> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log"\
    
    # Get connected players
    CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`

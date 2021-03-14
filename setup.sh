@@ -114,7 +114,7 @@ function auto_conf(){
 # Setup cron
 function set_cron() {
 	# Check a and old cron exists
-	$OLDLINE="$( crontab -l | grep "$WEBHOOKUPDATE" )"
+	$OLDLINE="$( crontab -l |grep \"$WEBHOOKUPDATE\" )"
 	if [ ! -z "$OLDLINE" ]
 	then
 		if [ $CRONTABWEBHOOKFREQ -eq 0 ]
@@ -153,6 +153,8 @@ function set_service(){
 	sed -i "s[###VHSERVERLAUNCHER###[$VHSERVERLAUNCHER[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher dir
 	sed -i "s[###VHSERVERLAUNCHERDIR###[$VHSERVERLAUNCHERDIR[g" "$CWD/systemd/$SERVICENAME"
+	# important : set server dir
+	sed -i "s[###VHSERVERDIR###[$VHSERVERDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
 
 	if [ "$SERVICENAME" = "$VSMHTTPSERVICENAME" ]
@@ -187,6 +189,7 @@ function uninstall_service(){
 	sudo rm "/etc/systemd/system/$SERVICENAME"
 	sudo systemctl daemon-reload
 	sudo systemctl reset-failed
+	rm "$CWD/systemd/$SERVICENAME"
 }
 
 # Setup service with conf values, setup is $1=1; setdown is $1=2
@@ -230,12 +233,12 @@ mkdir -p "$CWD/systemd"
         read a
         case $a in
 			1) clear ; setup_status ; service_menu ;;
-	        2) setup_value_prompt 'whats the user you want to execute service ?' 'VALHEIMSERVERLOGSDIR' ; clear ; service_menu ;;
+	        2) setup_value_prompt 'whats the user you want to execute service ?' 'USERSERVICE' ; clear ; service_menu ;;
 			3) setup_value_prompt "which launcher do you want to use ? remember to put server output on $( basename $VSMLOGFILTER ) stdin" 'VHSERVERLAUNCHER' ; clear ; service_menu ;;
 			4) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; service_menu ;;
 			5) set_logrotate ; sleep 5 ; clear ;  service_menu ;;
-			6) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
-			7) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ;  service_menu ;;
+			6) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ; service_menu ;;
+			7) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ; service_menu ;;
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;

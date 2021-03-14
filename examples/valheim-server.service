@@ -21,7 +21,7 @@ Group=###EXECUSER###
 ExecStart=###VHSERVERLAUNCHER###
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID
-WorkingDirectory=###VHSERVERLAUNCHERDIR###
+WorkingDirectory=###VHSERVERDIR###
 LimitNOFILE=100000
 
 [Install]
