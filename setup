@@ -223,6 +223,11 @@ function set_logrotate(){
 	fi
 }
 
+# WIP - auto-setup
+function auto_setup(){
+	echo -e "Not yet implemented"
+}
+
 service_menu(){
 echo -ne "
 ---------------------------------------
@@ -285,7 +290,7 @@ mkdir -p "$CWD/systemd"
 			4) uninstall_service "$VHSERVERSERVICENAME" ; clear ; uninstall_menu ;;
 			5) uninstall_service "$VSMHTTPSERVICENAME" ; clear ; uninstall_menu ;;
 			10) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSMHTTPSERVICENAME" ; clear ; uninstall_menu ;;
-			42) echo -e "Just give me everything !" ; clear ; uninstall_menu ;;
+			42) auto_setup ; clear ; uninstall_menu ;;
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
