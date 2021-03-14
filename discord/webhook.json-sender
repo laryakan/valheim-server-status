@@ -6,9 +6,9 @@ source "$CWD/../.env"
 
 # Sending status messages on Discord script
 CWD=$(dirname "$0")
-MESSAGEID=$(cat "$CWD/valheim-server.webhook.status-message-id")
-WEBHOOKID='<your-webhook-id>'
-WEBHOOKTOKEN='<you-webhook-token>'
+MESSAGEID="$STATUSMESSAGEID"
+WEBHOOKID="$WEBHOOKID"
+WEBHOOKTOKEN="$WEBHOOKTOKEN"
 
 # help
 if [ "$1" = "-h" ]
@@ -37,7 +37,7 @@ then
 	if [ ! -z "$CURL" ] && [ "$1" = "--status" ]
 	then
 		echo -e "Status message has been deleted from the server, \
-a new message will be sent, please fille the new id in ./valheim-server.webhook.status-message-id"
+a new message will be sent, please fill the .env file"
 	else
 		exit 0
 	fi

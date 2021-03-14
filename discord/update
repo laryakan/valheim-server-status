@@ -7,7 +7,7 @@ source "$CWD/../.env"
 "$VSMDIR/status/server-status" --for-webhook | "$CWD/webhook.json-sender" --status
 
 # Output the last stdout logs if asked
-if [ ! -z "$SENDLASTLOGS" ]
+if [ $SENDLASTLOGS -gt 0 ]
 then
   if [ -z $(ls -1 $VALHEIMSERVERLOGSDIR/*.stdout.log) ]
   then
