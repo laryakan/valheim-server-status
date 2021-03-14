@@ -73,9 +73,9 @@ or
 ### Ultra quick start, if you are sure to trust scripts and default values
 >This path required you to launch you Valheim server manually, without any service set, in another shell
 - clone repository, starting from version 2, I recommend to clone in your executing Valheim server user home directory under the ~/.vsm directory, go inside dir
-- if you already have a running Valheim server, disable/delete/daemon-reload/reset-failed eventual services you've set to start it and start you server manually
+- if you already have a running Valheim server, disable/delete/daemon-reload/reset-failed eventual services you've set to start it and start you server manually. Our script will search for running **valheim_server** to get all launch parameters.
 - launch **./setup** and directly enter the option **15** -> this will sniff your running server parameters to setup our custom launcher
-- once done, stop your current Valheim server
+- once done, stop your current Valheim server: this is important since our script will launch another server
 - if you're not sudoer, leave the **./setup**, change account or go in root
 - in **./setup**, go in service menu, option **20**
 - activate the Valheim-server.service with option **6** -> this will create a service bond to our custom_launcher

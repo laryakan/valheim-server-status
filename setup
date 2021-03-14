@@ -125,7 +125,7 @@ function set_cron() {
 	$OLDLINE="$( crontab -l 2>/dev/null|grep \"$WEBHOOKUPDATE\" )"
 	if [ $? -gt 0 ]
 	then
-		echo "$(ColorRed Cant get crontab, you can check it with \*crontab -l\*, edit with \*crontab -e\*)"
+		echo "$(ColorRed 'Cant get crontab, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
 		return 1
 	fi
 	if [ ! -z "$OLDLINE" ]
