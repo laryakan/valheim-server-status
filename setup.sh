@@ -49,7 +49,8 @@ if [ "$VHSERVERWORLD" != 'server.world' ];then echo -e "Custom launcher world $(
 if [ -e '/etc/logrotate.d/valheim' ];then echo -e "logrotate $(ColorGreen set)";else echo -e "logrotate $(ColorRed 'not set')";fi
 if [ "$WEBHOOKTOKEN" != 'webhookToken' ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen ready)";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'not ready')";fi
 if [ ! -z "$STATUSMESSAGEID" ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'can update status')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'cannot update status')";fi
-if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE") ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
+if [ "$SENDLASTLOGS" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send logs')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send logs')";fi
+if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE" | head -1|cut -d' ' -f6) ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSMHTTPSERVICENAME" ];then echo -e "$VSMHTTPSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VSMHTTPSERVICENAME is $(ColorRed 'missing') in system";fi
 

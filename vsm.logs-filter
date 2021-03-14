@@ -13,7 +13,8 @@ source "$CWD/.env"
 # Filter to remove debug dans blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
-mkdir -p "$VALHEIMSERVERLOGSDIR"
+mkdir -p "$VALHEIMSERVERLOGSDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
+touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
 
 while read LINE; do
    # Remove debug and blank lines

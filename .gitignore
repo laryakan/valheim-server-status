@@ -4,3 +4,4 @@ test
 systemd
 valheim-logs.d
 valheim-logs.d/*
+data
