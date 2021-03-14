@@ -16,7 +16,7 @@ All mandatory binaries, or the very very most,  are included with distro.
 >**./setup** (bash script)
 
 ### Setup
-![menu](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-menu.JPG?raw=true)
+![menu](https://github.com/laryakan/valheim-server-monitoring/raw/main/screenshots/vsm-menu.JPG?raw=true)
 The setup will guide you into setting be everything in order, step by step.
 
 You can check the setup completion at any time with option **1** (in any menu).
@@ -83,7 +83,7 @@ or
 
 
 ### Discord Valheim Server Status
-![discord-status](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-discord-status.JPG?raw=true)![discord-logs](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-discord-logs.JPG?raw=true)
+![discord-status](https://github.com/laryakan/valheim-server-monitoring/raw/main/screenshots/vsm-discord-status.JPG?raw=true)![discord-logs](https://github.com/laryakan/valheim-server-monitoring/raw/main/screenshots/vsm-discord-logs.JPG?raw=true)
 - If you want to have info like online player and incoming new features, you absolutely need to use the logs filter to manage logs
 - Go to Discord, create a webhook [How to ?](https://help.dashe.io/en/articles/2521940-how-to-create-a-discord-webhook-url) and enable developer mode [How to ?](https://www.followchain.org/copy-message-id-discord/)
 - Copy your webhook URL (containing webhook id and webhook token)
