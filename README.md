@@ -1,7 +1,7 @@
 Simplest server monitoring using basic bash command and libs.
 All mandatory binaries, or the very very most,  are included with distro.
 
-> Many bugs reported in **./setup.sh** , xargs prevent value update in **.env**. You can directly edit **.env** file for value edit.
+> Many bugs reported in **./setup** , xargs prevent value update in **.env**. You can directly edit **.env** file for value edit.
 > service menu is still OK
 
 # VALHEIM SERVER MONITORING aka VSM
@@ -11,7 +11,7 @@ All mandatory binaries, or the very very most,  are included with distro.
 
 >**cd valheim-server-monitoring**
 
->**./setup.sh**
+>**./setup** (bash script)
 
 ### Setup
 ![menu](https://github.com/laryakan/valheim-server-monitoring/blob/feature/envfile-and-setup/screenshots/vsm-menu.JPG?raw=true)
