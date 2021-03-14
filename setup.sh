@@ -114,7 +114,12 @@ function auto_conf(){
 # Setup cron
 function set_cron() {
 	# Check a and old cron exists
-	$OLDLINE="$( crontab -l |grep \"$WEBHOOKUPDATE\" )"
+	$OLDLINE="$( crontab -l 2>/dev/null|grep \"$WEBHOOKUPDATE\" )"
+	if [ $? -gt 0 ]
+	then
+		echo "$(ColorRed Cant get crontab, you can check it with \*crontab -l\*, edit with \*crontab -e\*)"
+		return 1
+	fi
 	if [ ! -z "$OLDLINE" ]
 	then
 		if [ $CRONTABWEBHOOKFREQ -eq 0 ]
@@ -132,7 +137,7 @@ function set_cron() {
 			(crontab -l 2>/dev/null ; echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE") | crontab -
 		fi
 	fi
-	echo "crontab updated, you can check it with *crontab -l*, edit with *crontab -e*"
+	echo "$(ColorGreen crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*)"
 }
 
 # Setup service with conf values
