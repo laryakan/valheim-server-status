@@ -82,6 +82,35 @@ function setup_value_prompt() {
 	echo ""
 }
 
+# trying autoconfig
+function auto_conf(){
+	# Searching for Valheim server dir
+	# Searching for running Valheim server to complete
+	VHSERVERPROCESS=$(ps -aux|grep -v grep|grep valheim_server)
+	# if process found
+	if [ ! -z "$VHSERVERPROCESS" ]
+	then
+		# get the user who will execute services
+		FUSERSERVICE=$(echo $VHSERVERPROCESS|cut -d' ' -f1)
+		replace_env_value 'USERSERVICE' "$FUSERSERVICE"
+		# get path
+		FVHSERVERDIR=$(echo $VHSERVERPROCESS|cut -d' ' -f20)
+		replace_env_value 'VHSERVERDIR' $( dirname "$FVHSERVERDIR")
+		# get Valheim server port
+		FVHSERVERPORT=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-port //p'|cut -d' ' -f1)
+		replace_env_value 'VHSERVERPORT' $FVHSERVERPORT
+		# get Your server name
+		FVHSERVERNAME=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-name //p'|cut -d' ' -f1)
+		replace_env_value 'VHSERVERNAME' "$FVHSERVERNAME"
+		# get you server world name
+		FVHSERVERWORLD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-world //p'|cut -d' ' -f1)
+		replace_env_value 'VHSERVERWORLD' "$FVHSERVERWORLD"
+		# get Your server password
+		FVHSERVERPASSWD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-password //p'|cut -d' ' -f1)
+		replace_env_value 'VHSERVERPASSWD' "$FVHSERVERPASSWD"
+	fi
+}
+
 # Setup cron
 function set_cron() {
 	# Check a and old cron exists
@@ -190,7 +219,7 @@ $(ColorGreen '3)') setup Valheim server launcher (recommended to user default cu
 => Advanced options <=
 $(ColorGreen '4)') setup $(ColorMagenta 'Discord') webhook update cron frequency
 $(ColorGreen '5)') $(ColorYellow 'sudo recommended'), activate logrotate on Valheim server logs
-$(ColorGreen '6)') $(ColorYellow 'sudo recommended'), add and activate valheim-server.service (your server through service)
+$(ColorGreen '6)') $(ColorYellow 'sudo recommended'), add and activate valheim-server.service (your server through service) $(ColorRed 'stop you server first !')
 $(ColorGreen '7)') $(ColorYellow 'sudo recommended'), add and activate vsm.http.service (server status over HTTP)
 
 $(ColorGreen '0)') return to previous menu
@@ -275,6 +304,7 @@ $(ColorGreen '11)') setup wanted Valheim server listening port
 $(ColorGreen '12)') setup wanted Valheim server name
 $(ColorGreen '13)') setup wanted Valheim server world name
 $(ColorGreen '14)') setup wanted Valheim server password
+$(ColorGreen '15)') if your server is running, you can try auto conf
 $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
 
 => Advanced options <==
@@ -300,6 +330,7 @@ $(ColorBlue 'choose an option:') "
 	        12) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?' 'VHSERVERNAME' ; clear ; menu ;;
 	        13) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; menu ;;
 	        14) setup_value_prompt 'what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?' 'VHSERVERPASSWD' ; clear ; menu ;;
+			15) auto_conf ; clear ; menu ;;
 	        20) clear ; service_menu ;;
 			30) clear ; uninstall_menu ;;
 		0) exit 0 ;;

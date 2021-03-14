@@ -15,7 +15,9 @@ NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
 while read LINE; do
    # Remove debug and blank lines
-   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stdout.log"
+   echo ${LINE} |sed "$NO_DEBUG_FILTER"\
+>> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stdout.log"\
+2>> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log"\
    
    # Get connected players
    CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`

@@ -7,7 +7,6 @@ export templdpath=$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=./linux64:$LD_LIBRARY_PATH
 export SteamAppId=892970
 
-CWD=$(dirname "$0")
 TODAY=`date +%Y-%m-%d`
 
 echo "Server running through VSM custom launcher, you can find logs in $VALHEIMSERVERLOGSDIR"
@@ -23,6 +22,6 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 -port $VHSERVERPORT \
 -world "$VHSERVERWORLD" \
 -password "$VHSERVERPASSWD" \
-> >("$VSMLOGFILTER") 2> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log"
+&> >("$VSMLOGFILTER")
 
 export LD_LIBRARY_PATH=$templdpath
