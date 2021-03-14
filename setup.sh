@@ -86,7 +86,7 @@ function setup_value_prompt() {
 function auto_conf(){
 	# Searching for Valheim server dir
 	# Searching for running Valheim server to complete
-	VHSERVERPROCESS=$(ps -aux|grep -v grep|grep valheim_server)
+	VHSERVERPROCESS=$(ps -auxwe|grep -v grep|grep valheim_server)
 	# if process found
 	if [ ! -z "$VHSERVERPROCESS" ]
 	then
@@ -94,8 +94,8 @@ function auto_conf(){
 		FUSERSERVICE=$(echo $VHSERVERPROCESS|cut -d' ' -f1)
 		replace_env_value 'USERSERVICE' "$FUSERSERVICE"
 		# get path
-		FVHSERVERDIR=$(echo $VHSERVERPROCESS|cut -d' ' -f20)
-		replace_env_value 'VHSERVERDIR' $( dirname "$FVHSERVERDIR")
+		FVHSERVERDIR=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*PWD=//p'|cut -d' ' -f1)
+		replace_env_value 'VHSERVERDIR' "$FVHSERVERDIR"
 		# get Valheim server port
 		FVHSERVERPORT=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-port //p'|cut -d' ' -f1)
 		replace_env_value 'VHSERVERPORT' $FVHSERVERPORT
@@ -304,7 +304,7 @@ $(ColorGreen '11)') setup wanted Valheim server listening port
 $(ColorGreen '12)') setup wanted Valheim server name
 $(ColorGreen '13)') setup wanted Valheim server world name
 $(ColorGreen '14)') setup wanted Valheim server password
-$(ColorGreen '15)') if your server is running, you can try auto conf
+$(ColorGreen '15)') $(ColorRed bugged) if your server is running, you can try auto conf
 $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
 
 => Advanced options <==
