@@ -22,6 +22,8 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 -port $VHSERVERPORT \
 -world "$VHSERVERWORLD" \
 -password "$VHSERVERPASSWD" \
-> >("$VSMLOGFILTER") 2> >(tee -a "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log" >&2)
+1> >( tee -a >("$VSMLOGFILTER") ) \
+2> >( tee -a "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log" >&2 )
+
 
 export LD_LIBRARY_PATH=$templdpath
