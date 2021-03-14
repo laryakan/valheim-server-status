@@ -68,7 +68,7 @@ or
 
 - setup vsm.http.service in **./setup** option **20** then **7** (only if you want your server status displaying over HTTP)
 - follow **Discord Valheim Server Status** chapter steps
-> do not setup the **valheim-server.service** from our **./setup** if you're not using our custom launcher !
+> avoid setting up the **valheim-server.service** from our **./setup** if you're not using our custom launcher. It should work if you've set **VHSERVERDIR** and your own launcher in **VHSERVERLAUNCHER** but it's still risky.
 
 ### Ultra quick start, if you are sure to trust scripts and default values
 >This path required you to launch you Valheim server manually, without any service set, in another shell
