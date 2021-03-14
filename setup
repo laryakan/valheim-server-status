@@ -131,7 +131,7 @@ function set_cron() {
 	if [ $CRONTABWEBHOOKFREQ -gt 0 ]
 	then
 		# add new one
-		echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE" | crontab -
+		(crontab -l 2>/dev/null ; echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE") | crontab -
 	fi
 	echo "$(ColorGreen 'crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
 }
