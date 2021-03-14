@@ -320,7 +320,7 @@ $(ColorGreen '11)') setup wanted Valheim server listening port
 $(ColorGreen '12)') setup wanted Valheim server name
 $(ColorGreen '13)') setup wanted Valheim server world name
 $(ColorGreen '14)') setup wanted Valheim server password
-$(ColorGreen '15)') $(ColorRed bugged) if your server is running, you can try auto conf
+$(ColorGreen '15)') $(ColorYellow 'auto-conf custom launcher') if your server is running manually and no service is actually set
 $(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
 
 => Advanced options <==
