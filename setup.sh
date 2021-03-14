@@ -62,7 +62,7 @@ echo -e "- $STATUSPORT/tcp (VSM over HTTP)"
 
 # env conf value changing function
 function replace_env_value() {
-  cat "$CWD/.env"|grep "$1="|xargs -I {} -t sed -i "s[{}[$1=\"$2\"[ig" "$CWD/.env"
+  cat "$CWD/.env"|grep "$1="|xargs -I {} -t -d'\n' sed -i "s[{}[$1=\"$2\"[ig" "$CWD/.env"
   source "$CWD/.env"
 }
 
