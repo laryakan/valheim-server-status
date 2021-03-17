@@ -4,21 +4,21 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$CWD/.env"
-# Valheim Server logs filter
-# This script brings a Valheim Logs Management which doesn't exist derectly through steamcmd and Valheim server ATM
+# Valheim Server log filter
+# This script brings a Valheim Log Management which doesn't exist directly through steamcmd and Valheim server ATM
 # YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how
 
-# Read logs lines from STDIN to filter server logs dans distribute them
+# Read log lines from STDIN to filter server logs and distribute them
 # This file is registering online/offline players
 # Filter to remove debug dans blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
-mkdir -p "$VALHEIMSERVERLOGSDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
+mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
 touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
 
 while read LINE; do
    # Remove debug and blank lines
-   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stdout.log" 
+   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log" 
    
    # Get connected players
    CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`

@@ -23,12 +23,12 @@ The setup will guide you into setting be everything in order, step by step.
 You can check the setup completion at any time with option **1** (in any menu).
 You can also scroll up to previous views.
 
->**Something really important for every VSS version is to pipe your server onto the logs filter at repository root.**
->Except for CPU and RAM usage, all server info will come through logs. The logs filter brings a low level log management to Valheim.
+>**Something really important for every VSS version is to pipe your server onto the log filter at repository root.**
+>Except for CPU and RAM usage, all server info will come through logs. The log filter brings a low level log management to Valheim.
 >VSS comes with a custom server launcher directly piped to the log filter (it's in the **./launcher** directory).
 
 ### Regular usage
-- setup wanted Valheim server logs directory (default is **./valheim-logs.d**) with option **2**
+- setup wanted Valheim server log directory (default is **./valheim-logs.d**) with option **2**
 - setup wanted Valheim server status over HTTP URL (default is **http://127.0.0.1:8181**) with option **3**
 > This step is important for serving status with ncat, and also for the link in your future Discord status, setup a public host
 
@@ -50,8 +50,8 @@ You can also scroll up to previous views.
 - Go into the service menu with option **20**
   - setup your env user who will execute services with option **2**
     - this can be auto set in the main menu with option **15** if you followed the steps described in the next chapter
-  - setup your Valheim server launcher path with option **3**, default is the vss custom launcher which include logs-filter piping
-    - do this only if you have your own launcher piped on the logs filter
+  - setup your Valheim server launcher path with option **3**, default is the vss custom launcher which include log-filter piping
+    - do this only if you have your own launcher piped on the log filter
   - activate the Discord webhook update cron with option **4**
   - activate logrotate on Valheim server logs with option **5** (without sudo, the setup will tell you how to do it)
   - add and activate valheim-server.service (your server through service) with option **6** (without sudo, the setup will tell you how to do it)
@@ -86,13 +86,13 @@ your_valheim_server_launch \
 - in **./setup**, go in service menu, option **20**
 - activate the Valheim-server.service with option **6** -> this will create a service bond to our custom_launcher
 - then activate the vss.http.service with option **7**
-> Once done, your Valheim server should be running as it was, but this time with a launcher piped on our logs-filter
+> Once done, your Valheim server should be running as it was, but this time with a launcher piped on our log-filter
 > you can now set your Discord webhook as described below
 
 
 ### Discord Valheim Server Status
 ![discord-status](https://github.com/laryakan/valheim-server-status/raw/main/screenshots/vss-discord-status.JPG?raw=true)![discord-logs](https://github.com/laryakan/valheim-server-status/raw/main/screenshots/vss-discord-logs.JPG?raw=true)
-- If you want to have info like online player and incoming new features, you absolutely need to use the logs filter to manage logs
+- If you want to have info like online player and incoming new features, you absolutely need to use the log filter to manage logs
 - Go to Discord, create a webhook [How to ?](https://help.dashe.io/en/articles/2521940-how-to-create-a-discord-webhook-url) and enable developer mode [How to ?](https://www.followchain.org/copy-message-id-discord/)
 - Copy your webhook URL (containing webhook id and webhook token)
 - Go into the **./setup**, then option **4**
@@ -138,7 +138,7 @@ If you want to remove component that the setup has created :
 - inotifywait
 - jq
 
-### Logs filter through custom Valheim Server Launch
+### Log filter through custom Valheim Server Launch
 - tee (not mandatory if you redirect logs by other means)
 - logrotate (if you want it)
 
