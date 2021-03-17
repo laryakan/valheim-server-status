@@ -1,7 +1,7 @@
 # VALHEIM SERVER STATUS
 > Renamed from VALHEIM SERVER status
 
-# [ULTRA QUICK START](#ultra-quick-start-if-you-are-sure-to-trust-scripts-and-default-values)
+## [ULTRA QUICK START](#ultra-quick-start-if-you-are-sure-to-trust-scripts-and-default-values)
 
 Simplest server status using basic bash command and libs.
 All mandatory binaries, or the very very most,  are included with distro.
