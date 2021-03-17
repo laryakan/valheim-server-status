@@ -8,7 +8,7 @@ then
 fi
 source "$CWD/.env"
 
-# VSM Setup menu
+# VSS Setup menu
 # Colors
 red='\e[31m'
 green='\e[32m'
@@ -41,10 +41,10 @@ ColorMagenta(){
 function setup_status(){
 	echo -ne "
 ---------------------------------------
-========== VSM- Setup status ==========
+========== VSS- Setup status ==========
 "
 if [ ! -z $VALSERVERPID ];then echo -e "Valheim Server $(ColorGreen online)";else echo -e "Valheim Server $(ColorRed offline)";fi
-if [ ! -z $(pgrep $(basename $VSMLOGFILTER)) ];then echo -e "VSM logs filter $(ColorGreen running)";else echo -e "VSM logs filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
+if [ ! -z $(pgrep $(basename $VSSLOGFILTER)) ];then echo -e "VSS logs filter $(ColorGreen running)";else echo -e "VSS logs filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
 if [ "$VHSERVERWORLD" != 'server.world' ];then echo -e "Custom launcher world $(ColorGreen 'is set')";else echo -e "Custom launcher world $(ColorRed 'has default value')";fi
 if [ -e '/etc/logrotate.d/valheim' ];then echo -e "logrotate $(ColorGreen set)";else echo -e "logrotate $(ColorRed 'not set')";fi
 if [ "$WEBHOOKTOKEN" != 'webhookToken' ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen ready)";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'not ready')";fi
@@ -52,13 +52,13 @@ if [ ! -z "$STATUSMESSAGEID" ];then echo -e "$(ColorMagenta 'Discord') webhook $
 if [ "$SENDLASTLOGS" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send logs')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send logs')";fi
 if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE" | head -1|cut -d' ' -f6) ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME is $(ColorRed 'missing') in system";fi
-if [ -e "/etc/systemd/system/$VSMHTTPSERVICENAME" ];then echo -e "$VSMHTTPSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VSMHTTPSERVICENAME is $(ColorRed 'missing') in system";fi
+if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME is $(ColorRed 'missing') in system";fi
 
 echo ""
 echo "--Ports--"
 echo -e "Please, run \e[1msudo ufw status\e[0m (firewall) to see if these ports are open:"
 echo -e "- $VHSERVERPORT to $(($VHSERVERPORT+2))/tcp/udp (Valheim server)"
-echo -e "- $STATUSPORT/tcp (VSM over HTTP)"
+echo -e "- $STATUSPORT/tcp (VSS over HTTP)"
 }
 
 # env conf value changing function
@@ -158,12 +158,12 @@ function set_service(){
 	sed -i "s[###VHSERVERDIR###[$VHSERVERDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
 
-	if [ "$SERVICENAME" = "$VSMHTTPSERVICENAME" ]
+	if [ "$SERVICENAME" = "$VSSHTTPSERVICENAME" ]
 	then
 	# set steamcmd path for server update
-	sed -i "s[###VSMHTTP###[$VSMHTTP[g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VSSHTTP###[$VSSHTTP[g" "$CWD/systemd/$SERVICENAME"
 	# set valheim server dir for server update
-	sed -i "s[###VSMHTTPDIR###[$VSMHTTPDIR[g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VSSHTTPDIR###[$VSSHTTPDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
 	# binding with systemd
 	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
@@ -219,7 +219,7 @@ function auto_setup(){
 service_menu(){
 echo -ne "
 ---------------------------------------
-=== Valheim Server Monitoring - VSM ===
+===== Valheim Server Status - VSS =====
 *** Service menu ***
 $(ColorGreen '1) get the setup status')
 $(ColorGreen '2)') setup a user for executing services
@@ -229,7 +229,7 @@ $(ColorGreen '3)') setup Valheim server launcher (recommended to user default cu
 $(ColorGreen '4)') setup $(ColorMagenta 'Discord') webhook update cron frequency
 $(ColorGreen '5)') $(ColorYellow 'sudo recommended'), activate logrotate on Valheim server logs
 $(ColorGreen '6)') $(ColorYellow 'sudo recommended'), add and activate valheim-server.service (your server through service) $(ColorRed 'stop you server first !')
-$(ColorGreen '7)') $(ColorYellow 'sudo recommended'), add and activate vsm.http.service (server status over HTTP)
+$(ColorGreen '7)') $(ColorYellow 'sudo recommended'), add and activate VSS.http.service (server status over HTTP)
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -240,11 +240,11 @@ mkdir -p "$CWD/systemd"
         case $a in
 			1) clear ; setup_status ; service_menu ;;
 	        2) setup_value_prompt 'whats the user you want to execute service ?' 'USERSERVICE' ; clear ; service_menu ;;
-			3) setup_value_prompt "which launcher do you want to use ? remember to put server output on $( basename $VSMLOGFILTER ) stdin" 'VHSERVERLAUNCHER' ; clear ; service_menu ;;
+			3) setup_value_prompt "which launcher do you want to use ? remember to put server output on $( basename $VSSLOGFILTER ) stdin" 'VHSERVERLAUNCHER' ; clear ; service_menu ;;
 			4) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; service_menu ;;
 			5) set_logrotate ; sleep 5 ; clear ;  service_menu ;;
 			6) set_service "$VHSERVERSERVICENAME"; sleep 10 ; clear ; service_menu ;;
-			7) set_service "$VSMHTTPSERVICENAME"; sleep 10 ; clear ; service_menu ;;
+			7) set_service "$VSSHTTPSERVICENAME"; sleep 10 ; clear ; service_menu ;;
 
 		0) clear ; menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
@@ -254,13 +254,13 @@ mkdir -p "$CWD/systemd"
 uninstall_menu(){
 echo -ne "
 ---------------------------------------
-=== Valheim Server Monitoring - VSM ===
+===== Valheim Server Status - VSS =====
 *** Uninstall menu ***
 $(ColorGreen '1) get the setup status')
 $(ColorGreen '2)') remove webhook crontab (no more auto-update)
 $(ColorGreen '3)') $(ColorRed 'sudo required') remove logrotate on server logs
 $(ColorGreen '4)') $(ColorRed 'sudo required') remove valheim-server.service (your server through service)
-$(ColorGreen '5)') $(ColorRed 'sudo required') remove vsm.http.service (server status over HTTP)
+$(ColorGreen '5)') $(ColorRed 'sudo required') remove VSS.http.service (server status over HTTP)
 
 => Uninstall all <==
 $(ColorGreen '10)') $(ColorRed 'sudo required') remove all previously listed components
@@ -276,8 +276,8 @@ mkdir -p "$CWD/systemd"
 			2) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; uninstall_menu ;;
 			3) sudo rm '/etc/logrotate.d/valheim' ; clear ; uninstall_menu ;;
 			4) uninstall_service "$VHSERVERSERVICENAME" ; clear ; uninstall_menu ;;
-			5) uninstall_service "$VSMHTTPSERVICENAME" ; clear ; uninstall_menu ;;
-			10) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSMHTTPSERVICENAME" ; clear ; uninstall_menu ;;
+			5) uninstall_service "$VSSHTTPSERVICENAME" ; clear ; uninstall_menu ;;
+			10) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; uninstall_menu ;;
 			42) auto_setup ; clear ; uninstall_menu ;;
 
 		0) clear ; menu ;;
@@ -288,16 +288,16 @@ mkdir -p "$CWD/systemd"
 menu(){
 echo -ne "
 ---------------------------------------
-=== Valheim Server Monitoring - VSM ===
+===== Valheim Server Status - VSS =====
 $(ColorBlue 'If its a new install, follow steps in order.')
 $(ColorBlue 'If you have setted things manually for version <2, please reset your server state')
 $(ColorRed 'Please, pipe your valheim server start script (launcher) on')
-$(ColorRed $VSMLOGFILTER)
+$(ColorRed $VSSLOGFILTER)
 $(ColorRed 'or use my launcher, steps 10),11),12),13) and 14) + service setup -> 20) then 6) in service menu')
 $(ColorGreen '1) get the setup status')
 $(ColorGreen '2)') setup wanted Valheim server logs directory
 $(ColorGreen '3)') setup wanted Valheim server status over HTTP URL (host:port)
-$(ColorBlue 'You can find the script to launch VSM HTTP in status directory, or create a service in service menu')
+$(ColorBlue 'You can find the script to launch VSS HTTP in status directory, or create a service in service menu')
 
 => Setting up $(ColorMagenta 'Discord') webhook <==
 $(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (appereance menu)')
@@ -328,7 +328,7 @@ $(ColorBlue 'choose an option:') "
         case $a in
 			1) clear ; setup_status ; menu ;;
 	        2) setup_value_prompt 'where do you want to put logs ?' 'VALHEIMSERVERLOGSDIR' ; clear ; menu ;;
-	        3) setup_value_prompt 'set the public URL of your VSM over HTTP status (http://host:port) ?' 'STATUSURL' ; clear ; menu ;;
+	        3) setup_value_prompt 'set the public URL of your VSS over HTTP status (http://host:port) ?' 'STATUSURL' ; clear ; menu ;;
 			4) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook url ?" 'WEBHOOKURL' ; clear ; menu ;;
 	        5) setup_value_prompt "how many logs do you want on your $(ColorMagenta 'Discord') ? set '0' if you dont want any" 'SENDLASTLOGS' ; clear ; menu ;;
 	        6) "$CWD/discord/update" ; clear ; menu ;;

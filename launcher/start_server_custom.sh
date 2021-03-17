@@ -9,7 +9,7 @@ export SteamAppId=892970
 
 TODAY=`date +%Y-%m-%d`
 
-echo "Server running through VSM custom launcher, you can find logs in $VALHEIMSERVERLOGSDIR"
+echo "Server running through VSS custom launcher, you can find logs in $VALHEIMSERVERLOGSDIR"
 echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)"
 
 # Tip: Make a local copy of this script to avoid it being overwritten by steam.
@@ -22,7 +22,7 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 -port $VHSERVERPORT \
 -world "$VHSERVERWORLD" \
 -password "$VHSERVERPASSWD" \
-1> >( tee -a >("$VSMLOGFILTER") ) \
+1> >( tee -a >("$VSSLOGFILTER") ) \
 2> >( tee -a "$VALHEIMSERVERLOGSDIR/`date +%Y-%m-%d`.stderr.log" >&2 )
 
 

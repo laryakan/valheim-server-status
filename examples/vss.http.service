@@ -1,10 +1,10 @@
-# ln -s </path/to/this/vsm.http.service> /etc/systemd/system/vsm.http.service
+# ln -s </path/to/this/vss.http.service> /etc/systemd/system/vss.http.service
 # sudo systemctl daemon-reload
-# sudo service vsm.http start
-# systemctl enable vsm.http.service -> this to auto-start at system reboot
+# sudo service vss.http start
+# systemctl enable vss.http.service -> this to auto-start at system reboot
 # Listening on configured port to display server status
 [Unit]
-Description=Valheim Server Monitoring over HTTP
+Description=Valheim Server Status over HTTP
 Wants=network-online.target
 After=syslog.target network.target nss-lookup.target network-online.target
 
@@ -16,10 +16,10 @@ StartLimitInterval=60s
 StartLimitBurst=3
 User=###EXECUSER###
 Group=###EXECUSER###
-ExecStart=###VSMHTTP###
+ExecStart=###VSSHTTP###
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID
-WorkingDirectory=###VSMHTTPDIR###
+WorkingDirectory=###VSSHTTPDIR###
 LimitNOFILE=100000
 
 [Install]
