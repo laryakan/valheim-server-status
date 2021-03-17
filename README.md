@@ -1,13 +1,15 @@
+# VALHEIM SERVER STATUS
+> Renamed from VALHEIM SERVER status
+
+# [ULTRA QUICK START](#ultra-quick-start-if-you-are-sure-to-trust-scripts-and-default-values)
+
 Simplest server status using basic bash command and libs.
 All mandatory binaries, or the very very most,  are included with distro.
 
 > Seems like **./setup** bugs has been fixed
 
-> Actually, your server will not update automatically. This is possible by uncommenting the **ExecStartPre=**, if you are using our service, in the **./systemd** directory
+> Actually, your Valheim Server will not update automatically through steamcmd. This is possible by uncommenting the **ExecStartPre=**, if you are using our service, in the **./systemd** directory
 > I will add an option in the **./setup** soon to automate it
-
-# VALHEIM SERVER STATUS
-> Renamed from VALHEIM SERVER status
 
 ## Quick launch
 >**git clone ...**
