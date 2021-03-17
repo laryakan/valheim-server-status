@@ -7,6 +7,7 @@ All mandatory binaries, or the very very most,  are included with distro.
 > I will add an option in the **./setup** soon to automate it
 
 # VALHEIM SERVER MONITORING aka VSM
+> Renamed VALHEIM SERVER STATUS
 
 ## Quick launch
 >**git clone ...**
