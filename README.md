@@ -7,7 +7,7 @@ All mandatory binaries, or the very very most,  are included with distro.
 > I will add an option in the **./setup** soon to automate it
 
 # VALHEIM SERVER STATUS
-> Renamed from VALHEIM SERVER status
+> Renamed from VALHEIM SERVER MONITORING
 
 ## Quick launch
 >**git clone ...**
