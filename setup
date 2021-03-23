@@ -40,8 +40,7 @@ ColorMagenta(){
 # Setup service with conf values
 function setup_status(){
 	echo -ne "
----------------------------------------
-========== VSS- Setup status ==========
+======== VSS setup completion =========
 "
 if [ ! -z $VALSERVERPID ];then echo -e "Valheim Server $(ColorGreen online)";else echo -e "Valheim Server $(ColorRed offline)";fi
 if [ ! -z $(pgrep $(basename $VSSLOGFILTER)) ];then echo -e "VSS log filter $(ColorGreen running)";else echo -e "VSS log filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
@@ -59,6 +58,7 @@ echo "--Ports--"
 echo -e "Please, run \e[1msudo ufw status\e[0m (firewall) to see if these ports are open:"
 echo -e "- $VHSERVERPORT to $(($VHSERVERPORT+2))/tcp/udp (Valheim server)"
 echo -e "- $STATUSPORT/tcp (VSS over HTTP)"
+echo "======================================="
 }
 
 # env conf value changing function
@@ -348,4 +348,142 @@ $(ColorBlue 'choose an option:') "
 }
 
 # Call the menu function
-clear ; menu
+#clear ; menu
+
+# new menus
+vss_header(){
+echo -ne "
+---------------------------------------
+===== Valheim Server Status - VSS =====
+"
+setup_status
+}
+
+discord_menu(){
+vss_header
+echo -ne "
+*** $(ColorMagenta 'Discord') menu ***
+$(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (appereance menu)')
+$(ColorGreen '1)') setup current $(ColorMagenta 'Discord') webhook URL
+$(ColorGreen '2)') setup 'how many' wanted last logs on your $(ColorMagenta 'Discord') channel
+$(ColorGreen '3)') force $(ColorMagenta 'Discord') webhook update
+$(ColorGreen '4)') setup current $(ColorMagenta 'Discord') webhook status message id
+$(ColorGreen '5)') setup current $(ColorMagenta 'Discord') webhook last logs message id
+$(ColorGreen '6)') setup $(ColorMagenta 'Discord') webhook update cron frequency
+$(ColorGreen '7)') remove webhook crontab (no more auto-update)
+
+$(ColorGreen '0)') return to previous menu
+$(ColorGreen 'CTRL+C)') quit
+$(ColorBlue 'You can scroll up to see previous screens')
+$(ColorBlue 'choose an option:') "
+mkdir -p "$CWD/systemd"
+        read a
+        case $a in
+			1) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook url ?" 'WEBHOOKURL' ; clear ; discord_menu ;;
+	        2) setup_value_prompt "how many logs do you want on your $(ColorMagenta 'Discord') ? set '0' if you dont want any" 'SENDLASTLOGS' ; clear ; discord_menu ;;
+	        3) "$CWD/discord/update" ; clear ; discord_menu ;;
+	        4) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook status message id ?" 'STATUSMESSAGEID' ; clear ; discord_menu ;;
+	        5) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook 'last logs' message id ?" 'LASTLOGMESSAGEID' ; clear ; discord_menu ;;
+			6) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; discord_menu ;;
+			7) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; discord_menu ;;
+			
+
+		0) clear ; new_menu ;;
+		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+        esac
+}
+
+# new menus
+launcher_menu(){
+vss_header
+echo -ne "
+*** Valheim Server Launcher menu ***
+$(ColorGreen '1)') setup current Valheim server directory
+$(ColorGreen '2)') setup wanted Valheim server listening port
+$(ColorGreen '3)') setup wanted Valheim server name
+$(ColorGreen '4)') setup wanted Valheim server world name
+$(ColorGreen '5)') setup wanted Valheim server password
+$(ColorGreen '6)') $(ColorYellow 'auto-conf custom launcher') if your server is running
+$(ColorGreen '7)') $(ColorRed 'sudo required'), add and activate valheim-server.service (your server through service) $(ColorRed 'stop you server first !')
+$(ColorGreen '8)') $(ColorRed 'sudo required') remove valheim-server.service
+$(ColorBlue 'You can find the launcher inside "launcher" directory, or create a service')
+
+$(ColorGreen '0)') return to previous menu
+$(ColorGreen 'CTRL+C)') quit
+$(ColorBlue 'You can scroll up to see previous screens')
+$(ColorBlue 'choose an option:') "
+mkdir -p "$CWD/systemd"
+        read a
+        case $a in
+			1) setup_value_prompt 'where is located your dedicated server ?' 'VHSERVERDIR' ; clear ; launcher_menu ;;
+			2) setup_value_prompt 'on which port do you want your server to listen (default: 2456) ?' 'VHSERVERPORT' ; clear ; launcher_menu ;;
+	        3) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?" 'VHSERVERNAME' ; clear ; launcher_menu ;;
+	        4) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; launcher_menu ;;
+	        5) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
+			6) auto_conf ; clear ; launcher_menu ;;
+			7) set_service "$VHSERVERSERVICENAME"; sleep 2 ; clear ; launcher_menu ;;
+			8) uninstall_service "$VHSERVERSERVICENAME" ; clear ; launcher_menu ;;
+
+
+		0) clear ; new_menu ;;
+		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+        esac
+}
+
+# new menus
+http_status_menu(){
+vss_header
+echo -ne "
+*** VSS over HTTP menu ***
+$(ColorGreen '1)') setup wanted Valheim server status over HTTP URL (host:port)
+$(ColorGreen '2)') $(ColorRed 'sudo required'), add and activate VSS.http.service (server status over HTTP)
+$(ColorGreen '3)') $(ColorRed 'sudo required') remove VSS.http.service (server status over HTTP)
+
+$(ColorGreen '0)') return to previous menu
+$(ColorGreen 'CTRL+C)') quit
+$(ColorBlue 'You can scroll up to see previous screens')
+$(ColorBlue 'choose an option:') "
+mkdir -p "$CWD/systemd"
+        read a
+        case $a in
+			 1) setup_value_prompt 'set the public URL of your VSS over HTTP status (http://host:port) ?' 'STATUSURL' ; clear ; http_status_menu ;;
+			 2) set_service "$VSSHTTPSERVICENAME"; sleep 2 ; clear ; http_status_menu ;;
+			 3) uninstall_service "$VSSHTTPSERVICENAME" ; clear ; http_status_menu ;;
+
+		0) clear ; new_menu ;;
+		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+        esac
+}
+
+# Main menu
+new_menu(){
+vss_header
+echo -ne "
+*** Main menu ***
+$(ColorGreen '1)') setup wanted Valheim Server logs path
+$(ColorGreen '2)') VSS Discord menu
+$(ColorGreen '3)') VSS Launcher menu
+$(ColorGreen '4)') VSS over HTTP menu
+
+=> Uninstall all <==
+$(ColorGreen '10)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
+
+$(ColorGreen '0)') quit
+$(ColorGreen 'CTRL+C)') quit
+$(ColorBlue 'You can scroll up to see previous screens')
+$(ColorBlue 'choose an option:') "
+        read a
+        case $a in
+	        1) setup_value_prompt 'where are your log (or where do yo uwant it) ?' 'VALHEIMSERVERLOGDIR' ; clear ; new_menu ;;
+			2) clear ; discord_menu ;;
+			3) clear ; launcher_menu ;;
+			4) clear ; http_status_menu ;;
+	     	10) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
+		
+		0) exit 0 ;;
+		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+        esac
+}
+
+# init new menu
+clear ; new_menu
