@@ -2,6 +2,7 @@
 > Renamed from VALHEIM SERVER MONITORING
 
 ## [ULTRA QUICK START](#tail-pipe-quickstart)
+Existing logs ? Discord Webhook only : **./setup** -> option **5** -> option **6** -> [Discord Menu](#discord-valheim-server-status)
 
 Simplest server status using basic bash command and libs.
 All mandatory binaries, or the very very most,  are included with distro.
