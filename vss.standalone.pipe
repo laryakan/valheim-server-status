@@ -9,11 +9,5 @@ source "$CWD/.env"
 # for status purpose
 
 # tail quiet watch new lines
-if [ $EVENTREALTIME -eq 0]
-then
-    tail -fqn0 "$VALHEIMSERVERLOGPATH" | "$VSSLOGFILTER" --tail-pipe-input
-else
-    tail -fqn0 "$VALHEIMSERVERLOGPATH" | "$VSSLOGFILTER" --tail-pipe-input | "$WEBHOOKUPDATE"
-fi
-
+tail -fqn0 "$VALHEIMSERVERLOGPATH" | "$VSSLOGFILTER" --tail-pipe-input
 

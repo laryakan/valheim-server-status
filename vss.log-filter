@@ -41,6 +41,10 @@ while read LINE; do
 	then
 		# new connection
 		echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
+      if [ $EVENTREALTIME -neq 0]
+      then
+         "$WEBHOOKUPDATE"
+      fi
 	fi
    fi
 
@@ -48,10 +52,14 @@ while read LINE; do
    DISCOZDOID=`echo ${LINE} |grep "Destroying abandoned non persistent zdo"|head -1|cut -d' ' -f10`
    if [ ! -z "$DISCOZDOID" ]
    then
-     # Add to offline players list
-     grep "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
-     # Delete from online players   
-     sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
+      # Add to offline players list
+      grep "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
+      # Delete from online players   
+      sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
+      if [ $EVENTREALTIME -neq 0]
+      then
+         "$WEBHOOKUPDATE"
+      fi
    fi
 
 done
