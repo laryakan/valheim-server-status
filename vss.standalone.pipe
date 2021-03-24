@@ -8,8 +8,5 @@ source "$CWD/.env"
 # This script brings take the logpath from .env, tail and pipe output on vss.log-filter to catch interesting logs
 # for status purpose
 
-# Log dir
-VHLOGPATH="$VALHEIMSERVERLOGPATH/*"
-
 # tail quiet watch new lines
-tail -fqn0 "$VHLOGPATH" | "$VSSLOGFILTER"
+tail -fqn0 "$VALHEIMSERVERLOGPATH" | "$VSSLOGFILTER"

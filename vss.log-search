@@ -5,4 +5,4 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$CWD/.env"
 
 # Log search tool
-cat "$VALHEIMSERVERLOGPATH"/*.log | grep "$1"
+cat "$VALHEIMSERVERLOGPATH" | grep "$1"

@@ -18,6 +18,7 @@ touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
 
 while read LINE; do
    # Remove debug and blank lines
+   # TODO : line to remove in case of using the tail pipe
    echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGPATH/`date +%Y-%m-%d`.stdout.log" 
    
    # Get connected players
