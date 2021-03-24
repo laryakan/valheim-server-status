@@ -18,8 +18,10 @@ touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
 
 while read LINE; do
    # Remove debug and blank lines
-   # TODO : line to remove in case of using the tail pipe
-   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGPATH/`date +%Y-%m-%d`.stdout.log" 
+   if [ "$1" != '--tail-pipe-input' ]
+   then
+      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGPATH/`date +%Y-%m-%d`.stdout.log" 
+   fi
    
    # Get connected players
    CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`
