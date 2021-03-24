@@ -6,7 +6,7 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$CWD/.env"
 # Valheim Server log filter
 # This script brings a Valheim Log Management which doesn't exist directly through steamcmd and Valheim server ATM
-# YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how
+# YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how, the vss.standalone.pipe do this with a tail
 
 # Read log lines from STDIN to filter server logs and distribute them
 # This file is registering online/offline players

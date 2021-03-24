@@ -1,0 +1,15 @@
+#!/bin/bash
+# author: laryakan, date 2021/03/12
+
+# Basic env init
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/.env"
+# Valheim Server log filter standalone pipe
+# This script brings take the logpath from .env, tail and pipe output on vss.log-filter to catch interesting logs
+# for status purpose
+
+# Log dir
+VHLOGPATH="$VALHEIMSERVERLOGDIR/*"
+
+# tail quiet watch new lines
+tail -fqn0 "$VHLOGPATH" | "$VSSLOGFILTER"
