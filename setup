@@ -251,8 +251,9 @@ $(ColorGreen '2)') setup 'how many' wanted last logs on your $(ColorMagenta 'Dis
 $(ColorGreen '3)') force $(ColorMagenta 'Discord') webhook update
 $(ColorGreen '4)') setup current $(ColorMagenta 'Discord') webhook status message id
 $(ColorGreen '5)') setup current $(ColorMagenta 'Discord') webhook last logs message id
-$(ColorGreen '6)') setup $(ColorMagenta 'Discord') webhook update cron frequency (Valheim Server heartbeat)
-$(ColorGreen '7)') remove webhook crontab (no more auto-update)
+$(ColorGreen '6)') enable or disable realtime in-game event update on your webhook (1 or 0), only for the vss.pipe.service
+$(ColorGreen '7)') setup $(ColorMagenta 'Discord') webhook update cron frequency (Valheim Server heartbeat)
+$(ColorGreen '8)') remove webhook crontab (no more auto-update)
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -266,8 +267,9 @@ mkdir -p "$CWD/systemd"
 	        3) "$CWD/discord/update" ; clear ; discord_menu ;;
 	        4) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook status message id ?" 'STATUSMESSAGEID' ; clear ; discord_menu ;;
 	        5) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook 'last logs' message id ?" 'LASTLOGMESSAGEID' ; clear ; discord_menu ;;
-			6) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; discord_menu ;;
-			7) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; discord_menu ;;
+			6) setup_value_prompt 'do you want the webhook messages to auto-update at each in-game event for vss.pipe.service ? (set "1" for true, "0" for false)' 'EVENTREALTIME' ; clear ; discord_menu ;;
+			7) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; discord_menu ;;
+			8) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; discord_menu ;;
 			
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
