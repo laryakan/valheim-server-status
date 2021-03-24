@@ -153,8 +153,6 @@ function set_service(){
 	then
 	# set steamcmd path for server update
 	sed -i "s[###STEAMCMDPATH###[$STEAMCMD[g" "$CWD/systemd/$SERVICENAME"
-	# set valheim server dir for server update
-	sed -i "s[###STEAMCMDPATH###[$STEAMCMD[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher path
 	sed -i "s[###VHSERVERLAUNCHER###[$VHSERVERLAUNCHER[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher dir
@@ -170,6 +168,14 @@ function set_service(){
 	# set valheim server dir for server update
 	sed -i "s[###VSSHTTPDIR###[$VSSHTTPDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
+
+	if [ "$SERVICENAME" = "$VSSPIPESERVICENAME" ]
+	then
+	# set steamcmd path for server update
+	sed -i "s[###VSSPIPE###[$VSSPIPE[g" "$CWD/systemd/$SERVICENAME"
+	# set valheim server dir for server update
+	sed -i "s[###VSSPIPEDIR###[$VSSPIPEDIR[g" "$CWD/systemd/$SERVICENAME"
+	fi
 	# binding with systemd
 	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
 	NOSUDO=$?
@@ -179,9 +185,14 @@ function set_service(){
 		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
 		echo -e "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
 		echo -e "sudo systemctl daemon-reload"
+		echo -e "sudo systemctl enable $SERVICENAME"
 		echo -e "sudo systemctl start $SERVICENAME"
 	else 
+		# service relaod
 		sudo systemctl daemon-reload
+		# start at reboot
+		sudo systemctl enable $SERVICENAME
+		# start now
 		sudo systemctl start $SERVICENAME
 		echo -e "$(ColorGreen 'service set and started')"
 	fi
@@ -334,20 +345,21 @@ $(ColorGreen '2)') VSS Launcher menu
 $(ColorGreen '3)') VSS over HTTP menu
 
 ** Logs **
-$(ColorBlue 'we can setup a service based on tail if you already have a your server log outputting somewhere.')
+$(ColorBlue 'we can setup a service based on tail if you already have a your server log outputting somewhere')
 $(ColorBlue 'just setup a valid logs path (wildcards accepted). Then you will not need to use the custom launcher')
 $(ColorGreen '5)') setup wanted Valheim Server logs path (file or directory)
-
 * standalone *
 $(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (to catch events from existings logs)
 $(ColorGreen '7)') $(ColorRed 'sudo required') remove vss.pipe.service
-
 * logrotate *
 $(ColorGreen '8)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
 $(ColorGreen '9)') $(ColorRed 'sudo required') remove logrotate on server logs
 
+** Service user **
+$(ColorGreen '10)') setup the user who will execute service $(ColorRed 'prior') to services install, default is $USER
+
 ** Uninstall all **
-$(ColorGreen '10)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
+$(ColorGreen '11)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
 
 $(ColorGreen '0)') quit
 $(ColorGreen 'CTRL+C)') quit
@@ -360,11 +372,12 @@ $(ColorBlue 'choose an option:') "
 			2) clear ; launcher_menu ;;
 			3) clear ; http_status_menu ;;
 			5) setup_value_prompt 'where are your logs (or where do you want it, file or dir, wildcards are valid) ?' 'VALHEIMSERVERLOGDIR' ; clear ; new_menu ;;
-			6) echo todo ; clear; new_menu ;;
-			7) echo todo ; clear; new_menu ;;
+			6) set_service "$VSSPIPESERVICENAME"; sleep 2 ; clear ; new_menu ;;
+			7) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
 			8) set_logrotate ; sleep 5 ; clear ;  new_menu ;;
 			9) sudo rm '/etc/logrotate.d/valheim' ; clear ; new_menu ;;
-	     	10) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
+			10) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
+	     	11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
 		
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;

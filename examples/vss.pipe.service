@@ -1,0 +1,26 @@
+# ln -s </path/to/this/vss.pipe.service> /etc/systemd/system/vss.pipe.service
+# sudo systemctl daemon-reload
+# sudo service vss.pipe start
+# systemctl enable vss.pipe.service -> this to auto-start at system reboot
+[Unit]
+Description=Tail pipe from Valheim Server logs to VSS log-filter
+Wants=network-online.target
+After=syslog.target network.target nss-lookup.target network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+User=###EXECUSER###
+Group=###EXECUSER###
+ExecStart=###VSSPIPE###
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s INT $MAINPID
+WorkingDirectory=###VSSPIPEDIR###
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target
+
