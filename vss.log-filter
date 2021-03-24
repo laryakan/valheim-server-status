@@ -41,9 +41,9 @@ while read LINE; do
 	then
 		# new connection
 		echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
-      if [ $EVENTREALTIME -neq 0]
+      if [ $EVENTREALTIME != 0]
       then
-         "$WEBHOOKUPDATE"
+         /$WEBHOOKUPDATE
       fi
 	fi
    fi
@@ -56,9 +56,9 @@ while read LINE; do
       grep "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
       # Delete from online players   
       sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
-      if [ $EVENTREALTIME -neq 0]
+      if [ $EVENTREALTIME != 0]
       then
-         "$WEBHOOKUPDATE"
+         /$WEBHOOKUPDATE
       fi
    fi
 
