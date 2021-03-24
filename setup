@@ -214,7 +214,7 @@ function set_logrotate(){
 	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
 
 	# set real path
-	sed -i "s[###VALHEIMSERVERLOGDIR###[${VALHEIMSERVERLOGDIR}[g" "$CWD/systemd/valheim.logrotate"
+	sed -i "s[###VALHEIMSERVERLOGPATH###[${VALHEIMSERVERLOGPATH}[g" "$CWD/systemd/valheim.logrotate"
 	sudo ln -s "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
 	NOSUDO=$?
 	# missing sudo fallback
@@ -371,7 +371,7 @@ $(ColorBlue 'choose an option:') "
 			1) clear ; discord_menu ;;
 			2) clear ; launcher_menu ;;
 			3) clear ; http_status_menu ;;
-			5) setup_value_prompt 'where are your logs (or where do you want it, file or dir, wildcards are valid) ?' 'VALHEIMSERVERLOGDIR' ; clear ; new_menu ;;
+			5) setup_value_prompt 'where are your logs (or where do you want it, file or dir, wildcards are valid) ?' 'VALHEIMSERVERLOGPATH' ; clear ; new_menu ;;
 			6) set_service "$VSSPIPESERVICENAME"; sleep 2 ; clear ; new_menu ;;
 			7) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
 			8) set_logrotate ; sleep 5 ; clear ;  new_menu ;;

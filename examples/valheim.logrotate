@@ -1,4 +1,4 @@
-###VALHEIMSERVERLOGDIR###/*
+###VALHEIMSERVERLOGPATH###/*
 {
 	rotate 4
 	weekly

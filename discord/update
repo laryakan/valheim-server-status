@@ -8,11 +8,11 @@ source "$CWD/../.env"
 # Output the last stdout logs if asked
 if [ $SENDLASTLOGS -gt 0 ]
 then
-  if [ -z $(ls -1 $VALHEIMSERVERLOGDIR/*.stdout.log) ]
+  if [ -z $(ls -1 $VALHEIMSERVERLOGPATH/*.stdout.log) ]
   then
     echo 'no log to send'
   fi
-  tail -$SENDLASTLOGS < $(ls -1 $VALHEIMSERVERLOGDIR/*.stdout.log | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
+  tail -$SENDLASTLOGS < $(ls -1 $VALHEIMSERVERLOGPATH/*.stdout.log | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
 {\"title\":\"Last Logs\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
 ]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
 fi

@@ -13,12 +13,12 @@ source "$CWD/.env"
 # Filter to remove debug dans blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
-mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
+mkdir -p "$VALHEIMSERVERLOGPATH" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
 touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
 
 while read LINE; do
    # Remove debug and blank lines
-   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log" 
+   echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGPATH/`date +%Y-%m-%d`.stdout.log" 
    
    # Get connected players
    CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`

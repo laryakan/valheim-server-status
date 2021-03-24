@@ -9,7 +9,7 @@ source "$CWD/.env"
 # for status purpose
 
 # Log dir
-VHLOGPATH="$VALHEIMSERVERLOGDIR/*"
+VHLOGPATH="$VALHEIMSERVERLOGPATH/*"
 
 # tail quiet watch new lines
 tail -fqn0 "$VHLOGPATH" | "$VSSLOGFILTER"
