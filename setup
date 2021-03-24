@@ -251,7 +251,7 @@ $(ColorGreen '2)') setup 'how many' wanted last logs on your $(ColorMagenta 'Dis
 $(ColorGreen '3)') force $(ColorMagenta 'Discord') webhook update
 $(ColorGreen '4)') setup current $(ColorMagenta 'Discord') webhook status message id
 $(ColorGreen '5)') setup current $(ColorMagenta 'Discord') webhook last logs message id
-$(ColorGreen '6)') enable or disable realtime in-game event update on your webhook (1 or 0)
+$(ColorGreen '6)') enable or disable realtime in-game event update on your webhook (1 or 0) (things using the log-filter have to restart)
 $(ColorGreen '7)') setup $(ColorMagenta 'Discord') webhook update cron frequency (Valheim Server heartbeat)
 $(ColorGreen '8)') remove webhook crontab (no more auto-update)
 
