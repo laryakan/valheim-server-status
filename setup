@@ -50,9 +50,9 @@ if [ "$WEBHOOKTOKEN" != 'webhookToken' ];then echo -e "$(ColorMagenta 'Discord')
 if [ ! -z "$STATUSMESSAGEID" ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'can update status')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'cannot update status')";fi
 if [ "$SENDLASTLOGS" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send logs')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send log')";fi
 if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE" | head -1|cut -d' ' -f6) ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
-if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME is $(ColorRed 'missing') in system";fi
-if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME is $(ColorRed 'missing') in system";fi
-
+if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME (valheim server) is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME (valheim server) is $(ColorRed 'missing') in system";fi
+if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME (vss over http) is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME (vss over http) is $(ColorRed 'missing') in system";fi
+if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME (realtime events) is $(ColorGreen 'present') in system";else echo -e  "$VSSPIPESERVICENAME (realtime events) is $(ColorRed 'missing') in system";fi
 echo ""
 echo "--Ports--"
 echo -e "Please, run \e[1msudo ufw status\e[0m (firewall) to see if these ports are open:"
