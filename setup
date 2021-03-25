@@ -379,7 +379,7 @@ $(ColorBlue 'choose an option:') "
 			8) set_logrotate ; sleep 5 ; clear ;  new_menu ;;
 			9) sudo rm '/etc/logrotate.d/valheim' ; clear ; new_menu ;;
 			10) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
-	     	11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
+	     	11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; rm "$CWD/systemd/valheim.logrotate" ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
 		
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear; WrongCommand;;
