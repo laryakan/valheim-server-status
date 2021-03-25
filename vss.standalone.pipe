@@ -9,5 +9,5 @@ source "$CWD/.env"
 # for status purpose
 
 # tail quiet watch new lines
-tail -fqn0 "$VALHEIMSERVERLOGPATH" | "$VSSLOGFILTER" --tail-pipe-input
+tail -fqn0 $VALHEIMSERVERLOGPATH | "$VSSLOGFILTER" --tail-pipe-input
 

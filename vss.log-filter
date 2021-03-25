@@ -27,25 +27,25 @@ while read LINE; do
    CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`
    if [ ! -z "$CONNECTION" ]
    then
-	PZ=`echo "$CONNECTION"|cut -d' ' -f7,9|cut -d':' -f1`
-	CHOUR=`date +'%F.%T'`
-	PLAYERNAME=`echo $PZ|cut -d' ' -f1`
-	ZDOID=`echo $PZ|cut -d' ' -f2`
+      PZ=`echo "$CONNECTION"|cut -d' ' -f7,9|cut -d':' -f1`
+      CHOUR=`date +'%F.%T'`
+      PLAYERNAME=`echo $PZ|cut -d' ' -f1`
+      ZDOID=`echo $PZ|cut -d' ' -f2`
 
-	# Remove from offline players list
-	sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
+      # Remove from offline players list
+      sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
 
-	# detect respawn (double connection and/or death) for the same Character
-	ALREADYREGISTEREDSTR=`grep "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
-	if [ -z "$ALREADYREGISTEREDSTR" ]
-	then
-		# new connection
-		echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
-      if [ $EVENTREALTIME != 0]
+      # detect respawn (double connection and/or death) for the same Character
+      ALREADYREGISTEREDSTR=`grep "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
+      if [ -z "$ALREADYREGISTEREDSTR" ]
       then
-         /$WEBHOOKUPDATE
+         # new connection
+         echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
+         if [ $EVENTREALTIME != 0 ]
+         then
+            "$WEBHOOKUPDATE"
+         fi
       fi
-	fi
    fi
 
    # Get disconnected players
@@ -56,9 +56,9 @@ while read LINE; do
       grep "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
       # Delete from online players   
       sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
-      if [ $EVENTREALTIME != 0]
+      if [ $EVENTREALTIME != 0 ]
       then
-         /$WEBHOOKUPDATE
+         "$WEBHOOKUPDATE"
       fi
    fi
 
