@@ -23,10 +23,10 @@ then
 echo -n "{\
 \"title\":\"Valheim server informations\",\
 \"embeds\":[\
-{\"title\":\"online\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
+{\"title\":\"Connection\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
 {\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"},\
-{\"name\":\"IP\",\"value\": \"$PUBLICIP:$VHSERVERPORT\"},\
-{\"name\":\"Password\",\"value\": \"$VHSERVERPASSWD\"}\
+{\"name\":\"IP\",\"value\": \"||$PUBLICIP:$VHSERVERPORT||\"},\
+{\"name\":\"Password\",\"value\": \"||$VHSERVERPASSWD||\"}\
 ]}\
 ]}" | "$CWD/webhook.json-sender" "$SERVERCONNECTIONINFOMESSAGEID"
 fi
