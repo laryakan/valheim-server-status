@@ -24,7 +24,7 @@ then
 		echo -n "{\
 \"title\":\"Valheim server status\",\
 \"embeds\":[\
-{\"title\":\"online\",\"color\":3066993,\"url\":\"$STATUSURL/\",\"fields\":[\
+{\"title\":\"online\",\"color\":3066993,\"url\":\"$STATUSURL\",\"fields\":[\
 {\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"},\
 {\"name\":\"CPU\",\"value\": \"$CPUUSAGE%\",\"inline\":true},\
 {\"name\":\"RAM\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\

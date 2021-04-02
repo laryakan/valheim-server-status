@@ -17,3 +17,17 @@ then
 ]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
 fi
 
+# Output the last stdout logs if asked
+if [ $SENDSERVERCONNECTIONINFO -gt 0 ]
+then
+echo -n "{\
+\"title\":\"Valheim server informations\",\
+\"embeds\":[\
+{\"title\":\"online\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
+{\"name\":\"Last Check\",\"value\": \"$(date +'%F.%T')\"},\
+{\"name\":\"IP\",\"value\": \"$PUBLICIP:$VHSERVERPORT\"},\
+{\"name\":\"Password\",\"value\": \"$VHSERVERPASSWD\"}\
+]}\
+]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
+fi
+
