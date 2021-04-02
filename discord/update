@@ -28,6 +28,6 @@ echo -n "{\
 {\"name\":\"IP\",\"value\": \"$PUBLICIP:$VHSERVERPORT\"},\
 {\"name\":\"Password\",\"value\": \"$VHSERVERPASSWD\"}\
 ]}\
-]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
+]}" | "$CWD/webhook.json-sender" "$SERVERCONNECTIONINFOMESSAGEID"
 fi
 
