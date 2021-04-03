@@ -19,8 +19,8 @@ then
 ]}]}"
 		exit 1
 	else
-		LIGHTONLINELIST=$(cat $CONNECTEDPLAYERSFILE|cut -d';' -f2|sed ':a;N;$!ba;s/\n/, /g')
-		LIGHTOFFLINELIST=$(cat $OFFLINEPLAYERSFILE|cut -d';' -f2|sed ':a;N;$!ba;s/\n/, /g')
+		LIGHTONLINELIST=$(touch $CONNECTEDPLAYERSFILE && cat $CONNECTEDPLAYERSFILE|cut -d';' -f2|sed ':a;N;$!ba;s/\n/, /g')
+		LIGHTOFFLINELIST=$(touch $OFFLINEPLAYERSFILE && cat $OFFLINEPLAYERSFILE|cut -d';' -f2|sed ':a;N;$!ba;s/\n/, /g')
 		echo -n "{\
 \"title\":\"Valheim server status\",\
 \"embeds\":[\
