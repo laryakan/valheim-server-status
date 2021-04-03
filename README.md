@@ -105,6 +105,7 @@ If you want to remove component that the setup has created :
 - head
 - echo
 - ps
+- dig
 #### in the future (maybe)
 - trap 
 - inotifywait
