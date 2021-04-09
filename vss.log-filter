@@ -36,7 +36,7 @@ while read LINE; do
       sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
 
       # detect respawn (double connection and/or death) for the same Character
-      ALREADYREGISTEREDSTR=`grep "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
+      ALREADYREGISTEREDSTR=`grep -- "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
       if [ -z "$ALREADYREGISTEREDSTR" ]
       then
          # new connection
@@ -53,7 +53,7 @@ while read LINE; do
    if [ ! -z "$DISCOZDOID" ]
    then
       # Add to offline players list
-      grep "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
+      grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
       # Delete from online players   
       sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
       if [ $EVENTREALTIME != 0 ]
