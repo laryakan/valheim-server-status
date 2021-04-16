@@ -6,7 +6,7 @@
 [Unit]
 Description=Valheim Server Status over HTTP
 Wants=network-online.target
-After=syslog.target network.target nss-lookup.target network-online.target
+After=syslog.target network.target nss-lookup.target network-online.target home.mount
 
 [Service]
 Type=simple

@@ -50,6 +50,9 @@ or
 - if you're not sudoer, leave the **./setup**, change account or go in root
 - in **./setup**, go in launcher menu, option **2**
 - activate the valheim-server.service with option **7** -> this will create a service bond to our custom_launcher
+> Caution ! If your Valheim Server AND/OR .service file AND/OR VSS are one differents filesystem, be sure to modify the service unit to include the mounting to wait on
+
+
 > Once done, your Valheim server should be running as it was, but this time with a launcher piped on our log-filter
 > you can now set your Discord webhook as described below
 > you can also setup vss.http as described below

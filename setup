@@ -176,8 +176,10 @@ function set_service(){
 	# set valheim server dir for server update
 	sed -i "s[###VSSPIPEDIR###[$VSSPIPEDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
+	# copying to system
+	sudo mv "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
 	# binding with systemd
-	sudo ln -s "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
+	ln -s "/etc/systemd/system/$SERVICENAME" "$CWD/systemd/$SERVICENAME"
 	NOSUDO=$?
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]

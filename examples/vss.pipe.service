@@ -5,7 +5,7 @@
 [Unit]
 Description=Tail pipe from Valheim Server logs to VSS log-filter
 Wants=network-online.target
-After=syslog.target network.target nss-lookup.target network-online.target
+After=syslog.target network.target nss-lookup.target network-online.target home.mount
 
 [Service]
 Type=simple
