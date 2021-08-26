@@ -18,7 +18,7 @@ All mandatory binaries, or the very very most,  are included with distro.
 ![menu](https://github.com/laryakan/valheim-server-status/raw/main/screenshots/vss-menu.JPG?raw=true)
 The setup will guide you into setting be everything in order, step by step.
 
-You can check the setup completion at any time with option **1** (in any menu).
+You can check the setup completion at any time, in any menu.
 You can also scroll up to previous views.
 
 >**Something really important for every VSS version is to pipe your server onto the log filter at repository root.**
