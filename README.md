@@ -74,26 +74,130 @@ You can also use the project pipe service from the main menu by selecting the lo
 - make sure the log file is readable by the project user
 - then configure Discord or HTTP status as needed
 
-## Discord status setup
+## Discord-only walkthrough
 
-![discord-status](https://github.com/laryakan/valheim-server-status/raw/main/screenshots/vss-discord-status.JPG?raw=true)![discord-logs](https://github.com/laryakan/valheim-server-status/raw/main/screenshots/vss-discord-logs.JPG?raw=true)
+This is the simplest Discord setup when you want only webhook notifications and no HTTP status page.
 
-Quick checklist:
+### 1) Create the webhook
 
-1. Create a Discord webhook in the target channel.
-2. Enable developer mode in Discord.
-3. Copy the webhook URL.
-4. Run `./setup` and open the Discord menu.
-5. Paste the webhook URL.
-6. Optionally set how many recent logs should be published.
-7. Trigger a force update.
-8. Copy the message ID of the status message and the logs message.
-9. Paste those IDs in the setup menu.
-10. Trigger another update to verify that the message is edited instead of duplicated.
+1. Open the Discord channel you want to use.
+2. Channel settings → Integrations → Webhooks.
+3. Create a webhook and copy the full URL.
+4. Keep developer mode enabled so you can copy message IDs later.
 
-> If the status message has been deleted, VSS will create a new message automatically and log the event to `stderr` / `crash.log`.
+### 2) Configure the project
 
-> Set the cron frequency to `0` to disable automatic updates.
+Run:
+
+```bash
+cd /home/your-user/valheim-server-status
+./setup
+```
+
+Then go to:
+
+- Discord menu
+- option 1: paste the webhook URL
+- option 2: set how many recent logs to send, or `0` to disable
+- option 7: enable `SENDSERVERCONNECTIONINFO` with value `1`
+- option 6: set the connection-info message ID once created, or leave empty for the initial message
+- option 4: set the server-status message ID once created
+- option 5: set the logs message ID once created
+
+### 3) Create the initial messages
+
+Once the config is in place, run:
+
+```bash
+./discord/update
+```
+
+This creates the first Discord messages in order:
+
+1. connection info
+2. server status
+3. last logs
+
+Then copy the message IDs from Discord and save them in `.env` or through the setup menu.
+
+### 4) Switch to update mode
+
+After the initial messages exist, set:
+
+```bash
+SERVERCONNECTIONINFOMESSAGEID=<id>
+STATUSMESSAGEID=<id>
+LASTLOGMESSAGEID=<id>
+```
+
+Then the project will update those existing messages instead of creating duplicates.
+
+### 5) Keep automatic updates
+
+In the Discord menu:
+
+- set `CRONTABWEBHOOKFREQ` to a value such as `5` for every 5 minutes
+- or set it to `0` to disable automatic updates
+
+> If a message is deleted, VSS creates a new one and logs it to `stderr` / `crash.log`.
+
+## Log pipeline walkthrough
+
+The log pipeline is the source of player activity and state changes.
+
+### Recommended flow
+
+1. Make sure the Valheim server writes to a log file or stream.
+2. Point `VALHEIMSERVERLOGPATH` to a file or a directory pattern.
+3. Activate the pipe service from `./setup`.
+4. Ensure the log filter is receiving the server output.
+
+### Example using a custom launcher
+
+```bash
+./launcher/start_server_custom.sh
+```
+
+The launcher writes to a log path that VSS can watch and parse.
+
+### Example using an existing launcher
+
+If your server is already started elsewhere, pipe its logs into the filter:
+
+```bash
+your_valheim_server_binary -name "My Server" -world "MyWorld" -password "secret" \
+  | tee -a "$HOME/valheim-server-status/valheim-logs.d/$(date +%Y-%m-%d).stdout.log"
+```
+
+Then in the project setup, set:
+
+```bash
+VALHEIMSERVERLOGPATH="$HOME/valheim-server-status/valheim-logs.d/*.log"
+```
+
+or a more specific file path if you use a single log file.
+
+### Example with the built-in pipe service
+
+From the main setup menu:
+
+- choose the logs path
+- activate the pipe service
+- check that the log filter is running with `pgrep vss.log-filter`
+
+Once active, player join/leave events are tracked automatically and can be posted to Discord.
+
+## Order of Discord messages on the channel
+
+The project sends Discord messages in this order:
+
+1. connection info
+2. server status
+3. last logs
+
+This ordering is intentional so the channel starts with a stable connection block, then the current server state, then the recent log excerpts.
+
+A short pause is inserted between messages to keep Discord ordering consistent across updates.
 
 ## HTTP status setup
 
