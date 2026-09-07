@@ -27,14 +27,23 @@ sleep 2
 # If no message ID is set yet, we create the initial message once so the user can later copy the ID.
 if [ "${SENDLASTLOGS:-0}" -gt 0 ] 2>/dev/null
 then
-  LAST_LOG="$(ls -1tr "$VALHEIMSERVERLOGPATH" 2>/dev/null | tail -1)"
-  if [ -z "$LAST_LOG" ]
+  shopt -s nullglob
+  LOGFILES=( $VALHEIMSERVERLOGPATH )
+  shopt -u nullglob
+
+  if [ ${#LOGFILES[@]} -eq 0 ]
   then
     echo 'no log to send' >&2
   else
-    tail -n "$SENDLASTLOGS" "$LAST_LOG" | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
+    LAST_LOG="$(ls -1tr "${LOGFILES[@]}" 2>/dev/null | tail -1)"
+    if [ -z "$LAST_LOG" ]
+    then
+      echo 'no log to send' >&2
+    else
+      tail -n "$SENDLASTLOGS" "$LAST_LOG" | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
 {\"title\":\"Last Logs\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
 ]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
+    fi
   fi
 fi
 
