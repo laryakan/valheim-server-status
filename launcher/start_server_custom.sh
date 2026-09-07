@@ -1,6 +1,7 @@
 #!/bin/bash
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 
 export templdpath=$LD_LIBRARY_PATH

@@ -5,3 +5,4 @@ systemd
 valheim-logs.d
 valheim-logs.d/*
 data
+crash.log

@@ -1,24 +1,27 @@
 #!/bin/bash
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 # Update server status
 "$VSSDIR/status/server-status" --for-webhook | "$CWD/webhook.json-sender" --status
 
 # Output the last stdout logs if asked
-if [ $SENDLASTLOGS -gt 0 ]
+if [ "${SENDLASTLOGS:-0}" -gt 0 ] 2>/dev/null
 then
-  if [ -z $(ls -1tr $VALHEIMSERVERLOGPATH) ]
+  LAST_LOG="$(ls -1tr $VALHEIMSERVERLOGPATH 2>/dev/null | tail -1)"
+  if [ -z "$LAST_LOG" ]
   then
-    echo 'no log to send'
-  fi
-  tail -$SENDLASTLOGS < $(ls -1tr $VALHEIMSERVERLOGPATH | tail -1) | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
+    echo 'no log to send' >&2
+  else
+    tail -n "$SENDLASTLOGS" "$LAST_LOG" | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
 {\"title\":\"Last Logs\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
 ]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
+  fi
 fi
 
 # Output the last stdout logs if asked
-if [ $SENDSERVERCONNECTIONINFO -gt 0 ]
+if [ "${SENDSERVERCONNECTIONINFO:-0}" -gt 0 ] 2>/dev/null
 then
 echo -n "{\
 \"title\":\"Valheim server informations\",\

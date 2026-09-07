@@ -2,6 +2,7 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 
 # Sending status messages on Discord script
@@ -31,21 +32,29 @@ WHURL="https://discord.com/api/webhooks/$WEBHOOKID/$WEBHOOKTOKEN"
 # Check if a status message_id has been filled
 if [ ! -z "$MESSAGEID" ]
 then
-	#PATCH
-	CURL=$(curl -sH "Content-Type: application/json" -X PATCH -d "$CONTENT" "$WHURL/messages/$MESSAGEID" | grep '"code": 10008')
-	# You asked for a status update but the status message id doesnt exist
-	if [ ! -z "$CURL" ] && [ "$1" = "--status" ]
+	PATCH_RESPONSE_FILE="$(mktemp)"
+	PATCH_HTTP_CODE=$(curl -sS -o "$PATCH_RESPONSE_FILE" -w '%{http_code}' -H "Content-Type: application/json" -X PATCH -d "$CONTENT" "$WHURL/messages/$MESSAGEID")
+	PATCH_BODY=$(cat "$PATCH_RESPONSE_FILE")
+	PATCH_DELETED=$(printf '%s' "$PATCH_BODY" | grep -E '"code": 10008|Unknown Message|message.*not found|not found' || true)
+
+	if [ "$PATCH_HTTP_CODE" = "200" ] || [ "$PATCH_HTTP_CODE" = "201" ] || [ "$PATCH_HTTP_CODE" = "204" ]
 	then
-		echo -e "Status message has been deleted from the server, \
-a new message will be sent, please fill the .env file"
-	else
 		exit 0
 	fi
 
+	if [ -n "$PATCH_DELETED" ]
+	then
+		if [ "$1" = "--status" ]
+		then
+			echo -e "Status message has been deleted from the server, \
+	a new message will be sent, please fill the .env file" >&2
+		fi
+		MESSAGEID=''
+	else
+		echo -e "Discord PATCH failed with HTTP $PATCH_HTTP_CODE; keeping existing message without creating a new one." >&2
+		exit 0
+	fi
 fi
 
-
-
 #'{"content":"'"${domain} : ${status_code}"'"}'
-curl -sH "Content-Type: application/json" -X POST -d "$CONTENT" "$WHURL"
-
+curl -sS -H "Content-Type: application/json" -X POST -d "$CONTENT" "$WHURL"

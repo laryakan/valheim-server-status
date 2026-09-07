@@ -2,6 +2,7 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/crash.log"
 if [ ! -f "$CWD/.env" ]
 then
   cp "$CWD/.env.dist" "$CWD/.env"
@@ -61,16 +62,38 @@ echo -e "- $STATUSPORT/tcp (VSS over HTTP)"
 echo "======================================="
 }
 
+source "$CWD/lib/validation.sh"
+
+function default_integer_value() {
+  case "$1" in
+    VHSERVERPORT) echo 2456 ;;
+    STATUSPORT) echo 8181 ;;
+    SENDLASTLOGS) echo 0 ;;
+    SENDSERVERCONNECTIONINFO) echo 0 ;;
+    CRONTABWEBHOOKFREQ) echo 5 ;;
+    EVENTREALTIME) echo 0 ;;
+    *) echo 0 ;;
+  esac
+}
+
 # env conf value changing function
 function replace_env_value() {
-  ISNUMorEMPTY="$(echo "$2"|grep -E '^\-?[0-9]?\.?[0-9]+$'|wc -l)"
-  if [[ $ISNUMorEMPTY -eq 0 ]]
-  then 
-  	cat "$CWD/.env"|grep "$1="|xargs -I {} -t -d'\n' sed -i "s[{}[$1=\"$2\"[ig" "$CWD/.env"
-  else
-	cat "$CWD/.env"|grep "$1="|xargs -I {} -t -d'\n' sed -i "s[{}[$1=$2[ig" "$CWD/.env"
+  local key="$1"
+  local value="$2"
+
+  if ! validate_env_integer "$key" "$value"; then
+    local fallback
+    fallback="$(default_integer_value "$key")"
+    echo "Invalid integer value for $key: '$value'; using default $fallback" >&2
+    value="$fallback"
   fi
-  
+
+  if [[ "$value" == *[!0-9]* ]] && [[ "$value" != "" ]]; then
+    sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$CWD/.env"
+  else
+    sed -i "s|^${key}=.*|${key}=${value}|" "$CWD/.env"
+  fi
+
   source "$CWD/.env"
 }
 
@@ -184,11 +207,11 @@ function set_service(){
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
-		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')"
-		echo -e "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\""
-		echo -e "sudo systemctl daemon-reload"
-		echo -e "sudo systemctl enable $SERVICENAME"
-		echo -e "sudo systemctl start $SERVICENAME"
+		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')" >&2
+		echo -e "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\"" >&2
+		echo -e "sudo systemctl daemon-reload" >&2
+		echo -e "sudo systemctl enable $SERVICENAME" >&2
+		echo -e "sudo systemctl start $SERVICENAME" >&2
 	else 
 		# service relaod
 		sudo systemctl daemon-reload
@@ -222,8 +245,8 @@ function set_logrotate(){
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
-		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')";
-		echo -e "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"";
+		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')" >&2
+		echo -e "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"" >&2
 	else 
 		echo -e "$(ColorGreen 'logrotate set')"
 	fi
@@ -274,7 +297,7 @@ mkdir -p "$CWD/systemd"
 			8) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; discord_menu ;;
 			
 		0) clear ; new_menu ;;
-		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
 
@@ -310,7 +333,7 @@ mkdir -p "$CWD/systemd"
 
 
 		0) clear ; new_menu ;;
-		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
 
@@ -335,7 +358,7 @@ mkdir -p "$CWD/systemd"
 			 3) uninstall_service "$VSSHTTPSERVICENAME" ; clear ; http_status_menu ;;
 
 		0) clear ; new_menu ;;
-		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
 
@@ -384,9 +407,11 @@ $(ColorBlue 'choose an option:') "
 	     	11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; rm "$CWD/systemd/valheim.logrotate" ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
 		
 		0) exit 0 ;;
-		*) echo -e $red"Wrong option."$clear; WrongCommand;;
+		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
 
 # init new menu
-clear ; new_menu
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  clear ; new_menu
+fi
