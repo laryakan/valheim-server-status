@@ -6,10 +6,11 @@ source "$CWD/../.env"
 # Update server status
 "$VSSDIR/status/server-status" --for-webhook | "$CWD/webhook.json-sender" --status
 
-# Output the last stdout logs if asked
+# Output the last stdout logs if asked.
+# If no message ID is set yet, we create the initial message once so the user can later copy the ID.
 if [ "${SENDLASTLOGS:-0}" -gt 0 ] 2>/dev/null
 then
-  LAST_LOG="$(ls -1tr $VALHEIMSERVERLOGPATH 2>/dev/null | tail -1)"
+  LAST_LOG="$(ls -1tr "$VALHEIMSERVERLOGPATH" 2>/dev/null | tail -1)"
   if [ -z "$LAST_LOG" ]
   then
     echo 'no log to send' >&2
@@ -20,10 +21,11 @@ then
   fi
 fi
 
-# Output the last stdout logs if asked
+# Output the server connection info if asked.
+# If no message ID is set yet, we create the initial message so the user can later copy it.
 if [ "${SENDSERVERCONNECTIONINFO:-0}" -gt 0 ] 2>/dev/null
 then
-echo -n "{\
+  echo -n "{\
 \"title\":\"Valheim server informations\",\
 \"embeds\":[\
 {\"title\":\"Connection\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\

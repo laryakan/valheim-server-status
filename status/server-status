@@ -6,10 +6,20 @@ exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 
 # Stats
-TOTALCPU=$(cat /proc/cpuinfo|grep processor|wc -l) # Cores
-TOTALRAM=$(($(grep MemTotal /proc/meminfo|cut -d' ' -f9)/1024)) #(MB)
-CPUUSAGE=$(($(top -p `pgrep valheim_server` -b -n1 | awk '{print $9}' | tail -n1 | cut -d'.' -f1) /$TOTALCPU))
-RAMUSAGE=$(top -p $VALSERVERPID -b -n1 | awk '{print $10}' | tail -n1)
+TOTALCPU=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
+TOTALCPU=$(( TOTALCPU > 0 ? TOTALCPU : 1 ))
+TOTALRAM=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | cut -d' ' -f9 || echo 0) / 1024 ))
+
+VALHEIM_PID=$(pgrep -x valheim_server 2>/dev/null | head -n 1)
+if [ -n "$VALHEIM_PID" ]
+then
+	CPUUSAGE_RAW=$(top -p "$VALHEIM_PID" -b -n1 2>/dev/null | awk 'END {print $9}' | cut -d'.' -f1)
+	CPUUSAGE=$(( ${CPUUSAGE_RAW:-0} / TOTALCPU ))
+	RAMUSAGE=$(top -p "$VALHEIM_PID" -b -n1 2>/dev/null | awk 'END {print $10}' | tail -n1)
+else
+	CPUUSAGE=0
+	RAMUSAGE=0
+fi
 
 if [ "$1" = '--for-webhook' ]
 then

@@ -30,30 +30,40 @@ CONTENT="$(</dev/stdin)"
 WHURL="https://discord.com/api/webhooks/$WEBHOOKID/$WEBHOOKTOKEN"
 
 # Check if a status message_id has been filled
-if [ ! -z "$MESSAGEID" ]
+if [ -n "${MESSAGEID:-}" ]
+then
+	case "$MESSAGEID" in
+		''|*[!0-9]*) MESSAGEID='' ;;
+		*) ;;
+	esac
+fi
+
+if [ -n "${MESSAGEID:-}" ]
 then
 	PATCH_RESPONSE_FILE="$(mktemp)"
 	PATCH_HTTP_CODE=$(curl -sS -o "$PATCH_RESPONSE_FILE" -w '%{http_code}' -H "Content-Type: application/json" -X PATCH -d "$CONTENT" "$WHURL/messages/$MESSAGEID")
 	PATCH_BODY=$(cat "$PATCH_RESPONSE_FILE")
-	PATCH_DELETED=$(printf '%s' "$PATCH_BODY" | grep -E '"code": 10008|Unknown Message|message.*not found|not found' || true)
+	PATCH_DELETED=$(printf '%s' "$PATCH_BODY" | grep -E '"code"[[:space:]]*:[[:space:]]*10008|Unknown Message|Unknown Webhook|message.*not found|not found' || true)
 
-	if [ "$PATCH_HTTP_CODE" = "200" ] || [ "$PATCH_HTTP_CODE" = "201" ] || [ "$PATCH_HTTP_CODE" = "204" ]
-	then
-		exit 0
-	fi
-
-	if [ -n "$PATCH_DELETED" ]
-	then
-		if [ "$1" = "--status" ]
-		then
-			echo -e "Status message has been deleted from the server, \
+	case "$PATCH_HTTP_CODE" in
+		200|201|202|204)
+			exit 0
+			;;
+		*)
+			if [ -n "$PATCH_DELETED" ]
+			then
+				if [ "$1" = "--status" ]
+				then
+					echo -e "Status message has been deleted from the server, \
 	a new message will be sent, please fill the .env file" >&2
-		fi
-		MESSAGEID=''
-	else
-		echo -e "Discord PATCH failed with HTTP $PATCH_HTTP_CODE; keeping existing message without creating a new one." >&2
-		exit 0
-	fi
+				fi
+				MESSAGEID=''
+			else
+				echo -e "Discord PATCH failed with HTTP $PATCH_HTTP_CODE; keeping existing message without creating a new one." >&2
+				exit 0
+			fi
+			;;
+	esac
 fi
 
 #'{"content":"'"${domain} : ${status_code}"'"}'
