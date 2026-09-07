@@ -10,12 +10,25 @@ TOTALCPU=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
 TOTALCPU=$(( TOTALCPU > 0 ? TOTALCPU : 1 ))
 TOTALRAM=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | cut -d' ' -f9 || echo 0) / 1024 ))
 
-VALHEIM_PID=$(pgrep -x valheim_server 2>/dev/null | head -n 1)
+VALHEIM_PID="${VALSERVERPID:-}"
 if [ -n "$VALHEIM_PID" ]
 then
-	CPUUSAGE_RAW=$(top -p "$VALHEIM_PID" -b -n1 2>/dev/null | awk 'END {print $9}' | cut -d'.' -f1)
-	CPUUSAGE=$(( ${CPUUSAGE_RAW:-0} / TOTALCPU ))
-	RAMUSAGE=$(top -p "$VALHEIM_PID" -b -n1 2>/dev/null | awk 'END {print $10}' | tail -n1)
+	PS_OUTPUT=$(LC_ALL=C ps -p "$VALHEIM_PID" -o %cpu=,%mem= --no-headers 2>/dev/null | head -n 1)
+	if [ -n "$PS_OUTPUT" ]
+	then
+		read -r CPUUSAGE_RAW RAMUSAGE_RAW <<EOF
+$PS_OUTPUT
+EOF
+		CPUUSAGE=$(printf '%s' "$CPUUSAGE_RAW" | tr ',' '.' | awk '{printf "%.0f", $1}')
+		RAMUSAGE=$(printf '%s' "$RAMUSAGE_RAW" | tr ',' '.' | awk '{printf "%.0f", $1}')
+	else
+		CPUUSAGE=0
+		RAMUSAGE=0
+	fi
+	if [ "$TOTALCPU" -gt 0 ]
+	then
+		CPUUSAGE=$(( CPUUSAGE / TOTALCPU ))
+	fi
 else
 	CPUUSAGE=0
 	RAMUSAGE=0
