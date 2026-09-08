@@ -80,7 +80,19 @@ function default_integer_value() {
 # env conf value changing function
 function replace_env_value() {
   local key="$1"
-  local value="$2"
+  local value="${2:-}"
+
+  case "$key" in
+    STATUSMESSAGEID|LASTLOGMESSAGEID|SERVERCONNECTIONINFOMESSAGEID)
+      if [ -n "$value" ]; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "$CWD/.env"
+      else
+        sed -i "s|^${key}=.*|${key}=''|" "$CWD/.env"
+      fi
+      source "$CWD/.env"
+      return
+      ;;
+  esac
 
   if ! validate_env_integer "$key" "$value"; then
     local fallback

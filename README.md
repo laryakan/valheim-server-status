@@ -106,11 +106,7 @@ Then go to:
 
 ### 3) Create the initial messages
 
-Once the config is in place, run:
-
-```bash
-./discord/update
-```
+Once the config is in place, go to the Discord menu in `./setup` and select option 3 to force a webhook update.
 
 This creates the first Discord messages in order:
 
@@ -119,6 +115,12 @@ This creates the first Discord messages in order:
 3. last logs
 
 Then copy the message IDs from Discord and save them in `.env` or through the setup menu.
+
+You can also trigger the same update directly with:
+
+```bash
+./discord/update
+```
 
 ### 4) Switch to update mode
 
