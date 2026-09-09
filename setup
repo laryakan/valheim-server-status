@@ -91,7 +91,12 @@ function setup_status(){
 	echo -ne "
 ======== VSS setup completion =========
 "
-if [ ! -z $VALSERVERPID ];then echo -e "Valheim Server $(ColorGreen online)";else echo -e "Valheim Server $(ColorRed offline)";fi
+if [ -n "${VALSERVERPID:-}" ] && ps -p "$VALSERVERPID" >/dev/null 2>&1; then
+  LIVE_VALHEIM_PID="$VALSERVERPID"
+else
+  LIVE_VALHEIM_PID="$(pgrep -f 'valheim_server' 2>/dev/null | head -n 1)"
+fi
+if [ -n "$LIVE_VALHEIM_PID" ] && ps -p "$LIVE_VALHEIM_PID" >/dev/null 2>&1; then echo -e "Valheim Server $(ColorGreen online)"; else echo -e "Valheim Server $(ColorRed offline)"; fi
 if [ ! -z $(pgrep $(basename $VSSLOGFILTER)) ];then echo -e "VSS log filter $(ColorGreen running)";else echo -e "VSS log filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
 if [ "$VHSERVERWORLD" != 'server.world' ];then echo -e "Custom launcher world $(ColorGreen 'is set')";else echo -e "Custom launcher world $(ColorRed 'has default value')";fi
 if [ -e '/etc/logrotate.d/valheim' ];then echo -e "logrotate $(ColorGreen set)";else echo -e "logrotate $(ColorRed 'not set')";fi
