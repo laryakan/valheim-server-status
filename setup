@@ -483,10 +483,11 @@ $(ColorGreen '5)') setup wanted Valheim server world name
 $(ColorGreen '6)') setup wanted Valheim server password
 $(ColorGreen '7)') setup wanted Valheim server $(ColorYellow 'seed') value $(ColorRed '(you will start on a new map after server restart)')
 $(ColorGreen '8)') setup wanted Valheim server savedir value $(ColorRed '(you must restart your server for this to take effect)')
-$(ColorGreen '9)') $(ColorRed 'sudo required') stop the service and shut down the server
-$(ColorGreen '10)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
-$(ColorGreen '11)') $(ColorRed 'sudo required') restart the service and the server (force server update)
-$(ColorGreen '12)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
+$(ColorGreen '9)') setup crossplay $(ColorRed '(you must restart your server for this to take effect)')
+$(ColorGreen '10)') $(ColorRed 'sudo required') stop the service and shut down the server
+$(ColorGreen '11)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
+$(ColorGreen '12)') $(ColorRed 'sudo required') restart the service and the server (force server update)
+$(ColorGreen '13)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -503,10 +504,11 @@ mkdir -p "$CWD/systemd"
 	        6) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
 			7) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
 			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
-			9) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			10) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			11) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			12) 
+			9) setup_value_prompt 'set crossplay on/off: 1 = crossplay active, 0 = crossplay inactive' 'VHSERVERCROSSPLAY' ; clear ; launcher_menu ;;
+			10) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			11) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			12) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			13) 
 				if [ -n "$VHSERVERWORLD" ]; then
 					stop_valheim_service
 					WORLD_FILES_DIR="$VHSERVERSAVEDIR/worlds_local"

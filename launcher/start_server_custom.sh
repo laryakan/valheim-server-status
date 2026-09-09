@@ -18,14 +18,20 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 # NOTE: You need to make sure the ports 2456-2458 (or the one specified +2) is being forwarded to
 #   your server through your local router & firewall.
 # Redirect stdout to log-filter and stderr to another file
-"$VHSERVERDIR/valheim_server.x86_64" \
--name "$VHSERVERNAME" \
--port $VHSERVERPORT \
--world "$VHSERVERWORLD" \
--world_seed "$VHSERVERSEED" \
--savedir "$VHSERVERSAVEDIR" \
--password "$VHSERVERPASSWD" \
--crossplay \
+LAUNCH_ARGS=(
+  -name "$VHSERVERNAME"
+  -port "$VHSERVERPORT"
+  -world "$VHSERVERWORLD"
+  -world_seed "$VHSERVERSEED"
+  -savedir "$VHSERVERSAVEDIR"
+  -password "$VHSERVERPASSWD"
+)
+
+if [ "${VHSERVERCROSSPLAY:-0}" = "1" ]; then
+  LAUNCH_ARGS+=( -crossplay )
+fi
+
+"$VHSERVERDIR/valheim_server.x86_64" "${LAUNCH_ARGS[@]}" \
 1> >( tee -a >("$VSSLOGFILTER") ) \
 2> >( tee -a "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stderr.log" >&2 )
 
