@@ -85,6 +85,7 @@ then
 {\"name\":\"$(T ram)\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\
 {\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},\
 {\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
+{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},\
 {\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},\
 {\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST:-nobody}\",\"inline\":true},\
 {\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST:-nobody}\",\"inline\":true},\
