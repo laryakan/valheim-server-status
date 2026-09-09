@@ -56,7 +56,7 @@ while read LINE; do
          echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
          if [ $EVENTREALTIME != 0 ]
          then
-            "$WEBHOOKUPDATE"
+            "$CWD/discord/event" "connect" "Player $PLAYERNAME joined the server." "$PLAYERNAME"
          fi
       fi
    fi
@@ -65,13 +65,17 @@ while read LINE; do
    DISCOZDOID=`echo ${LINE} |grep "Destroying abandoned non persistent zdo"|head -1|cut -d' ' -f10`
    if [ ! -z "$DISCOZDOID" ]
    then
-      # Add to offline players list
-      grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
-      # Delete from online players   
-      sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
-      if [ $EVENTREALTIME != 0 ]
+      PLAYERNAME=$(grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" 2>/dev/null | cut -d';' -f2 | head -n 1)
+      if [ -n "$PLAYERNAME" ]
       then
-         "$WEBHOOKUPDATE"
+         # Add to offline players list
+         grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
+         # Delete from online players
+         sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
+         if [ $EVENTREALTIME != 0 ]
+         then
+            "$CWD/discord/event" "disconnect" "Player $PLAYERNAME left the server." "$PLAYERNAME"
+         fi
       fi
    fi
 

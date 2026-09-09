@@ -1,0 +1,41 @@
+#!/bin/bash
+# Basic env init
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/../crash.log"
+source "$CWD/../.env"
+
+EVENT_TYPE="${1:-unknown}"
+EVENT_MESSAGE="${2:-}"
+PLAYER_NAME="${3:-}"
+EVENT_TIME="$(date +'%F.%T')"
+
+if [ -n "$EVENT_MESSAGE" ]
+then
+  EVENT_TEXT="$EVENT_MESSAGE"
+else
+  EVENT_TEXT="Event: $EVENT_TYPE"
+fi
+
+if [ -n "$PLAYER_NAME" ]
+then
+  PLAYER_FIELD='{"name":"Player","value": "%s"},'
+else
+  PLAYER_FIELD=''
+fi
+
+printf '{\
+"title":"Valheim server event",\
+"embeds":[\
+{"title":"%s","color":%s,"url":"%s","fields":[\
+{"name":"Event Time","value": "%s"},\
+%s\
+{"name":"Status","value": "%s"}\
+]}\
+]}' \
+  "$EVENT_TYPE" \
+  10181046 \
+  "$STATUSURL" \
+  "$EVENT_TIME" \
+  "$(printf "$PLAYER_FIELD" "$PLAYER_NAME")" \
+  "$EVENT_TEXT" \
+  | "$CWD/webhook.json-sender"
