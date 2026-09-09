@@ -212,6 +212,13 @@ function auto_conf(){
 		if [ ! -z "$FVHSERVERSAVEDIR" ]; then
 			replace_env_value 'VHSERVERSAVEDIR' "$FVHSERVERSAVEDIR"
 		fi
+		# get crossplay if present
+		FVHSERVERCROSSPLAY=$(echo $VHSERVERPROCESS|grep -o -- '-crossplay' | head -n 1)
+		if [ -n "$FVHSERVERCROSSPLAY" ]; then
+			replace_env_value 'VHSERVERCROSSPLAY' 1
+		else
+			replace_env_value 'VHSERVERCROSSPLAY' 0
+		fi
 		# get Your server password
 		FVHSERVERPASSWD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-password //p'|cut -d' ' -f1)
 		replace_env_value 'VHSERVERPASSWD' "$FVHSERVERPASSWD"
