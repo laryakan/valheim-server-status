@@ -20,15 +20,18 @@ fi
 
 if [ -n "$VALHEIM_PID" ]
 then
-	PS_OUTPUT=$(LC_ALL=C ps -p "$VALHEIM_PID" -o %cpu=,%mem= --no-headers 2>/dev/null | head -n 1)
+	PS_OUTPUT=$(LC_ALL=C ps -p "$VALHEIM_PID" -o lstart=,%cpu=,%mem= --no-headers 2>/dev/null | head -n 1)
 	if [ -n "$PS_OUTPUT" ]
 	then
-		read -r CPUUSAGE_RAW RAMUSAGE_RAW <<EOF
+		read -r START_DAY START_MONTH START_DAYNUM START_TIME START_YEAR CPUUSAGE_RAW RAMUSAGE_RAW <<EOF
 $PS_OUTPUT
 EOF
+		PROCESS_START_RAW="${START_DAY} ${START_MONTH} ${START_DAYNUM} ${START_TIME} ${START_YEAR}"
+		PROCESS_START_TS=$(date -d "$PROCESS_START_RAW" '+%d/%m/%Y %H:%M:%S' 2>/dev/null || true)
 		CPUUSAGE=$(printf '%s' "$CPUUSAGE_RAW" | tr ',' '.' | awk '{printf "%.0f", $1}')
 		RAMUSAGE=$(printf '%s' "$RAMUSAGE_RAW" | tr ',' '.' | awk '{printf "%.0f", $1}')
 	else
+		PROCESS_START_TS="unknown"
 		CPUUSAGE=0
 		RAMUSAGE=0
 	fi
@@ -37,6 +40,7 @@ EOF
 		CPUUSAGE=$(( CPUUSAGE / TOTALCPU ))
 	fi
 else
+	PROCESS_START_TS="unknown"
 	CPUUSAGE=0
 	RAMUSAGE=0
 fi
@@ -47,11 +51,8 @@ CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
 CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
 CURRENT_START_TS="${VALSERVERLASTSTART:-unknown}"
 LAST_WORLD_SAVE_TS="$(cat "$CWD/../last-world-save" 2>/dev/null || echo "unknown")"
-if [ -n "$VALHEIM_PID" ]; then
-	PROCESS_START_TS="$(ps -p "$VALHEIM_PID" -o lstart= 2>/dev/null | head -n 1 | sed 's/^ *//' | xargs -I{} date -d "{}" '+%d/%m/%Y %H:%M:%S' 2>/dev/null || true)"
-	if [ -n "$PROCESS_START_TS" ]; then
-		CURRENT_START_TS="$PROCESS_START_TS"
-	fi
+if [ -n "$PROCESS_START_TS" ] && [ "$PROCESS_START_TS" != "unknown" ]; then
+	CURRENT_START_TS="$PROCESS_START_TS"
 fi
 if [ -z "$CURRENT_START_TS" ] || [ "$CURRENT_START_TS" = "0" ] || [ "$CURRENT_START_TS" = "unknown" ]; then
 	CURRENT_START_TS="unknown"
@@ -83,7 +84,7 @@ then
 {\"name\":\"$(T cpu)\",\"value\": \"$CPUUSAGE%\",\"inline\":true},\
 {\"name\":\"$(T ram)\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\
 {\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},\
-{\"name\":\"last_start\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
+{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
 {\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},\
 {\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST:-nobody}\",\"inline\":true},\
 {\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST:-nobody}\",\"inline\":true},\
