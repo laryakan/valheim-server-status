@@ -23,7 +23,7 @@ case "${VSS_LANG:-en}" in
     T_CONNECTION_INFO_TITLE="Informations de connexion"
     T_SERVER_INFO_TITLE="Informations du serveur Valheim"
     T_IP="IP"
-    T_WORLD="Monde"
+    T_SERVER_NAME="Nom du serveur"
     T_PASSWORD="Mot de passe"
     T_LAST_LOGS="Derniers journaux"
     T_NO_LOG_TO_SEND="aucun journal à envoyer"
@@ -67,7 +67,7 @@ case "${VSS_LANG:-en}" in
     T_CONNECTION_INFO_TITLE="Connection"
     T_SERVER_INFO_TITLE="Valheim server information"
     T_IP="IP"
-    T_WORLD="World"
+    T_SERVER_NAME="Server name"
     T_PASSWORD="Password"
     T_LAST_LOGS="Last Logs"
     T_NO_LOG_TO_SEND="no log to send"
@@ -140,7 +140,7 @@ T() {
     connection_info_title) echo "$T_CONNECTION_INFO_TITLE" ;;
     server_info_title) echo "$T_SERVER_INFO_TITLE" ;;
     ip) echo "$T_IP" ;;
-    world) echo "$T_WORLD" ;;
+    server_name) echo "$T_SERVER_NAME" ;;
     password) echo "$T_PASSWORD" ;;
     last_logs) echo "$T_LAST_LOGS" ;;
     no_log_to_send) echo "$T_NO_LOG_TO_SEND" ;;

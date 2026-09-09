@@ -67,13 +67,13 @@ then
 \"title\":\"$(T server_status_title)\",\
 \"embeds\":[\
 {\"title\":\"$(T online)\",\"color\":3066993,\"url\":\"$STATUSURL\",\"fields\":[\
-{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},\
 {\"name\":\"$(T cpu)\",\"value\": \"$CPUUSAGE%\",\"inline\":true},\
 {\"name\":\"$(T ram)\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\
 {\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},\
 {\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},\
 {\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST:-nobody}\",\"inline\":true},\
-{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST:-nobody}\",\"inline\":true}\
+{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST:-nobody}\",\"inline\":true},\
+{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}\
 ]}\
 ]}"
 	fi

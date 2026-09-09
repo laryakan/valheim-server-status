@@ -9,9 +9,9 @@ echo -n "{\
 \"title\":\"$(T server_info_title)\",\
 \"embeds\":[\
 {\"title\":\"$(T connection_info_title)\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
-{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},\
+{\"name\":\"$(T server_name)\",\"value\": \"$VHSERVERNAME\"},\
 {\"name\":\"$(T ip)\",\"value\": \"||$PUBLICIP:$VHSERVERPORT||\"},\
-{\"name\":\"$(T world)\",\"value\": \"||$VHSERVERWORLD||\"},\
-{\"name\":\"$(T password)\",\"value\": \"||$VHSERVERPASSWD||\"}\
+{\"name\":\"$(T password)\",\"value\": \"||$VHSERVERPASSWD||\"},\
+{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}\
 ]}\
 ]}"
