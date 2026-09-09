@@ -5,6 +5,16 @@ exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 source "$CWD/../i18n.sh"
 
+json_escape() {
+  local value="${1}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
 EVENT_TYPE="${1:-unknown}"
 EVENT_MESSAGE="${2:-}"
 PLAYER_NAME="${3:-}"
@@ -17,25 +27,28 @@ else
   EVENT_TEXT="$(T event_line "$EVENT_TYPE")"
 fi
 
-if [ -n "$PLAYER_NAME" ]
-then
-  PLAYER_FIELD='{"name":"'"$(T player)"'","value": "%s"},'
-else
-  PLAYER_FIELD=''
+PLAYER_FIELD=''
+if [ -n "$PLAYER_NAME" ]; then
+  PLAYER_FIELD="{\"name\":\"$(json_escape "$(T player)")\",\"value\":\"$(json_escape "$PLAYER_NAME")\"},"
 fi
 
-printf '{\
-"title":"'"$(T event_title)"'",\
-"embeds":[\
-{"title":"%s","color":%s,"url":"%s","fields":[\
-{"name":"'"$(T event_time)"'","value": "%s"},\
-%s\
-{"name":"'"$(T status)"'","value": "%s"}\
-]}\
-]}' \
-  "$EVENT_TYPE" \
-  10181046 \
-  "$STATUSURL" \
-  "$EVENT_TIME" \
-  "$(printf "$PLAYER_FIELD" "$PLAYER_NAME")" \
-  "$EVENT_TEXT"
+PAYLOAD=$(cat <<EOF
+{
+  "title":"$(json_escape "$(T event_title)")",
+  "embeds":[
+    {
+      "title":"$(json_escape "$EVENT_TYPE")",
+      "color":10181046,
+      "url":"$(json_escape "$STATUSURL")",
+      "fields":[
+        {"name":"$(json_escape "$(T event_time)")","value":"$(json_escape "$EVENT_TIME")"},
+        ${PLAYER_FIELD}
+        {"name":"$(json_escape "$(T status)")","value":"$(json_escape "$EVENT_TEXT")"}
+      ]
+    }
+  ]
+}
+EOF
+)
+
+printf '%s' "$PAYLOAD"
