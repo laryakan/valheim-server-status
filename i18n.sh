@@ -8,6 +8,7 @@ case "${VSS_LANG:-en}" in
     T_OFFLINE="hors ligne"
     T_LAST_CHECK="Dernière vérification"
     T_LAST_START="Dernier démarrage"
+    T_LAST_SAVE="Dernière sauvegarde"
     T_CPU="CPU"
     T_RAM="RAM"
     T_VERSION="Version"
@@ -53,6 +54,7 @@ case "${VSS_LANG:-en}" in
     T_OFFLINE="offline"
     T_LAST_CHECK="Last Check"
     T_LAST_START="Last start"
+    T_LAST_SAVE="Last save"
     T_CPU="CPU"
     T_RAM="RAM"
     T_VERSION="Version"
@@ -127,6 +129,7 @@ T() {
     offline) echo "$T_OFFLINE" ;;
     last_check) echo "$T_LAST_CHECK" ;;
     last_start) echo "$T_LAST_START" ;;
+    last_save) echo "$T_LAST_SAVE" ;;
     cpu) echo "$T_CPU" ;;
     ram) echo "$T_RAM" ;;
     version) echo "$T_VERSION" ;;

@@ -16,6 +16,7 @@ NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
 mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
 touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
+LAST_WORLD_SAVE_FILE="$CWD/last-world-save"
 
 while read LINE; do
    # Remove debug and blank lines
@@ -34,6 +35,13 @@ while read LINE; do
          VALSERVERVERSION="$FOUND_VERSION"
          VALSERVERLASTUPDATE="$VERSION_TS"
       fi
+   fi
+
+   # Detect final world save completion and persist the save timestamp for status output
+   # We only care about the final save step, exactly as in: "09/09/2026 23:55:30: World save (5/5) done. Total time [420ms]"
+   if [[ "$LINE" =~ ^([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*World[[:space:]]save[[:space:]]\(5/5\)[[:space:]]done\.[[:space:]]*Total[[:space:]]time[[:space:]]\[[^]]+\] ]]; then
+      SAVE_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+      printf '%s\n' "$SAVE_TS" > "$LAST_WORLD_SAVE_FILE"
    fi
    
    # Get connected players
@@ -83,6 +91,8 @@ while read LINE; do
          fi
       fi
    fi
+
+
 
 done
 

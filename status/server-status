@@ -46,6 +46,7 @@ source "$CWD/../i18n.sh"
 CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
 CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
 CURRENT_START_TS="${VALSERVERLASTSTART:-unknown}"
+LAST_WORLD_SAVE_TS="$(cat "$CWD/../last-world-save" 2>/dev/null || echo "unknown")"
 if [ -n "$VALHEIM_PID" ]; then
 	PROCESS_START_TS="$(ps -p "$VALHEIM_PID" -o lstart= 2>/dev/null | head -n 1 | sed 's/^ *//' | xargs -I{} date -d "{}" '+%d/%m/%Y %H:%M:%S' 2>/dev/null || true)"
 	if [ -n "$PROCESS_START_TS" ]; then
@@ -66,7 +67,8 @@ then
 		echo -n "{\"embeds\":[{\"title\":\"$(T offline)\",\"color\":15158332,\"url\":\"$STATUSURL/\",\"fields\":[\
 {\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},\
 {\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},\
-{\"name\":\"last_start\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
+{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
+{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},\
 {\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},\
 {\"name\":\"world\",\"value\": \"${CURRENT_WORLD}\",\"inline\":true}\
 ]}]}"
@@ -101,6 +103,8 @@ then
 	echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
 	echo -e "\n**$(T last_start)**"
 	echo -e "${CURRENT_START_TS}"
+	echo -e "\n**$(T last_save)**"
+	echo -e "${LAST_WORLD_SAVE_TS}"
 	echo -e "\n**Server seed**"
 	echo -e "${CURRENT_SEED}"
 	exit 1
@@ -115,6 +119,8 @@ echo -e "\n**Server version**"
 echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
 echo -e "\n**$(T last_start)**"
 echo -e "${CURRENT_START_TS}"
+echo -e "\n**$(T last_save)**"
+echo -e "${LAST_WORLD_SAVE_TS}"
 echo -e "\n**Server seed**"
 echo -e "${CURRENT_SEED}"
 

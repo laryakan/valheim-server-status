@@ -7,3 +7,4 @@ valheim-logs.d/*
 data
 crash.log
 savedir
+last-world-save
