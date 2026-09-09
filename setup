@@ -482,7 +482,6 @@ vss_header
 echo -ne "
 *** Valheim Server Launcher menu ***
 $(ColorRed 'Warning: most launcher options only work when VSS starts the Valheim server itself. All setup option needs a server restart to take effect.')
-$(ColorYellow 'Service install/remove (systemd): options 7-8. Runtime control of an existing service: options 12-15.')
 $(ColorGreen '1)') $(ColorYellow 'auto-conf custom launcher') if your server is running! this will set 2),3),4),5),6),7),8)
 $(ColorGreen '2)') setup current Valheim server directory
 $(ColorGreen '3)') setup wanted Valheim server listening port
