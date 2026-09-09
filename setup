@@ -197,6 +197,16 @@ function auto_conf(){
 		# get you server world name
 		FVHSERVERWORLD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-world //p'|cut -d' ' -f1)
 		replace_env_value 'VHSERVERWORLD' "$FVHSERVERWORLD"
+		# get world seed if present
+		FVHSERVERSEED=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-world_seed //p'|cut -d' ' -f1)
+		if [ ! -z "$FVHSERVERSEED" ]; then
+			replace_env_value 'VHSERVERSEED' "$FVHSERVERSEED"
+		fi
+		# get save dir if present
+		FVHSERVERSAVEDIR=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-savedir //p'|cut -d' ' -f1)
+		if [ ! -z "$FVHSERVERSAVEDIR" ]; then
+			replace_env_value 'VHSERVERSAVEDIR' "$FVHSERVERSAVEDIR"
+		fi
 		# get Your server password
 		FVHSERVERPASSWD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-password //p'|cut -d' ' -f1)
 		replace_env_value 'VHSERVERPASSWD' "$FVHSERVERPASSWD"
@@ -465,7 +475,7 @@ vss_header
 echo -ne "
 *** Valheim Server Launcher menu ***
 $(ColorRed 'Warning: most launcher options only work when VSS starts the Valheim server itself.')
-$(ColorGreen '1)') $(ColorYellow 'auto-conf custom launcher') if your server is running! this will set 2),3),4),5),6)
+$(ColorGreen '1)') $(ColorYellow 'auto-conf custom launcher') if your server is running! this will set 2),3),4),5),6),7),8)
 $(ColorGreen '2)') setup current Valheim server directory
 $(ColorGreen '3)') setup wanted Valheim server listening port
 $(ColorGreen '4)') setup wanted Valheim server name
@@ -476,6 +486,7 @@ $(ColorGreen '8)') setup wanted Valheim server savedir value $(ColorRed '(you mu
 $(ColorGreen '9)') $(ColorRed 'sudo required') stop the service and shut down the server
 $(ColorGreen '10)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
 $(ColorGreen '11)') $(ColorRed 'sudo required') restart the service and the server (force server update)
+$(ColorGreen '12)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -495,6 +506,17 @@ mkdir -p "$CWD/systemd"
 			9) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
 			10) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
 			11) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			12) 
+				if [ -n "$VHSERVERWORLD" ]; then
+					stop_valheim_service
+					WORLD_FILES_DIR="$VHSERVERSAVEDIR/worlds_local"
+					mkdir -p "$WORLD_FILES_DIR"
+					find "$WORLD_FILES_DIR" -maxdepth 1 -type f \( -name "${VHSERVERWORLD}.fwl" -o -name "${VHSERVERWORLD}.db" -o -name "${VHSERVERWORLD}*.fwl" -o -name "${VHSERVERWORLD}*.db" \) -print -delete
+					start_valheim_service
+				else
+					echo -e "$(ColorRed 'VHSERVERWORLD is empty; cannot delete the current world.')" >&2
+				fi
+				sleep 2 ; clear ; launcher_menu ;;
 
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
