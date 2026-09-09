@@ -56,7 +56,8 @@ while read LINE; do
          echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
          if [ $EVENTREALTIME != 0 ]
          then
-            "$CWD/discord/event" "connect" "Player $PLAYERNAME joined the server." "$PLAYERNAME"
+            CONNECT_MESSAGE="${PLAYERNAME} $(T player_joined)"
+            "$CWD/discord/event" "connect" "$CONNECT_MESSAGE" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
       fi
    fi
@@ -74,7 +75,8 @@ while read LINE; do
          sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
          if [ $EVENTREALTIME != 0 ]
          then
-            "$CWD/discord/event" "disconnect" "Player $PLAYERNAME left the server." "$PLAYERNAME"
+            DISCONNECT_MESSAGE="${PLAYERNAME} $(T player_left)"
+            "$CWD/discord/event" "disconnect" "$DISCONNECT_MESSAGE" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
       fi
    fi

@@ -38,5 +38,4 @@ printf '{\
   "$STATUSURL" \
   "$EVENT_TIME" \
   "$(printf "$PLAYER_FIELD" "$PLAYER_NAME")" \
-  "$EVENT_TEXT" \
-  | "$CWD/webhook.json-sender"
+  "$EVENT_TEXT"
