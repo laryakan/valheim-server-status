@@ -19,12 +19,20 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 #   your server through your local router & firewall.
 # Redirect stdout to log-filter and stderr to another file
 LAUNCH_ARGS=(
+  -nographics
+  -batchmode
   -name "$VHSERVERNAME"
   -port "$VHSERVERPORT"
   -world "$VHSERVERWORLD"
   -world_seed "$VHSERVERSEED"
   -savedir "$VHSERVERSAVEDIR"
   -password "$VHSERVERPASSWD"
+  -saveinterval 1800
+  -backups 2
+  -backupshort 7200
+  -backuplong 43200
+  # Do not use -logfile "$VALHEIMSERVERLOGDIR/$TODAY.log" because it will break the log filter
+  #-logFile "$VALHEIMSERVERLOGDIR/$TODAY.log"
 )
 
 if [ "${VHSERVERCROSSPLAY:-0}" = "1" ]; then
