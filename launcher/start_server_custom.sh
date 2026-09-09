@@ -22,7 +22,9 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 -name "$VHSERVERNAME" \
 -port $VHSERVERPORT \
 -world "$VHSERVERWORLD" \
+-world_seed "$VHSERVERSEED" \
 -password "$VHSERVERPASSWD" \
+-crossplay \
 1> >( tee -a >("$VSSLOGFILTER") ) \
 2> >( tee -a "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stderr.log" >&2 )
 

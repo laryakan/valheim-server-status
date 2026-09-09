@@ -7,6 +7,54 @@ if [ ! -f "$CWD/.env" ]
 then
   cp "$CWD/.env.dist" "$CWD/.env"
 fi
+
+function ensure_env_sync() {
+  local env_file="${1:-$CWD/.env}"
+  local template_file="${2:-$CWD/.env.dist}"
+  local tmp_file
+  local line
+  local key
+
+  if [ ! -f "$template_file" ]; then
+    return
+  fi
+
+  tmp_file="$(mktemp)"
+  cp "$env_file" "$tmp_file"
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ""|[[:space:]]*"#"*)
+        continue
+        ;;
+      *=*)
+        key="${line%%=*}"
+        if ! grep -Fq "${key}=" "$tmp_file"; then
+          awk -v new_line="$line" '
+            BEGIN { inserted = 0 }
+            {
+              if (!inserted && $0 ~ /^set \+o allexport$/) {
+                print new_line
+                inserted = 1
+              }
+              print
+            }
+            END {
+              if (!inserted) {
+                print new_line
+              }
+            }
+          ' "$tmp_file" > "$tmp_file.new" && mv "$tmp_file.new" "$tmp_file"
+        fi
+        ;;
+    esac
+  done < "$template_file"
+
+  cp "$tmp_file" "$env_file"
+  rm -f "$tmp_file"
+}
+
+ensure_env_sync "$CWD/.env" "$CWD/.env.dist"
 source "$CWD/.env"
 
 # VSS Setup menu
@@ -247,6 +295,33 @@ function uninstall_service(){
 	rm "$CWD/systemd/$SERVICENAME"
 }
 
+function stop_valheim_service(){
+  if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ] && systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    sudo systemctl stop "$VHSERVERSERVICENAME"
+    echo -e "$(ColorGreen 'Valheim service stopped')"
+  else
+    echo -e "$(ColorYellow 'Valheim service is not running or does not exist')" >&2
+  fi
+}
+
+function start_valheim_service(){
+  if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ] && ! systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    sudo systemctl start "$VHSERVERSERVICENAME"
+    echo -e "$(ColorGreen 'Valheim service started')"
+  else
+    echo -e "$(ColorYellow 'Valheim service is already running or does not exist')" >&2
+  fi
+}
+
+function restart_valheim_service(){
+  if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
+    sudo systemctl restart "$VHSERVERSERVICENAME"
+    echo -e "$(ColorGreen 'Valheim service restarted')"
+  else
+    echo -e "$(ColorRed 'Valheim service does not exist')" >&2
+  fi
+}
+
 # Setup service with conf values, setup is $1=1; setdown is $1=2
 function set_logrotate(){
 	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
@@ -329,8 +404,10 @@ $(ColorGreen '3)') setup wanted Valheim server listening port
 $(ColorGreen '4)') setup wanted Valheim server name
 $(ColorGreen '5)') setup wanted Valheim server world name
 $(ColorGreen '6)') setup wanted Valheim server password
-$(ColorGreen '7)') $(ColorRed 'sudo required') add and activate valheim-server.service (your server through service) $(ColorRed 'stop you server first !')
-$(ColorGreen '8)') $(ColorRed 'sudo required') remove valheim-server.service
+$(ColorGreen '7)') setup wanted Valheim server $(ColorYellow 'seed') value $(ColorRed '(you must restart your server for this to take effect)')
+$(ColorGreen '8)') $(ColorRed 'sudo required') stop the service and shut down the server
+$(ColorGreen '9)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
+$(ColorGreen '10)') $(ColorRed 'sudo required') restart the service and the server (force server update)
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -345,9 +422,10 @@ mkdir -p "$CWD/systemd"
 	        4) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?" 'VHSERVERNAME' ; clear ; launcher_menu ;;
 	        5) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; launcher_menu ;;
 	        6) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
-			7) set_service "$VHSERVERSERVICENAME"; sleep 2 ; clear ; launcher_menu ;;
-			8) uninstall_service "$VHSERVERSERVICENAME" ; clear ; launcher_menu ;;
-
+			7) setup_value_prompt "what is your wanted Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
+			8) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			9) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			10) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
 
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
