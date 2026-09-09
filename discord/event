@@ -18,7 +18,6 @@ json_escape() {
 EVENT_TYPE="${1:-unknown}"
 EVENT_MESSAGE="${2:-}"
 PLAYER_NAME="${3:-}"
-EVENT_TIME="$(date +'%F.%T')"
 
 if [ -n "$EVENT_MESSAGE" ]
 then
@@ -27,28 +26,20 @@ else
   EVENT_TEXT="$(T event_line "$EVENT_TYPE")"
 fi
 
-PLAYER_FIELD=''
-if [ -n "$PLAYER_NAME" ]; then
-  PLAYER_FIELD="{\"name\":\"$(json_escape "$(T player)")\",\"value\":\"$(json_escape "$PLAYER_NAME")\"},"
+if [ -n "$PLAYER_NAME" ] && [[ "$EVENT_TEXT" != *"$PLAYER_NAME"* ]]; then
+  EVENT_TEXT="${EVENT_TEXT} (${PLAYER_NAME})"
 fi
 
-PAYLOAD=$(cat <<EOF
-{
-  "title":"$(json_escape "$(T event_title)")",
-  "embeds":[
-    {
-      "title":"$(json_escape "$EVENT_TYPE")",
-      "color":10181046,
-      "url":"$(json_escape "$STATUSURL")",
-      "fields":[
-        {"name":"$(json_escape "$(T event_time)")","value":"$(json_escape "$EVENT_TIME")"},
-        ${PLAYER_FIELD}
-        {"name":"$(json_escape "$(T status)")","value":"$(json_escape "$EVENT_TEXT")"}
-      ]
-    }
-  ]
-}
-EOF
-)
+TITLE="$(T player_connected)"
+if [ "$EVENT_TYPE" = "disconnect" ]; then
+  TITLE="$(T player_disconnected)"
+fi
 
-printf '%s' "$PAYLOAD"
+printf '%s' "{
+  \"title\": \"$(json_escape "$(T event_title)")\",
+  \"embeds\": [{
+    \"title\": \"$(json_escape "$TITLE")\",
+    \"color\": 10181046,
+    \"description\": \"$(json_escape "$EVENT_TEXT")\"
+  }]
+}"
