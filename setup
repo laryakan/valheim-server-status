@@ -482,6 +482,7 @@ vss_header
 echo -ne "
 *** Valheim Server Launcher menu ***
 $(ColorRed 'Warning: most launcher options only work when VSS starts the Valheim server itself. All setup option needs a server restart to take effect.')
+$(ColorYellow 'Service install/remove (systemd): options 7-8. Runtime control of an existing service: options 12-15.')
 $(ColorGreen '1)') $(ColorYellow 'auto-conf custom launcher') if your server is running! this will set 2),3),4),5),6),7),8)
 $(ColorGreen '2)') setup current Valheim server directory
 $(ColorGreen '3)') setup wanted Valheim server listening port
@@ -491,10 +492,12 @@ $(ColorGreen '6)') setup wanted Valheim server password
 $(ColorGreen '7)') setup wanted Valheim server $(ColorYellow 'seed') value $(ColorRed '(you will start on a new map after server restart)')
 $(ColorGreen '8)') setup wanted Valheim server savedir value
 $(ColorGreen '9)') setup crossplay
-$(ColorGreen '10)') $(ColorRed 'sudo required') stop the service and shut down the server
-$(ColorGreen '11)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
-$(ColorGreen '12)') $(ColorRed 'sudo required') restart the service and the server (force server update)
-$(ColorGreen '13)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
+$(ColorGreen '10)') $(ColorRed 'sudo required') create or reinstall valheim-server.service in /etc/systemd/system
+$(ColorGreen '11)') $(ColorRed 'sudo required') remove valheim-server.service from /etc/systemd/system
+$(ColorGreen '12)') $(ColorRed 'sudo required') stop the existing service and shut down the server
+$(ColorGreen '13)') $(ColorRed 'sudo required') start the existing service and run the server
+$(ColorGreen '14)') $(ColorRed 'sudo required') restart the existing service and the server
+$(ColorGreen '15)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -512,10 +515,12 @@ mkdir -p "$CWD/systemd"
 			7) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
 			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
 			9) setup_value_prompt 'set crossplay on/off: 1 = crossplay active, 0 = crossplay inactive' 'VHSERVERCROSSPLAY' ; clear ; launcher_menu ;;
-			10) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			11) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			12) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			13) 
+			10) set_service "$VHSERVERSERVICENAME"; sleep 2 ; clear ; launcher_menu ;;
+			11) uninstall_service "$VHSERVERSERVICENAME" ; clear ; launcher_menu ;;
+			12) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			13) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			14) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			15) 
 				if [ -n "$VHSERVERWORLD" ]; then
 					stop_valheim_service
 					WORLD_FILES_DIR="$VHSERVERSAVEDIR/worlds_local"
