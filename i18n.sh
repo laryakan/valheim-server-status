@@ -30,6 +30,20 @@ case "${VSS_LANG:-en}" in
     T_STATUS_MESSAGE_DELETED="Le message de statut a été supprimé du serveur, un nouveau message sera envoyé, veuillez remplir le fichier .env"
     T_PATCH_FAILED="Échec de la requête PATCH Discord avec HTTP %s ; le message existant est conservé sans en créer un nouveau."
     T_USAGE="usage:\njson_to_send | ./script <--status|message_id>"
+    T_EVENT_LINES_CONNECT=(
+      "\"\$PLAYER_NAME\" n'aime vraiment pas les trolls, et compte le démontrer !"
+      "Un nain, un troll et \"\$PLAYER_NAME\" entre dans une taverne, mais un seul aura droit à sa chope !"
+      "Le feu du foyer gronde, et \"\$PLAYER_NAME\" semble déjà prêt à repartir au combat."
+      "Dans ce royaume, la bière est forte, mais la volonté de \"\$PLAYER_NAME\" l'est encore plus."
+      "\"\$PLAYER_NAME\" a juré de faire du raid, et les trolls peuvent commencer à courir."
+    )
+    T_EVENT_LINES_DISCONNECT=(
+      "\"\$PLAYER_NAME\" a pris la fuite comme un lâche devant la horde."
+      "Le courage de \"\$PLAYER_NAME\" a déserté dès le premier bruit de combat."
+      "\"\$PLAYER_NAME\" s'est sauvé avant même que le premier troll ne se mette en colère."
+      "On a vu \"\$PLAYER_NAME\" partir en courant comme un lâche !"
+      "\"\$PLAYER_NAME\" a préféré la fuite au combat, et c'est un peu trop facile à deviner."
+    )
     ;;
   *)
     VSS_LANG="en"
@@ -60,8 +74,49 @@ case "${VSS_LANG:-en}" in
     T_STATUS_MESSAGE_DELETED="Status message has been deleted from the server, a new message will be sent, please fill the .env file"
     T_PATCH_FAILED="Discord PATCH failed with HTTP %s; keeping existing message without creating a new one."
     T_USAGE="usage:\njson_to_send | ./script <--status|message_id>"
+    T_EVENT_LINES_CONNECT=(
+      "\"\$PLAYER_NAME\" really dislikes trolls, and plans to prove it."
+      "A dwarf, a troll and \"\$PLAYER_NAME\" walk into a tavern, but only one gets to keep the ale."
+      "The fire crackles, and \"\$PLAYER_NAME\" looks ready for another run into the wild."
+      "In this realm, the ale is strong, but \"\$PLAYER_NAME\" is stronger."
+      "\"\$PLAYER_NAME\" has sworn to raid, and the trolls can start running now."
+    )
+    T_EVENT_LINES_DISCONNECT=(
+      "\"\$PLAYER_NAME\" ran off like a coward the moment the horde showed up."
+      "The courage in \"\$PLAYER_NAME\" vanished the second the first troll appeared."
+      "\"\$PLAYER_NAME\" fled before the first axe ever swung."
+      "\"\$PLAYER_NAME\" left like a deserter who feared the fight more than the frost."
+      "As soon as the chaos started, \"\$PLAYER_NAME\" chose the road of shame."
+    )
     ;;
 esac
+
+T_RANDOM_EVENT_LINE() {
+  local kind="${1:-connect}"
+  local -a lines=()
+  case "$kind" in
+    connect) lines=("${T_EVENT_LINES_CONNECT[@]}") ;;
+    disconnect) lines=("${T_EVENT_LINES_DISCONNECT[@]}") ;;
+    *) lines=("${T_EVENT_LINES_CONNECT[@]}") ;;
+  esac
+
+  local count=${#lines[@]}
+  if [ "$count" -le 0 ]
+  then
+    echo "$(T event)"
+    return 0
+  fi
+
+  local index=$(( RANDOM % count ))
+  local line="${lines[$index]}"
+  if [ -n "${PLAYER_NAME:-}" ]
+  then
+    line="${line//\$PLAYER_NAME/$PLAYER_NAME}"
+  else
+    line="${line//\$PLAYER_NAME/$(T player)}"
+  fi
+  printf '%s' "$line"
+}
 
 T() {
   case "$1" in
@@ -96,6 +151,9 @@ T() {
       else
         echo "$T_PATCH_FAILED"
       fi
+      ;;
+    event_line)
+      T_RANDOM_EVENT_LINE "${2:-connect}"
       ;;
     usage) echo -e "$T_USAGE" ;;
     *) echo "$1" ;;

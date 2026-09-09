@@ -14,7 +14,7 @@ if [ -n "$EVENT_MESSAGE" ]
 then
   EVENT_TEXT="$EVENT_MESSAGE"
 else
-  EVENT_TEXT="$(T event): $EVENT_TYPE"
+  EVENT_TEXT="$(T event_line "$EVENT_TYPE")"
 fi
 
 if [ -n "$PLAYER_NAME" ]
