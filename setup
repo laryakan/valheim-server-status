@@ -394,6 +394,72 @@ mkdir -p "$CWD/systemd"
 }
 
 # new menus
+function admin_list_file() {
+  case "$1" in
+    admin) echo "$VHSERVERSAVEDIR/adminlist.txt" ;;
+    banned) echo "$VHSERVERSAVEDIR/bannedlist.txt" ;;
+    permitted) echo "$VHSERVERSAVEDIR/permittedlist.txt" ;;
+    *) echo "$VHSERVERSAVEDIR/${1}list.txt" ;;
+  esac
+}
+
+function admin_list_show() {
+  local list_name="$1"
+  local file
+  mkdir -p "$VHSERVERSAVEDIR"
+  file="$(admin_list_file "$list_name")"
+  if [ -f "$file" ]; then
+    echo "--- ${list_name} list ---"
+    cat "$file"
+  else
+    echo "--- ${list_name} list ---"
+    echo "(empty or missing)"
+  fi
+}
+
+function admin_list_add() {
+  local list_name="$1"
+  local pseudo
+  local file
+  mkdir -p "$VHSERVERSAVEDIR"
+  file="$(admin_list_file "$list_name")"
+  echo "enter pseudo to add to ${list_name}:"
+  read -r pseudo
+  if [ -z "$pseudo" ]; then
+    echo "empty value, aborted" >&2
+    return
+  fi
+  if [ -f "$file" ] && grep -Fqx "$pseudo" "$file"; then
+    echo "$pseudo already exists in ${list_name} list" >&2
+    return
+  fi
+  echo "$pseudo" >> "$file"
+  echo "$pseudo added to ${list_name} list"
+}
+
+function admin_list_remove() {
+  local list_name="$1"
+  local pseudo
+  local file
+  local tmp_file
+  mkdir -p "$VHSERVERSAVEDIR"
+  file="$(admin_list_file "$list_name")"
+  echo "enter pseudo to remove from ${list_name}:"
+  read -r pseudo
+  if [ -z "$pseudo" ]; then
+    echo "empty value, aborted" >&2
+    return
+  fi
+  if [ ! -f "$file" ] || ! grep -Fqx "$pseudo" "$file"; then
+    echo "$pseudo not found in ${list_name} list" >&2
+    return
+  fi
+  tmp_file="$(mktemp)"
+  grep -Fvx "$pseudo" "$file" > "$tmp_file"
+  mv "$tmp_file" "$file"
+  echo "$pseudo removed from ${list_name} list"
+}
+
 launcher_menu(){
 vss_header
 echo -ne "
@@ -435,6 +501,42 @@ mkdir -p "$CWD/systemd"
         esac
 }
 
+admin_menu(){
+vss_header
+echo -ne "
+*** VSS Admin menu ***
+$(ColorGreen '1)') [Show] Admin
+$(ColorGreen '2)') [Add] Admin
+$(ColorGreen '3)') [Remove] Admin
+$(ColorGreen '4)') [Show] Banned
+$(ColorGreen '5)') [Add] Banned
+$(ColorGreen '6)') [Remove] Banned
+$(ColorGreen '7)') [Show] Permitted
+$(ColorGreen '8)') [Add] Permitted
+$(ColorGreen '9)') [Remove] Permitted
+
+$(ColorGreen '0)') return to previous menu
+$(ColorGreen 'CTRL+C)') quit
+$(ColorBlue 'You can scroll up to see previous screens')
+$(ColorBlue 'choose an option:') "
+mkdir -p "$CWD/systemd"
+        read a
+        case $a in
+			1) admin_list_show 'admin' ; sleep 2 ; clear ; admin_menu ;;
+			2) admin_list_add 'admin' ; sleep 2 ; clear ; admin_menu ;;
+			3) admin_list_remove 'admin' ; sleep 2 ; clear ; admin_menu ;;
+			4) admin_list_show 'banned' ; sleep 2 ; clear ; admin_menu ;;
+			5) admin_list_add 'banned' ; sleep 2 ; clear ; admin_menu ;;
+			6) admin_list_remove 'banned' ; sleep 2 ; clear ; admin_menu ;;
+			7) admin_list_show 'permitted' ; sleep 2 ; clear ; admin_menu ;;
+			8) admin_list_add 'permitted' ; sleep 2 ; clear ; admin_menu ;;
+			9) admin_list_remove 'permitted' ; sleep 2 ; clear ; admin_menu ;;
+
+		0) clear ; new_menu ;;
+		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
+        esac
+}
+
 # new menus
 http_status_menu(){
 vss_header
@@ -468,6 +570,7 @@ echo -ne "
 $(ColorGreen '1)') VSS $(ColorMagenta 'Discord') menu
 $(ColorGreen '2)') VSS Launcher menu
 $(ColorGreen '3)') VSS over HTTP menu
+$(ColorGreen '4)') VSS Admin menu $(ColorRed '(only available for VSS launched server)')
 
 ** Logs **
 $(ColorBlue 'we can setup a service based on tail if you already have a your server log outputting somewhere')
@@ -496,6 +599,7 @@ $(ColorBlue 'choose an option:') "
 			1) clear ; discord_menu ;;
 			2) clear ; launcher_menu ;;
 			3) clear ; http_status_menu ;;
+			4) clear ; admin_menu ;;
 			5) setup_value_prompt 'where are your logs (or where do you want it, file or dir, wildcards are valid) ?' 'VALHEIMSERVERLOGPATH' ; clear ; new_menu ;;
 			6) set_service "$VSSPIPESERVICENAME"; sleep 2 ; clear ; new_menu ;;
 			7) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
