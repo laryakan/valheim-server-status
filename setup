@@ -420,6 +420,38 @@ function admin_list_file() {
   esac
 }
 
+function known_players_display() {
+  local known_file
+  local line
+  local timestamp
+  local pseudo
+  local player_id
+  local display_entries=""
+
+  if [ -d "$VSSDIR/data" ]; then
+    for known_file in "$VSSDIR/data/online-players" "$VSSDIR/data/offline-players"; do
+      if [ -f "$known_file" ]; then
+        while IFS=';' read -r timestamp pseudo player_id; do
+          if [ -n "$pseudo" ] && [ -n "$player_id" ]; then
+            if ! printf '%s\n' "$display_entries" | grep -Fq "${pseudo}:${player_id}"; then
+              if [ -n "$display_entries" ]; then
+                display_entries="${display_entries} | ${pseudo}:${player_id}"
+              else
+                display_entries="${pseudo}:${player_id}"
+              fi
+            fi
+          fi
+        done < "$known_file"
+      fi
+    done
+
+    if [ -n "$display_entries" ]; then
+      echo "--- known players ---"
+      echo "$display_entries"
+    fi
+  fi
+}
+
 function admin_list_show() {
   local list_name="$1"
   local file
@@ -436,45 +468,47 @@ function admin_list_show() {
 
 function admin_list_add() {
   local list_name="$1"
-  local pseudo
+  local player_id
   local file
   mkdir -p "$VHSERVERSAVEDIR"
   file="$(admin_list_file "$list_name")"
-  echo "enter pseudo to add to ${list_name}:"
-  read -r pseudo
-  if [ -z "$pseudo" ]; then
+  known_players_display
+  echo "enter player ID to add to ${list_name}:"
+  read -r player_id
+  if [ -z "$player_id" ]; then
     echo "empty value, aborted" >&2
     return
   fi
-  if [ -f "$file" ] && grep -Fqx "$pseudo" "$file"; then
-    echo "$pseudo already exists in ${list_name} list" >&2
+  if [ -f "$file" ] && grep -Fqx "$player_id" "$file"; then
+    echo "$player_id already exists in ${list_name} list" >&2
     return
   fi
-  echo "$pseudo" >> "$file"
-  echo "$pseudo added to ${list_name} list"
+  echo "$player_id" >> "$file"
+  echo "$player_id added to ${list_name} list"
 }
 
 function admin_list_remove() {
   local list_name="$1"
-  local pseudo
+  local player_id
   local file
   local tmp_file
   mkdir -p "$VHSERVERSAVEDIR"
   file="$(admin_list_file "$list_name")"
-  echo "enter pseudo to remove from ${list_name}:"
-  read -r pseudo
-  if [ -z "$pseudo" ]; then
+  known_players_display
+  echo "enter player ID to remove from ${list_name}:"
+  read -r player_id
+  if [ -z "$player_id" ]; then
     echo "empty value, aborted" >&2
     return
   fi
-  if [ ! -f "$file" ] || ! grep -Fqx "$pseudo" "$file"; then
-    echo "$pseudo not found in ${list_name} list" >&2
+  if [ ! -f "$file" ] || ! grep -Fqx "$player_id" "$file"; then
+    echo "$player_id not found in ${list_name} list" >&2
     return
   fi
   tmp_file="$(mktemp)"
-  grep -Fvx "$pseudo" "$file" > "$tmp_file"
+  grep -Fvx "$player_id" "$file" > "$tmp_file"
   mv "$tmp_file" "$file"
-  echo "$pseudo removed from ${list_name} list"
+  echo "$player_id removed from ${list_name} list"
 }
 
 launcher_menu(){
@@ -557,16 +591,15 @@ $(ColorBlue 'choose an option:') "
 mkdir -p "$CWD/systemd"
         read a
         case $a in
-			1) admin_list_show 'admin' ; sleep 2 ; clear ; admin_menu ;;
-			2) admin_list_add 'admin' ; sleep 2 ; clear ; admin_menu ;;
-			3) admin_list_remove 'admin' ; sleep 2 ; clear ; admin_menu ;;
-			4) admin_list_show 'banned' ; sleep 2 ; clear ; admin_menu ;;
-			5) admin_list_add 'banned' ; sleep 2 ; clear ; admin_menu ;;
-			6) admin_list_remove 'banned' ; sleep 2 ; clear ; admin_menu ;;
-			7) admin_list_show 'permitted' ; sleep 2 ; clear ; admin_menu ;;
-			8) admin_list_add 'permitted' ; sleep 2 ; clear ; admin_menu ;;
-			9) admin_list_remove 'permitted' ; sleep 2 ; clear ; admin_menu ;;
-
+			1) admin_list_show 'admin' ; sleep 5 ; clear ; admin_menu ;;
+			2) admin_list_add 'admin' ; sleep 5 ; clear ; admin_menu ;;
+			3) admin_list_remove 'admin' ; sleep 5 ; clear ; admin_menu ;;
+			4) admin_list_show 'banned' ; sleep 5 ; clear ; admin_menu ;;
+			5) admin_list_add 'banned' ; sleep 5 ; clear ; admin_menu ;;
+			6) admin_list_remove 'banned' ; sleep 5 ; clear ; admin_menu ;;
+			7) admin_list_show 'permitted' ; sleep 5 ; clear ; admin_menu ;;
+			8) admin_list_add 'permitted' ; sleep 5 ; clear ; admin_menu ;;
+			9) admin_list_remove 'permitted' ; sleep 5 ; clear ; admin_menu ;;
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
