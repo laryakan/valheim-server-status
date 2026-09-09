@@ -5,18 +5,9 @@ exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 source "$CWD/../i18n.sh"
 # Output the server connection info first if asked.
-# If no message ID is set yet, we create the initial message so the user can later copy it.
 if [ "${SENDSERVERCONNECTIONINFO:-0}" -gt 0 ] 2>/dev/null
 then
-  echo -n "{\
-\"title\":\"$(T server_info_title)\",\
-\"embeds\":[\
-{\"title\":\"$(T connection_info_title)\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
-{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},\
-{\"name\":\"$(T ip)\",\"value\": \"||$PUBLICIP:$VHSERVERPORT||\"},\
-{\"name\":\"$(T password)\",\"value\": \"||$VHSERVERPASSWD||\"}\
-]}\
-]}" | "$CWD/webhook.json-sender" "$SERVERCONNECTIONINFOMESSAGEID"
+  "$CWD/connection-info" | "$CWD/webhook.json-sender" "$SERVERCONNECTIONINFOMESSAGEID"
   sleep 2
 fi
 
@@ -25,26 +16,8 @@ fi
 sleep 2
 
 # Output the last stdout logs last if asked.
-# If no message ID is set yet, we create the initial message once so the user can later copy the ID.
 if [ "${SENDLASTLOGS:-0}" -gt 0 ] 2>/dev/null
 then
-  shopt -s nullglob
-  LOGFILES=( $VALHEIMSERVERLOGPATH )
-  shopt -u nullglob
-
-  if [ ${#LOGFILES[@]} -eq 0 ]
-  then
-    echo "$(T no_log_to_send)" >&2
-  else
-    LAST_LOG="$(ls -1tr "${LOGFILES[@]}" 2>/dev/null | tail -1)"
-    if [ -z "$LAST_LOG" ]
-    then
-      echo "$(T no_log_to_send)" >&2
-    else
-      tail -n "$SENDLASTLOGS" "$LAST_LOG" | sed ':a;N;$!ba;s/\n/\\n/g' | echo "{\"embeds\":[\
-{\"title\":\"$(T last_logs)\",\"color\":10181046,\"description\":\"$(</dev/stdin)\"}\
-]}" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
-    fi
-  fi
+  "$CWD/last-logs" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
 fi
 

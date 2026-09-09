@@ -1,0 +1,26 @@
+#!/bin/bash
+# Basic env init
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/../crash.log"
+source "$CWD/../.env"
+source "$CWD/../i18n.sh"
+
+shopt -s nullglob
+LOGFILES=( $VALHEIMSERVERLOGPATH )
+shopt -u nullglob
+
+if [ ${#LOGFILES[@]} -eq 0 ]
+then
+  echo "$(T no_log_to_send)" >&2
+else
+  LAST_LOG="$(ls -1tr "${LOGFILES[@]}" 2>/dev/null | tail -1)"
+  if [ -z "$LAST_LOG" ]
+  then
+    echo "$(T no_log_to_send)" >&2
+  else
+    LOG_BODY="$(tail -n "$SENDLASTLOGS" "$LAST_LOG" 2>/dev/null | sed ':a;N;$!ba;s/\n/\\n/g')"
+    echo -n "{\"embeds\":[\
+{\"title\":\"$(T last_logs)\",\"color\":10181046,\"description\":\"${LOG_BODY}\"}\
+]}"
+  fi
+fi

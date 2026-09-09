@@ -1,0 +1,17 @@
+#!/bin/bash
+# Basic env init
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+exec 2>>"$CWD/../crash.log"
+source "$CWD/../.env"
+source "$CWD/../i18n.sh"
+
+echo -n "{\
+\"title\":\"$(T server_info_title)\",\
+\"embeds\":[\
+{\"title\":\"$(T connection_info_title)\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
+{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},\
+{\"name\":\"$(T ip)\",\"value\": \"||$PUBLICIP:$VHSERVERPORT||\"},\
+{\"name\":\"$(T world)\",\"value\": \"||$VHSERVERWORLD||\"},\
+{\"name\":\"$(T password)\",\"value\": \"||$VHSERVERPASSWD||\"}\
+]}\
+]}"
