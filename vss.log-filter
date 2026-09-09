@@ -67,7 +67,7 @@ while read LINE; do
    fi
 
    # Get disconnected players
-   DISCOZDOID=$(echo ${LINE} |grep "Destroying abandoned non persistent zdo"|head -1 | sed -E 's/.*[[:space:]]([0-9-]+):[0-9]+$/\1/')
+   DISCOZDOID=$(echo "${LINE}" | grep "Destroying abandoned non persistent zdo" | head -1 | sed -E 's/.*Destroying abandoned non persistent zdo ([0-9-]+):[0-9]+.*$/\1/')
    if [ ! -z "$DISCOZDOID" ]
    then
       PLAYERNAME=$(grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" 2>/dev/null | cut -d';' -f2 | head -n 1)
