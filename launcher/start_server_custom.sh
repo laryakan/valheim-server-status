@@ -23,6 +23,7 @@ echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)
 -port $VHSERVERPORT \
 -world "$VHSERVERWORLD" \
 -world_seed "$VHSERVERSEED" \
+-savedir "$VHSERVERSAVEDIR" \
 -password "$VHSERVERPASSWD" \
 -crossplay \
 1> >( tee -a >("$VSSLOGFILTER") ) \

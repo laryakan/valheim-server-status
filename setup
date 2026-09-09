@@ -398,16 +398,18 @@ launcher_menu(){
 vss_header
 echo -ne "
 *** Valheim Server Launcher menu ***
+$(ColorRed 'Warning: most launcher options only work when VSS starts the Valheim server itself.')
 $(ColorGreen '1)') $(ColorYellow 'auto-conf custom launcher') if your server is running! this will set 2),3),4),5),6)
 $(ColorGreen '2)') setup current Valheim server directory
 $(ColorGreen '3)') setup wanted Valheim server listening port
 $(ColorGreen '4)') setup wanted Valheim server name
 $(ColorGreen '5)') setup wanted Valheim server world name
 $(ColorGreen '6)') setup wanted Valheim server password
-$(ColorGreen '7)') setup wanted Valheim server $(ColorYellow 'seed') value $(ColorRed '(you must restart your server for this to take effect)')
-$(ColorGreen '8)') $(ColorRed 'sudo required') stop the service and shut down the server
-$(ColorGreen '9)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
-$(ColorGreen '10)') $(ColorRed 'sudo required') restart the service and the server (force server update)
+$(ColorGreen '7)') setup wanted Valheim server $(ColorYellow 'seed') value $(ColorRed '(you will start on a new map after server restart)')
+$(ColorGreen '8)') setup wanted Valheim server savedir value $(ColorRed '(you must restart your server for this to take effect)')
+$(ColorGreen '9)') $(ColorRed 'sudo required') stop the service and shut down the server
+$(ColorGreen '10)') $(ColorRed 'sudo required') start the service and run the server (Valheim server will be updated if needed)
+$(ColorGreen '11)') $(ColorRed 'sudo required') restart the service and the server (force server update)
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -419,13 +421,14 @@ mkdir -p "$CWD/systemd"
 			1) auto_conf ; clear ; launcher_menu ;;
 			2) setup_value_prompt 'where is located your dedicated server ?' 'VHSERVERDIR' ; clear ; launcher_menu ;;
 			3) setup_value_prompt 'on which port do you want your server to listen (default: 2456) ?' 'VHSERVERPORT' ; clear ; launcher_menu ;;
-	        4) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server name ?" 'VHSERVERNAME' ; clear ; launcher_menu ;;
-	        5) setup_value_prompt "what is your Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; launcher_menu ;;
-	        6) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted')  Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
-			7) setup_value_prompt "what is your wanted Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
-			8) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			9) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			10) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+	        4) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server name ?" 'VHSERVERNAME' ; clear ; launcher_menu ;;
+	        5) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; launcher_menu ;;
+	        6) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
+			7) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
+			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
+			9) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			10) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			11) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
 
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
