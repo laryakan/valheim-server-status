@@ -6,3 +6,4 @@ valheim-logs.d
 valheim-logs.d/*
 data
 crash.log
+savedir
