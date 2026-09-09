@@ -645,7 +645,7 @@ $(ColorBlue 'we can setup a service based on tail if you already have a your ser
 $(ColorBlue 'just setup a valid logs path (wildcards accepted). Then you will not need to use the custom launcher')
 $(ColorGreen '5)') setup wanted Valheim Server logs path (file or directory)
 * standalone *
-$(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (to catch events from existings logs)
+$(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (not needed if you use the VSS custom launcher)
 $(ColorGreen '7)') $(ColorRed 'sudo required') remove vss.pipe.service
 * logrotate *
 $(ColorGreen '8)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
