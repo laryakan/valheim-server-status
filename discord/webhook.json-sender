@@ -4,6 +4,7 @@
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
+source "$CWD/../i18n.sh"
 
 # Sending status messages on Discord script
 CWD=$(dirname "$0")
@@ -14,8 +15,7 @@ WEBHOOKTOKEN="$WEBHOOKTOKEN"
 # help
 if [ "$1" = "-h" ]
 then
-	echo -e "usage:\n\
-json_to_send |./script <--status|message_id>"
+	echo -e "$(T usage)"
 	exit 0
 fi
 
@@ -59,7 +59,7 @@ then
 				fi
 				MESSAGEID=''
 			else
-				echo -e "Discord PATCH failed with HTTP $PATCH_HTTP_CODE; keeping existing message without creating a new one." >&2
+				echo -e "$(T patch_failed "$PATCH_HTTP_CODE")" >&2
 				exit 0
 			fi
 			;;

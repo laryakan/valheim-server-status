@@ -3,6 +3,7 @@
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
+source "$CWD/../i18n.sh"
 
 EVENT_TYPE="${1:-unknown}"
 EVENT_MESSAGE="${2:-}"
@@ -13,23 +14,23 @@ if [ -n "$EVENT_MESSAGE" ]
 then
   EVENT_TEXT="$EVENT_MESSAGE"
 else
-  EVENT_TEXT="Event: $EVENT_TYPE"
+  EVENT_TEXT="$(T event): $EVENT_TYPE"
 fi
 
 if [ -n "$PLAYER_NAME" ]
 then
-  PLAYER_FIELD='{"name":"Player","value": "%s"},'
+  PLAYER_FIELD='{"name":"'"$(T player)"'","value": "%s"},'
 else
   PLAYER_FIELD=''
 fi
 
 printf '{\
-"title":"Valheim server event",\
+"title":"'"$(T event_title)"'",\
 "embeds":[\
 {"title":"%s","color":%s,"url":"%s","fields":[\
-{"name":"Event Time","value": "%s"},\
+{"name":"'"$(T event_time)"'","value": "%s"},\
 %s\
-{"name":"Status","value": "%s"}\
+{"name":"'"$(T status)"'","value": "%s"}\
 ]}\
 ]}' \
   "$EVENT_TYPE" \
