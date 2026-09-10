@@ -77,3 +77,41 @@ then
 	exit 0
 fi
 
+echo -e ">=VALHEIM SERVER STATUS @ `date +'%F.%T'`=<"
+if [ -z "$VALHEIM_PID" ]
+then
+       echo -e "SERVER OFFLINE !"
+       echo -e "\n**Server version**"
+       echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
+       echo -e "\n**$(T last_start)**"
+       echo -e "${CURRENT_START_TS}"
+       echo -e "\n**$(T last_save)**"
+       echo -e "${LAST_WORLD_SAVE_TS}"
+       echo -e "\n**Server seed**"
+       echo -e "${CURRENT_SEED}"
+       exit 1
+else
+       echo -e "SERVER ONLINE !"
+fi
+
+echo -e "\n**Server session running since**"
+ps -p "$VALHEIM_PID" -o lstart,etime
+
+echo -e "\n**Server version**"
+echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
+echo -e "\n**$(T last_start)**"
+echo -e "${CURRENT_START_TS}"
+echo -e "\n**$(T last_save)**"
+echo -e "${LAST_WORLD_SAVE_TS}"
+echo -e "\n**Server seed**"
+echo -e "${CURRENT_SEED}"
+
+echo -e "\n**Server consumption**"
+echo -e "CPU ($TOTALCPU cores) : $CPUUSAGE%"
+echo -e "RAM ($TOTALRAM MB) : $RAMUSAGE%"
+
+echo -e "\n**Connected players**"
+cat "$CONNECTEDPLAYERSFILE"
+
+echo -e "\n**Offline players**"
+cat "$OFFLINEPLAYERSFILE"
