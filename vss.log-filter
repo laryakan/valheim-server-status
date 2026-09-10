@@ -60,6 +60,7 @@ while read LINE; do
 
       # Remove from offline players list
       sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
+      sed -i '/^$/d' "$OFFLINEPLAYERSFILE"
 
       # detect respawn (double connection and/or death) for the same Character
       ALREADYREGISTEREDSTR=`grep -- "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
@@ -67,6 +68,7 @@ while read LINE; do
       then
          # new connection
          echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
+         sed -i '/^$/d' "$CONNECTEDPLAYERSFILE"
          if [ $EVENTREALTIME != 0 ]
          then
             "$CWD/discord/event" "connect" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
@@ -81,10 +83,13 @@ while read LINE; do
       PLAYERNAME=$(grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" 2>/dev/null | cut -d';' -f2 | head -n 1)
       if [ -n "$PLAYERNAME" ]
       then
-         # Add to offline players list
+         # Add to offline players list, then delete from online players
+         # Keep file structures compact and safe: skip any blank/empty player line.
          grep -- "$DISCOZDOID" "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
-         # Delete from online players
          sed -i "/;$DISCOZDOID/d" "$CONNECTEDPLAYERSFILE"
+         # Ensure no accidental blank player records remain anywhere in the player lists.
+         sed -i '/^$/d' "$CONNECTEDPLAYERSFILE"
+         sed -i '/^$/d' "$OFFLINEPLAYERSFILE"
          if [ $EVENTREALTIME != 0 ]
          then
             "$CWD/discord/event" "disconnect" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"

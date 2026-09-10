@@ -65,73 +65,15 @@ if [ "$1" = '--for-webhook' ]
 then
 	if [ -z "$VALHEIM_PID" ]
 	then
-		echo -n "{\"embeds\":[{\"title\":\"$(T offline)\",\"color\":15158332,\"url\":\"$STATUSURL/\",\"fields\":[\
-{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},\
-{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},\
-{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
-{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},\
-{\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},\
-{\"name\":\"world\",\"value\": \"${CURRENT_WORLD}\",\"inline\":true}\
-]}]}"
+		echo -n "{"embeds":[{"title":"$(T offline)","color":15158332,"url":"$STATUSURL/","fields":[{"name":"$(T last_check)","value": "$(date +'%F.%T')"},{"name":"$(T version)","value": "${VERSION_LABEL}","inline":true},{"name":"$(T last_start)","value": "${CURRENT_START_TS}","inline":true},{"name":"$(T last_save)","value": "${LAST_WORLD_SAVE_TS}","inline":true},{"name":"seed","value": "${CURRENT_SEED}","inline":true},{"name":"world","value": "${CURRENT_WORLD}","inline":true}}]}"
 		exit 1
 	else
-		LIGHTONLINELIST=$(touch $CONNECTEDPLAYERSFILE && cat $CONNECTEDPLAYERSFILE|cut -d';' -f2|sed ':a;N;$!ba;s/\n/, /g')
-		LIGHTOFFLINELIST=$(touch $OFFLINEPLAYERSFILE && cat $OFFLINEPLAYERSFILE|cut -d';' -f2|sed ':a;N;$!ba;s/\n/, /g')
-		echo -n "{\
-\"title\":\"$(T server_status_title)\",\
-\"embeds\":[\
-{\"title\":\"$(T online)\",\"color\":3066993,\"url\":\"$STATUSURL\",\"fields\":[\
-{\"name\":\"$(T cpu)\",\"value\": \"$CPUUSAGE%\",\"inline\":true},\
-{\"name\":\"$(T ram)\",\"value\": \"$RAMUSAGE%\",\"inline\":true},\
-{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},\
-{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},\
-{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},\
-{\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},\
-{\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST:-nobody}\",\"inline\":true},\
-{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST:-nobody}\",\"inline\":true},\
-{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}\
-]}\
-]}"
+		LIGHTONLINELIST=$(touch "$CONNECTEDPLAYERSFILE" && awk -F';' 'NF >= 3 && $2 != "" { print $2 }' "$CONNECTEDPLAYERSFILE" | paste -sd, - | sed 's/,/, /g')
+		LIGHTOFFLINELIST=$(touch "$OFFLINEPLAYERSFILE" && awk -F';' 'NF >= 3 && $2 != "" { print $2 }' "$OFFLINEPLAYERSFILE" | paste -sd, - | sed 's/,/, /g')
+		LIGHTONLINELIST=${LIGHTONLINELIST:-nobody}
+		LIGHTOFFLINELIST=${LIGHTOFFLINELIST:-nobody}
+		echo -n "{"title":"$(T server_status_title)","embeds":[{"title":"$(T online)","color":3066993,"url":"$STATUSURL","fields":[{"name":"$(T cpu)","value": "$CPUUSAGE%","inline":true},{"name":"$(T ram)","value": "$RAMUSAGE%","inline":true},{"name":"$(T version)","value": "${VERSION_LABEL}","inline":true},{"name":"$(T last_start)","value": "${CURRENT_START_TS}","inline":true},{"name":"$(T last_save)","value": "${LAST_WORLD_SAVE_TS}","inline":true},{"name":"seed","value": "${CURRENT_SEED}","inline":true},{"name":"$(T online)","value": "${LIGHTONLINELIST}","inline":true},{"name":"$(T offline)","value": "${LIGHTOFFLINELIST}","inline":true},{"name":"$(T last_check)","value": "$(date +'%F.%T')"}]}]}"
 	fi
 	exit 0
 fi
 
-
-echo -e ">=VALHEIM SERVER STATUS @ `date +'%F.%T'`=<"
-if [ -z "$VALHEIM_PID" ]
-then
-	echo -e "SERVER OFFLINE !"
-	echo -e "\n**Server version**"
-	echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
-	echo -e "\n**$(T last_start)**"
-	echo -e "${CURRENT_START_TS}"
-	echo -e "\n**$(T last_save)**"
-	echo -e "${LAST_WORLD_SAVE_TS}"
-	echo -e "\n**Server seed**"
-	echo -e "${CURRENT_SEED}"
-	exit 1
-else
-	echo -e "SERVER ONLINE !"
-fi
-
-echo -e "\n**Server session running since**"
-ps -p "$VALHEIM_PID" -o lstart,etime
-
-echo -e "\n**Server version**"
-echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
-echo -e "\n**$(T last_start)**"
-echo -e "${CURRENT_START_TS}"
-echo -e "\n**$(T last_save)**"
-echo -e "${LAST_WORLD_SAVE_TS}"
-echo -e "\n**Server seed**"
-echo -e "${CURRENT_SEED}"
-
-echo -e "\n**Server consumption**"
-echo -e "CPU ($TOTALCPU cores) : $CPUUSAGE%"
-echo -e "RAM ($TOTALRAM MB) : $RAMUSAGE%"
-
-echo -e "\n**Connected players**"
-cat "$CONNECTEDPLAYERSFILE"
-
-echo -e "\n**Offline players**"
-cat "$OFFLINEPLAYERSFILE"
