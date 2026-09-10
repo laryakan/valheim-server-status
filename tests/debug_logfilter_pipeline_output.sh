@@ -59,7 +59,7 @@ printf '%s\n' \
 "09/10/2026 19:58:26: Connections 0 ZDOS:44844 sent:0 recv:0" \
 | ./vss.log-filter
 
-echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: First connection detection (1 json output expected)') :"
+echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: First connection detection (1 steamid and 1 json output expected with event \"first_join\")') :"
 
 printf '%s\n' \
 "09/10/2026 12:17:48: Connections 0 ZDOS:44824 sent:0 recv:0" \
@@ -84,7 +84,7 @@ printf '%s\n' \
 "09/10/2026 12:27:48: Connections 1 ZDOS:44824 sent:0 recv:274" \
 | ./vss.log-filter
 
-echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Connection detection (1 json output expected)') :"
+echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Connection detection (1 steamid 1 json output expected with \"connected\")') :"
 
 printf '%s\n' \
 "09/10/2026 12:17:48: Connections 0 ZDOS:44824 sent:0 recv:0" \

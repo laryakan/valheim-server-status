@@ -117,14 +117,25 @@ while read LINE; do
       then
          CHOUR=`date +'%F.%T'`
 
+         # Connection default event
+         EVENT_TYPE="connect"
+
          # Persist the cross-reference SteamID -> player name / ZDOID from the same login stack.
          # Close the sequence immediately after the ZDOID line is consumed:
          # the SteamID is only valid while the connection stack is being matched.
+         ALREADYKNOWN=1
          if [ -n "$CURRENT_STEAMID" ] && [ -n "$PLAYERNAME" ]; then
-            grep -q "^${CURRENT_STEAMID};${PLAYERNAME}$" "$STEAMIDMAPFILE" 2>/dev/null || echo "${CURRENT_STEAMID};${PLAYERNAME}" >> "$STEAMIDMAPFILE"
+            ALREADYKNOWN=$(grep "^${CURRENT_STEAMID};${PLAYERNAME}$" "$STEAMIDMAPFILE")
+            if [ -z "$ALREADYKNOWN" ]
+            then
+               # Player is not known to the server yet, its a new player.
+               echo "${CURRENT_STEAMID};${PLAYERNAME}" >> "$STEAMIDMAPFILE"
+               EVENT_TYPE="first_join"
+            fi
+             
             if [ $DEBUGMODE -eq 1 ]
             then
-               echo -e "\n\nDEBUG: We have a new SteamID mapping: ${CURRENT_STEAMID};${PLAYERNAME}"
+               echo -e "\n\nDEBUG: Detected SteamID mapping: ${CURRENT_STEAMID};${PLAYERNAME}, event type: $EVENT_TYPE"
             fi
          fi
          CURRENT_STEAMID=""
@@ -132,16 +143,6 @@ while read LINE; do
          # Remove from offline players list when the same player reconnects.
          sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
          sed -i '/^$/d' "$OFFLINEPLAYERSFILE"
-
-         ALREADYKNOWN=`grep -- "$PLAYERNAME" "$STEAMIDMAPFILE" 2>/dev/null || true`
-
-         # New connection default event
-         EVENT_TYPE="first_join"
-         if [ -z "$ALREADYKNOWN" ]
-         then
-            # Player is a already known from the server.
-            EVENT_TYPE="connect"
-         fi
 
          echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
          sed -i '/^$/d' "$CONNECTEDPLAYERSFILE"
@@ -152,7 +153,7 @@ while read LINE; do
 
          if [ $DEBUGMODE -eq 1 ]
          then
-            echo -e "\n\nDEBUG: sending event $EVENT_TYPE for player $PLAYERNAME"
+            echo -e "\n\nDEBUG: sending event \"$EVENT_TYPE\" for player $PLAYERNAME"
             "$CWD/discord/event" "$EVENT_TYPE" "" "$PLAYERNAME"
          fi
       fi
@@ -178,7 +179,7 @@ while read LINE; do
          fi
          if [ $DEBUGMODE -eq 1 ]
          then
-            echo -e "\n\nDEBUG: sending event disconnect for player $PLAYERNAME"
+            echo -e "\n\nDEBUG: sending event \"disconnect\" for player $PLAYERNAME"
             "$CWD/discord/event" "disconnect" "" "$PLAYERNAME"
          fi
       fi
