@@ -3,7 +3,7 @@ set -u
 
 cd "$(dirname "$0")/.."
 
-source ./setup >/dev/null 2>&1
+source ./setup >/dev/null
 
 if ! declare -F ensure_env_sync >/dev/null 2>&1; then
   echo "FAIL: ensure_env_sync function should exist" >&2
