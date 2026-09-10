@@ -44,7 +44,7 @@ case "${VSS_LANG:-en}" in
     T_EVENT_LINES_DISCONNECT=(
       "\"\$PLAYER_NAME\" a pris la fuite comme un couard devant un simple Greyling."
       "Le courage de \"\$PLAYER_NAME\" a déserté avant que la première hache ne soit lancée."
-      "\"\$PLAYER_NAME\" s'est sauvé... et il n'y avait même pas de trolls à l'horizon !"
+      "\"\$PLAYER_NAME\" s'est sauvé... et il n'y avait même pas de troll à l'horizon !"
       "On a vu \"\$PLAYER_NAME\" partir en courant comme un lâche ! Les valkyries qui l'ont ammené en Valheim doivent s'en mordre les doigts !"
       "\"\$PLAYER_NAME\" a préféré la fuite au combat... Il faut dire que les nains avait des cure-dents."
     )
