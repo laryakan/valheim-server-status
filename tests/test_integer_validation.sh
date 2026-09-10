@@ -2,6 +2,7 @@
 set -u
 
 cd "$(dirname "$0")/.."
+export DEBUGMODE=1
 
 source ./lib/validation.sh
 

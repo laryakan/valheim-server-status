@@ -2,6 +2,7 @@
 set -u
 
 cd "$(dirname "$0")/.."
+export DEBUGMODE=1
 
 if ! grep -q "sed -i '/^\$/d' \"\$CONNECTEDPLAYERSFILE\"" vss.log-filter; then
   echo "FAIL: vss.log-filter should remove blank lines from CONNECTEDPLAYERSFILE" >&2

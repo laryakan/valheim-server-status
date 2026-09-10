@@ -4,7 +4,15 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/crash.log"
-source "$CWD/.env"
+
+# Test by-pass
+if [ $DEBUGMODE -eq 1 ]; 
+then
+   source "$CWD/.env.test"
+else
+   source "$CWD/.env"
+fi
+
 # Valheim Server log filter
 # This script brings a Valheim Log Management which doesn't exist directly through steamcmd and Valheim server ATM
 # YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how, the vss.standalone.pipe do this with a tail
@@ -32,7 +40,7 @@ while read LINE; do
    # Keep it as session context across the following log lines until a
    # new SteamID token arrives, so the later ZDOID line can complete the
    # stable map as SteamID;player;ZDOID.
-   if [[ "$LINE" =~ Got[[:space:]]connection[[:space:]]SteamID[[:space:]]from[[:space:]]+([^[:space:]]+) ]]; then
+   if [[ "$LINE" =~ Got[[:space:]]connection[[:space:]]SteamID[[:space:]]+([^[:space:]]+) ]]; then
       CURRENT_STEAMID="${BASH_REMATCH[1]}"
    fi
 
@@ -50,6 +58,11 @@ while read LINE; do
          VALSERVERVERSION="$FOUND_VERSION"
          VALSERVERLASTUPDATE="$VERSION_TS"
       fi
+
+      if [ $DEBUGMODE -eq 1 ]
+      then
+         echo -e "\n\nDetected Valheim server version update: $FOUND_VERSION at $VERSION_TS"
+      fi
    fi
 
    # Detect final world save completion and persist the save timestamp for status output
@@ -57,6 +70,11 @@ while read LINE; do
    if [[ "$LINE" =~ ^([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*World[[:space:]]save[[:space:]]\(5/5\)[[:space:]]done\.[[:space:]]*Total[[:space:]]time[[:space:]]\[[^]]+\] ]]; then
       SAVE_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
       printf '%s\n' "$SAVE_TS" > "$LAST_WORLD_SAVE_FILE"
+
+      if [ $DEBUGMODE -eq 1 ]
+      then
+         echo -e "\n\nDetected world save completion: $SAVE_TS"
+      fi
    fi
    
    # Detect a synthetic respawn/spawn marker 0:0 for a player already known
@@ -71,6 +89,11 @@ while read LINE; do
          then
             "$CWD/discord/event" "death" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
+
+         if [ $DEBUGMODE -eq 1 ]
+         then
+            "$CWD/discord/event" "death" "" "$PLAYERNAME"
+         fi
       fi
    fi
 
@@ -81,11 +104,10 @@ while read LINE; do
       # Parse a stable player identity chain from the log line.
       # Accept only a positive player identifier and an instance number. Ignore
       # the 0:0 spawn/respawn token and any malformed or negative chain.
-      if [[ "$CONNECTION" =~ Got\ character\ ZDOID\ from\ ([^[:space:]]+)\ .*:\ ([0-9]+):([0-9]+)$ ]]; then
-         PLAYERNAME="${BASH_REMATCH[1]}"
-         PLAYERID="${BASH_REMATCH[2]}"
-         PLAYERINSTANCE="${BASH_REMATCH[3]}"
-         ZDOID="${PLAYERID}:${PLAYERINSTANCE}"
+      PZ=$(printf '%s\n' "$CONNECTION" | sed -E 's/.*Got character ZDOID from ([^[:space:]]+) .*: ([0-9-]+):1$/\1;\2/')
+      if [ -n "$PZ" ] && printf '%s' "$PZ" | grep -q ';'; then
+         PLAYERNAME="${PZ%%;*}"
+         ZDOID="${PZ#*;}"
       else
          PLAYERNAME=""
          ZDOID=""
@@ -100,6 +122,10 @@ while read LINE; do
          # the SteamID is only valid while the connection stack is being matched.
          if [ -n "$CURRENT_STEAMID" ] && [ -n "$PLAYERNAME" ]; then
             grep -q "^${CURRENT_STEAMID};${PLAYERNAME}$" "$STEAMIDMAPFILE" 2>/dev/null || echo "${CURRENT_STEAMID};${PLAYERNAME}" >> "$STEAMIDMAPFILE"
+            if [ $DEBUGMODE -eq 1 ]
+            then
+               echo -e "\n\nDEBUG: We have a new SteamID mapping: ${CURRENT_STEAMID};${PLAYERNAME}"
+            fi
          fi
          CURRENT_STEAMID=""
 
@@ -123,8 +149,15 @@ while read LINE; do
          then
             "$CWD/discord/event" "$EVENT_TYPE" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
+
+         if [ $DEBUGMODE -eq 1 ]
+         then
+            echo -e "\n\nDEBUG: sending event $EVENT_TYPE for player $PLAYERNAME"
+            "$CWD/discord/event" "$EVENT_TYPE" "" "$PLAYERNAME"
+         fi
       fi
    fi
+
    # Get disconnected players
    DISCOZDOID=$(echo "${LINE}" | grep "Destroying abandoned non persistent zdo" | head -1 | sed -E 's/.*Destroying abandoned non persistent zdo ([0-9-]+):[0-9]+.*$/\1/')
    if [ ! -z "$DISCOZDOID" ]
@@ -142,6 +175,11 @@ while read LINE; do
          if [ $EVENTREALTIME != 0 ]
          then
             "$CWD/discord/event" "disconnect" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
+         fi
+         if [ $DEBUGMODE -eq 1 ]
+         then
+            echo -e "\n\nDEBUG: sending event disconnect for player $PLAYERNAME"
+            "$CWD/discord/event" "disconnect" "" "$PLAYERNAME"
          fi
       fi
    fi
