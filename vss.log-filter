@@ -14,15 +14,30 @@ source "$CWD/.env"
 # Filter to remove debug dans blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
-mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" )
-touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE"
-LAST_WORLD_SAVE_FILE="$CWD/last-world-save"
+mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" ) $( dirname "$STEAMIDMAPFILE" ) $( dirname "$LAST_WORLD_SAVE_FILE" )
+touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE" "$STEAMIDMAPFILE" "$LAST_WORLD_SAVE_FILE"
+
+STEAMIDMAPFILE="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
+LAST_WORLD_SAVE_FILE="${LAST_WORLD_SAVE_FILE:-$CWD/data/last-world-save}"
+CURRENT_STEAMID=""
 
 while read LINE; do
    # Remove debug and blank lines
    if [ "$1" != '--tail-pipe-input' ]
    then
       echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log" 
+   fi
+
+   # Capture a current SteamID from the opening connection stack line.
+   # Keep it as session context across the following log lines until a
+   # new SteamID token arrives, so the later ZDOID line can complete the
+   # stable map as SteamID;player;ZDOID.
+   if [[ "$LINE" =~ Got[[:space:]]connection[[:space:]]SteamID[[:space:]]from[[:space:]]+([^[:space:]]+) ]]; then
+      CURRENT_STEAMID="${BASH_REMATCH[1]}"
+   fi
+
+   if [[ "$LINE" =~ Got[[:space:]]handshake[[:space:]]from[[:space:]]client.*SteamID[[:space:]]+([^[:space:]]+) ]]; then
+      CURRENT_STEAMID="${BASH_REMATCH[1]}"
    fi
 
    # Detect Valheim server version update
@@ -44,38 +59,72 @@ while read LINE; do
       printf '%s\n' "$SAVE_TS" > "$LAST_WORLD_SAVE_FILE"
    fi
    
-   # Get connected players
-   CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`
-   if [ ! -z "$CONNECTION" ]
+   # Detect a synthetic respawn/spawn marker 0:0 for a player already known
+   # by name in the connected/offline roster and classify it as a death event.
+   DEATH_MARKER=$(echo "${LINE}" | grep "Got character ZDOID from" | head -1 | grep -E ' : 0:0$' || true)
+   if [ -n "$DEATH_MARKER" ]
    then
-      PZ=$(printf '%s\n' "$CONNECTION" | sed -E 's/.*Got character ZDOID from ([^[:space:]]+) .*: ([0-9-]+):[0-9]+$/\1;\2/')
-      if [ -n "$PZ" ] && printf '%s' "$PZ" | grep -q ';'; then
-         PLAYERNAME="${PZ%%;*}"
-         ZDOID="${PZ#*;}"
-      else
-         PLAYERNAME=""
-         ZDOID=""
-      fi
-      CHOUR=`date +'%F.%T'`
-
-      # Remove from offline players list
-      sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
-      sed -i '/^$/d' "$OFFLINEPLAYERSFILE"
-
-      # detect respawn (double connection and/or death) for the same Character
-      ALREADYREGISTEREDSTR=`grep -- "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE"`
-      if [ -z "$ALREADYREGISTEREDSTR" ]
+      PLAYERNAME=$(printf '%s\n' "$DEATH_MARKER" | sed -E 's/.*Got character ZDOID from ([^[:space:]]+) .*: 0:0$/\1/')
+      if [ -n "$PLAYERNAME" ] && grep -q -- "$PLAYERNAME;" "$CONNECTEDPLAYERSFILE" 2>/dev/null
       then
-         # new connection
-         echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
-         sed -i '/^$/d' "$CONNECTEDPLAYERSFILE"
          if [ $EVENTREALTIME != 0 ]
          then
-            "$CWD/discord/event" "connect" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
+            "$CWD/discord/event" "death" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
       fi
    fi
 
+   # Get connected players
+   CONNECTION=`echo ${LINE} |grep "Got character ZDOID from"|head -1`
+   if [ ! -z "$CONNECTION" ]
+   then
+      # Parse a stable player identity chain from the log line.
+      # Accept only a positive player identifier and an instance number. Ignore
+      # the 0:0 spawn/respawn token and any malformed or negative chain.
+      if [[ "$CONNECTION" =~ Got\ character\ ZDOID\ from\ ([^[:space:]]+)\ .*:\ ([0-9]+):([0-9]+)$ ]]; then
+         PLAYERNAME="${BASH_REMATCH[1]}"
+         PLAYERID="${BASH_REMATCH[2]}"
+         PLAYERINSTANCE="${BASH_REMATCH[3]}"
+         ZDOID="${PLAYERID}:${PLAYERINSTANCE}"
+      else
+         PLAYERNAME=""
+         ZDOID=""
+      fi
+
+      if [ -n "$PLAYERNAME" ] && [ -n "$ZDOID" ]
+      then
+         CHOUR=`date +'%F.%T'`
+
+         # Persist the cross-reference SteamID -> player name / ZDOID from the same login stack.
+         # Close the sequence immediately after the ZDOID line is consumed:
+         # the SteamID is only valid while the connection stack is being matched.
+         if [ -n "$CURRENT_STEAMID" ] && [ -n "$PLAYERNAME" ]; then
+            grep -q "^${CURRENT_STEAMID};${PLAYERNAME}$" "$STEAMIDMAPFILE" 2>/dev/null || echo "${CURRENT_STEAMID};${PLAYERNAME}" >> "$STEAMIDMAPFILE"
+         fi
+         CURRENT_STEAMID=""
+
+         # Remove from offline players list when the same player reconnects.
+         sed -i "/;$PLAYERNAME;/d" "$OFFLINEPLAYERSFILE"
+         sed -i '/^$/d' "$OFFLINEPLAYERSFILE"
+
+         ALREADYKNOWN=`grep -- "$PLAYERNAME" "$STEAMIDMAPFILE" 2>/dev/null || true`
+
+         # New connection default event
+         EVENT_TYPE="first_join"
+         if [ -z "$ALREADYKNOWN" ]
+         then
+            # Player is a already known from the server.
+            EVENT_TYPE="connect"
+         fi
+
+         echo -e "$CHOUR;$PLAYERNAME;$ZDOID" >> "$CONNECTEDPLAYERSFILE"
+         sed -i '/^$/d' "$CONNECTEDPLAYERSFILE"
+         if [ $EVENTREALTIME != 0 ]
+         then
+            "$CWD/discord/event" "$EVENT_TYPE" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
+         fi
+      fi
+   fi
    # Get disconnected players
    DISCOZDOID=$(echo "${LINE}" | grep "Destroying abandoned non persistent zdo" | head -1 | sed -E 's/.*Destroying abandoned non persistent zdo ([0-9-]+):[0-9]+.*$/\1/')
    if [ ! -z "$DISCOZDOID" ]

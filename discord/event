@@ -31,9 +31,20 @@ if [ -n "$PLAYER_NAME" ] && [[ "$EVENT_TEXT" != *"$PLAYER_NAME"* ]]; then
 fi
 
 TITLE="$(T player_connected)"
-if [ "$EVENT_TYPE" = "disconnect" ]; then
-  TITLE="$(T player_disconnected)"
-fi
+case "$EVENT_TYPE" in
+  disconnect)
+    TITLE="$(T player_disconnected)"
+    ;;
+  first_join)
+    TITLE="$(T first_connection)"
+    ;;
+  death)
+    TITLE="$(T player_died)"
+    ;;
+  *)
+    TITLE="$(T player_connected)"
+    ;;
+esac
 
 printf '%s' "{
   \"title\": \"$(json_escape "$(T event_title)")\",

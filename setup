@@ -430,33 +430,28 @@ function admin_list_file() {
 function known_players_display() {
   local known_file
   local line
-  local timestamp
   local pseudo
   local player_id
   local display_entries=""
 
-  if [ -d "$VSSDIR/data" ]; then
-    for known_file in "$VSSDIR/data/online-players" "$VSSDIR/data/offline-players"; do
-      if [ -f "$known_file" ]; then
-        while IFS=';' read -r timestamp pseudo player_id; do
-          if [ -n "$pseudo" ] && [ -n "$player_id" ]; then
-            if ! printf '%s\n' "$display_entries" | grep -Fq "${pseudo}:${player_id}"; then
-              if [ -n "$display_entries" ]; then
-                display_entries="${display_entries} | ${pseudo}:${player_id}"
-              else
-                display_entries="${pseudo}:${player_id}"
-              fi
-            fi
-          fi
-        done < "$known_file"
-      fi
-    done
 
-    if [ -n "$display_entries" ]; then
-      echo "--- known players ---"
-      echo "$display_entries"
-    fi
-  fi
+	if [ -f "$STEAMIDMAPFILE" ]; then
+	while IFS=';' read -r player_id pseudo; do
+		if [ -n "$pseudo" ] && [ -n "$player_id" ]; then
+			if ! printf '%s\n' "$display_entries" | grep -Fq "${player_id}:${pseudo}"; then
+				if [ -n "$display_entries" ]; then
+				display_entries="${display_entries} | ${player_id}:${pseudo}"
+				else
+				display_entries="${player_id}:${pseudo}"
+				fi
+			fi
+		fi
+	done < "$STEAMIDMAPFILE"
+		if [ -n "$display_entries" ]; then
+		echo "--- known players ---"
+		echo "$display_entries"
+		fi
+	fi
 }
 
 function admin_list_show() {
