@@ -481,12 +481,12 @@ function admin_list_add() {
     echo "empty value, aborted" >&2
     return
   fi
-  if [ -f "$file" ] && grep -Fqx "$player_id" "$file"; then
-    echo "$player_id already exists in ${list_name} list" >&2
+  if [ -f "$file" ] && grep -Fqx "V_$player_id" "$file"; then
+    echo "V_$player_id already exists in ${list_name} list" >&2
     return
   fi
-  echo "$player_id" >> "$file"
-  echo "$player_id added to ${list_name} list"
+  echo "V_$player_id" >> "$file"
+  echo "V_$player_id added to ${list_name} list"
 }
 
 function admin_list_remove() {
@@ -503,14 +503,14 @@ function admin_list_remove() {
     echo "empty value, aborted" >&2
     return
   fi
-  if [ ! -f "$file" ] || ! grep -Fqx "$player_id" "$file"; then
-    echo "$player_id not found in ${list_name} list" >&2
+  if [ ! -f "$file" ] || ! grep -Fqx "V_$player_id" "$file"; then
+    echo "V_$player_id not found in ${list_name} list" >&2
     return
   fi
   tmp_file="$(mktemp)"
-  grep -Fvx "$player_id" "$file" > "$tmp_file"
+  grep -Fvx "V_$player_id" "$file" > "$tmp_file"
   mv "$tmp_file" "$file"
-  echo "$player_id removed from ${list_name} list"
+  echo "V_$player_id removed from ${list_name} list"
 }
 
 launcher_menu(){
