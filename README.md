@@ -172,6 +172,7 @@ First launch `./setup`, then CTRL+C to exit, this will create the file where you
 
 You can find the option you can put here (for exemple) :
 https://www.survivalservers.com/wiki/Valheim_Server_Settings#Presets
+https://xgamingserver.com/tools/valheim/server-config
 
 ### Example using an existing launcher
 

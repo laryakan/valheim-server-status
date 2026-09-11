@@ -6,7 +6,7 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/crash.log"
 
 # Test by-pass
-if [ $DEBUGMODE -eq 1 ];
+if [ "${DEBUGMODE:-0}" -eq 1 ];
 then
    source "$CWD/.env.test"
 else
@@ -59,7 +59,7 @@ while read LINE; do
          VALSERVERLASTUPDATE="$VERSION_TS"
       fi
 
-      if [ $DEBUGMODE -eq 1 ]
+      if [ "${DEBUGMODE:-0}" -eq 1 ];
       then
          echo -e "\n\nDetected Valheim server version update: $FOUND_VERSION at $VERSION_TS"
       fi
@@ -71,7 +71,7 @@ while read LINE; do
       SAVE_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
       printf '%s\n' "$SAVE_TS" > "$LAST_WORLD_SAVE_FILE"
 
-      if [ $DEBUGMODE -eq 1 ]
+      if [ "${DEBUGMODE:-0}" -eq 1 ];
       then
          echo -e "\n\nDetected world save completion: $SAVE_TS"
       fi
@@ -90,7 +90,7 @@ while read LINE; do
             "$CWD/discord/event" "death" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
 
-         if [ $DEBUGMODE -eq 1 ]
+         if [ "${DEBUGMODE:-0}" -eq 1 ];
          then
             "$CWD/discord/event" "death" "" "$PLAYERNAME"
          fi
@@ -133,7 +133,7 @@ while read LINE; do
                EVENT_TYPE="first_join"
             fi
              
-            if [ $DEBUGMODE -eq 1 ]
+            if [ "${DEBUGMODE:-0}" -eq 1 ];
             then
                echo -e "\n\nDEBUG: Detected SteamID mapping: ${CURRENT_STEAMID};${PLAYERNAME}, event type: $EVENT_TYPE"
             fi
@@ -151,7 +151,7 @@ while read LINE; do
             "$CWD/discord/event" "$EVENT_TYPE" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
 
-         if [ $DEBUGMODE -eq 1 ]
+         if [ "${DEBUGMODE:-0}" -eq 1 ];
          then
             echo -e "\n\nDEBUG: sending event \"$EVENT_TYPE\" for player $PLAYERNAME"
             "$CWD/discord/event" "$EVENT_TYPE" "" "$PLAYERNAME"
@@ -177,7 +177,7 @@ while read LINE; do
          then
             "$CWD/discord/event" "disconnect" "" "$PLAYERNAME" | "$CWD/discord/webhook.json-sender"
          fi
-         if [ $DEBUGMODE -eq 1 ]
+         if [ "${DEBUGMODE:-0}" -eq 1 ];
          then
             echo -e "\n\nDEBUG: sending event \"disconnect\" for player $PLAYERNAME"
             "$CWD/discord/event" "disconnect" "" "$PLAYERNAME"

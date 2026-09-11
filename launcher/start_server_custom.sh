@@ -4,7 +4,7 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
 
 # Test by-pass
-if [ -z $DEBUGMODE ];
+if [ "${DEBUGMODE:-0}" -eq 0 ];
 then
   source "$CWD/../.env"
 else
@@ -47,7 +47,7 @@ if [ "${VHSERVERCROSSPLAY:-0}" = "1" ]; then
   LAUNCH_ARGS+=( -crossplay )
 fi
 
-if [ ! -z $DEBUGMODE ];
+if [ ! "${DEBUGMODE:-0}" -eq 0 ];
 then
   echo "$VHSERVERDIR/valheim_server.x86_64" "${LAUNCH_ARGS[@]}"
   export LD_LIBRARY_PATH=$templdpath
