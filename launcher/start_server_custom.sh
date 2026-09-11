@@ -20,6 +20,10 @@ TODAY=`date +%Y-%m-%d`
 echo "Server running through VSS custom launcher, you can find logs in $VALHEIMSERVERLOGPATH"
 echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)"
 
+if [ ! -f "$CWD/launcher-args" ]; then
+  cp "$CWD/../examples/launcher-args" "$CWD/launcher-args"
+fi
+
 # Tip: Make a local copy of this script to avoid it being overwritten by steam.
 # NOTE: Minimum password length is 5 characters & Password cant be in the server name.
 # NOTE: You need to make sure the ports 2456-2458 (or the one specified +2) is being forwarded to
@@ -34,10 +38,7 @@ LAUNCH_ARGS=(
   -world_seed "$VHSERVERSEED"
   -savedir "$VHSERVERSAVEDIR"
   -password "$VHSERVERPASSWD"
-  -saveinterval 1800
-  -backups 2
-  -backupshort 7200
-  -backuplong 43200
+  $( cat $CWD/launcher-args)
   # Do not use -logfile "$VALHEIMSERVERLOGDIR/$TODAY.log" because it will break the log filter
   #-logFile "$VALHEIMSERVERLOGDIR/$TODAY.log"
 )

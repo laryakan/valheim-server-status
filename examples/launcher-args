@@ -1,0 +1,4 @@
+-saveinterval 1800
+-backups 2
+-backupshort 7200
+-backuplong 43200

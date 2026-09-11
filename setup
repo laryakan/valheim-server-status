@@ -8,6 +8,10 @@ then
   cp "$CWD/.env.dist" "$CWD/.env"
 fi
 
+if [ ! -f "$CWD/launcher-args" ]; then
+  cp "$CWD/../examples/launcher-args" "$CWD/launcher-args"
+fi
+
 function ensure_env_sync() {
   local env_file="${1:-$CWD/.env}"
   local template_file="${2:-$CWD/.env.dist}"
