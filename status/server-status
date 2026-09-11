@@ -49,14 +49,19 @@ source "$CWD/../i18n.sh"
 
 CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
 CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
-CURRENT_START_TS="${VALSERVERLASTSTART:-unknown}"
-LAST_WORLD_SAVE_TS="$(cat "$CWD/../last-world-save" 2>/dev/null || echo "unknown")"
+CURRENT_START_TS="0"
+LAST_WORLD_SAVE_TS="$(cat "$LASTWORLDSAVEFILE" 2>/dev/null || echo "unknown")"
 if [ -n "$PROCESS_START_TS" ] && [ "$PROCESS_START_TS" != "unknown" ]; then
 	CURRENT_START_TS="$PROCESS_START_TS"
 fi
-if [ -z "$CURRENT_START_TS" ] || [ "$CURRENT_START_TS" = "0" ] || [ "$CURRENT_START_TS" = "unknown" ]; then
+if [ -z "$CURRENT_START_TS" ] || [ "$CURRENT_START_TS" = "0" ]; then
 	CURRENT_START_TS="unknown"
 fi
+if [ "$CURRENT_START_TS" = "unknown" ]; then
+	CURRENT_START_TS="${VALSERVERLASTSTART:-unknown}"
+fi
+
+
 CURRENT_SEED="${VHSERVERSEED:-unknown}"
 CURRENT_WORLD="${VHSERVERWORLD:-unknown}"
 VERSION_LABEL="${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
@@ -65,7 +70,7 @@ if [ "$1" = '--for-webhook' ]
 then
 	if [ -z "$VALHEIM_PID" ]
 	then
-		echo -n "{\"embeds\":[{\"title\":\"$(T offline)\",\"color\":15158332,\"fields\":[{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},{\"name\":\"seed\",\"value\": \"${CURRENT_SEED}\",\"inline\":true},{\"name\":\"world\",\"value\": \"${CURRENT_WORLD}\",\"inline\":true}]}]}"
+		echo -n "{\"embeds\":[{\"title\":\"$(T offline)\",\"color\":15158332,\"fields\":[{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true}, {\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}]}]}"
 		exit 1
 	else
 		LIGHTONLINELIST=$(touch "$CONNECTEDPLAYERSFILE" && awk -F';' 'NF >= 3 && $2 != "" { print $2 }' "$CONNECTEDPLAYERSFILE" | paste -sd, - | sed 's/,/, /g')
