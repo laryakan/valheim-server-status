@@ -8,7 +8,7 @@ source "$CWD/../i18n.sh"
 echo -n "{\
 \"title\":\"$(T server_info_title)\",\
 \"embeds\":[\
-{\"title\":\"$(T connection_info_title)\",\"color\":12745742,\"url\":\"$STATUSURL\",\"fields\":[\
+{\"title\":\"$(T connection_info_title)\",\"color\":12745742,\"fields\":[\
 {\"name\":\"$(T server_name)\",\"value\": \"$VHSERVERNAME\"},\
 {\"name\":\"$(T ip)\",\"value\": \"||$PUBLICIP:$VHSERVERPORT||\"},\
 {\"name\":\"$(T password)\",\"value\": \"||$VHSERVERPASSWD||\"},\
