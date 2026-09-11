@@ -551,11 +551,11 @@ mkdir -p "$CWD/systemd"
 			7) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
 			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
 			9) setup_value_prompt 'set crossplay on/off: 1 = crossplay active, 0 = crossplay inactive' 'VHSERVERCROSSPLAY' ; clear ; launcher_menu ;;
-			10) set_service "$VHSERVERSERVICENAME"; sleep 2 ; clear ; launcher_menu ;;
-			11) uninstall_service "$VHSERVERSERVICENAME" ; clear ; launcher_menu ;;
-			12) stop_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			13) start_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
-			14) restart_valheim_service ; sleep 2 ; clear ; launcher_menu ;;
+			10) set_service "$VHSERVERSERVICENAME"; sleep 1 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			11) uninstall_service "$VHSERVERSERVICENAME"; sleep 1 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			12) stop_valheim_service ; sleep 1 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			13) start_valheim_service ; sleep 1 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			14) restart_valheim_service ; sleep 1 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
 			15) 
 				if [ -n "$VHSERVERWORLD" ]; then
 					stop_valheim_service
@@ -566,7 +566,7 @@ mkdir -p "$CWD/systemd"
 				else
 					echo -e "$(ColorRed 'VHSERVERWORLD is empty; cannot delete the current world.')" >&2
 				fi
-				sleep 2 ; clear ; launcher_menu ;;
+				sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
 
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
