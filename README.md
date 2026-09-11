@@ -162,6 +162,17 @@ The log pipeline is the source of player activity and state changes.
 
 The launcher writes to a log path that VSS can watch and parse.
 
+#### Custom args launcher
+
+First launch `./setup`, then CTRL+C to exit, this will create the file where you will be able to set custom server launcher args :
+
+```bash
+./launcher/launcher-args
+```
+
+You can find the option you can put here (for exemple) :
+https://www.survivalservers.com/wiki/Valheim_Server_Settings#Presets
+
 ### Example using an existing launcher
 
 If your server is already started elsewhere, pipe its logs into the filter:
