@@ -2,7 +2,14 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-source "$CWD/../.env"
+
+# Test by-pass
+if [ -z $DEBUGMODE ];
+then
+  source "$CWD/../.env"
+else
+  source "$CWD/../.env.test"
+fi
 
 export templdpath=$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=./linux64:$LD_LIBRARY_PATH
@@ -38,6 +45,14 @@ LAUNCH_ARGS=(
 if [ "${VHSERVERCROSSPLAY:-0}" = "1" ]; then
   LAUNCH_ARGS+=( -crossplay )
 fi
+
+if [ ! -z $DEBUGMODE ];
+then
+  echo "$VHSERVERDIR/valheim_server.x86_64" "${LAUNCH_ARGS[@]}"
+  export LD_LIBRARY_PATH=$templdpath
+  exit 0
+fi
+
 
 "$VHSERVERDIR/valheim_server.x86_64" "${LAUNCH_ARGS[@]}" \
 1> >( tee -a >("$VSSLOGFILTER") ) \
