@@ -55,11 +55,11 @@ then
 				if [ "$1" = "--status" ]
 				then
 					echo -e "Status message has been deleted from the server, \
-	a new message will be sent, please fill the .env file" >&2
+	a new message will be sent, please fill the .env file. | Content : "$CONTENT" "$WHURL/messages/$MESSAGEID"" >&2
 				fi
 				MESSAGEID=''
 			else
-				echo -e "$(T patch_failed "$PATCH_HTTP_CODE")" >&2
+				echo -e "$(T patch_failed "$PATCH_HTTP_CODE") | Content : "$CONTENT" "$WHURL/messages/$MESSAGEID"" >&2
 				exit 0
 			fi
 			;;

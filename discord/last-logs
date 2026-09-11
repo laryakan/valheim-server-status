@@ -9,7 +9,9 @@ shopt -s nullglob
 LOGFILES=( $VALHEIMSERVERLOGPATH )
 shopt -u nullglob
 
-if [ ${#LOGFILES[@]} -eq 0 ]
+LOG_BODY="$(T no_log_to_send)"
+
+if [ -z "${#LOGFILES[@]}" ]
 then
   echo "$(T no_log_to_send)" >&2
 else
@@ -19,8 +21,9 @@ else
     echo "$(T no_log_to_send)" >&2
   else
     LOG_BODY="$(tail -n "$SENDLASTLOGS" "$LAST_LOG" 2>/dev/null | sed ':a;N;$!ba;s/\n/\\n/g')"
-    echo -n "{\"embeds\":[\
-{\"title\":\"$(T last_logs)\",\"color\":10181046,\"description\":\"${LOG_BODY}\"}\
-]}"
   fi
 fi
+
+echo -n "{\"embeds\":[\
+{\"title\":\"$(T last_logs)\",\"color\":10181046,\"description\":\"${LOG_BODY}\"}\
+]}"
