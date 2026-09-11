@@ -3,7 +3,13 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-source "$CWD/../.env"
+# Test by-pass
+if [ "${DEBUGMODE:-0}" -eq 1 ];
+then
+   source "$CWD/../.env.test"
+else
+   source "$CWD/../.env"
+fi
 source "$CWD/../i18n.sh"
 
 # Sending status messages on Discord script
@@ -67,4 +73,9 @@ then
 fi
 
 #'{"content":"'"${domain} : ${status_code}"'"}'
+if [ "${DEBUGMODE:-0}" -eq 1 ];
+then
+	echo -e "curl -sS -H \"Content-Type: application/json\" -X POST -d '$CONTENT' \"$WHURL\""
+	exit 0
+fi
 curl -sS -H "Content-Type: application/json" -X POST -d "$CONTENT" "$WHURL"

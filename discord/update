@@ -2,7 +2,12 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-source "$CWD/../.env"
+if [ "${DEBUGMODE:-0}" -eq 1 ];
+then
+   source "$CWD/../.env.test"
+else
+   source "$CWD/../.env"
+fi
 source "$CWD/../i18n.sh"
 # Output the server connection info first if asked.
 if [ "${SENDSERVERCONNECTIONINFO:-0}" -gt 0 ] 2>/dev/null
