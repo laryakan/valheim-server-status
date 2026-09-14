@@ -104,7 +104,7 @@ while read LINE; do
       # Parse a stable player identity chain from the log line.
       # Accept only a positive player identifier and an instance number. Ignore
       # the 0:0 spawn/respawn token and any malformed or negative chain.
-      PZ=$(printf '%s\n' "$CONNECTION" | sed -E 's/.*Got character ZDOID from ([^[:space:]]+) .*: ([0-9-]+):1$/\1;\2/')
+      PZ=$(printf '%s\n' "$CONNECTION" | sed -E 's/.*Got character ZDOID from ([^[:space:]]+) .*: ([0-9-]+):[1-9]\d?$/\1;\2/')
       if [ -n "$PZ" ] && printf '%s' "$PZ" | grep -q ';'; then
          PLAYERNAME="${PZ%%;*}"
          ZDOID="${PZ#*;}"
@@ -115,6 +115,13 @@ while read LINE; do
 
       if [ -n "$PLAYERNAME" ] && [ -n "$ZDOID" ]
       then
+
+         # Check if already listed as connected: Then do nothing
+         if grep -q "${PLAYERNAME}" "$CONNECTEDPLAYERSFILE" 2>/dev/null;
+         then
+            continue
+         fi
+
          CHOUR=`date +'%F.%T'`
 
          # Connection default event
