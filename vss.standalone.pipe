@@ -1,13 +1,26 @@
 #!/bin/bash
 # author: laryakan, date 2021/03/12
 
-# Basic env init
-CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/.env"
+# Checking .env init
+if [ -z "$VSSDIR" ]
+then
+   # Basic env init
+   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+   source "$CWD/.env"
+else
+   CWD="$VSSDIR"
+fi
+
 # Valheim Server log filter standalone pipe
 # This script brings take the logpath from .env, tail and pipe output on vss.log-filter to catch interesting logs
 # for status purpose
 
-# tail quiet watch new lines
-tail -fqn0 $VALHEIMSERVERLOGPATH | "$VSSLOGFILTER" --tail-pipe-input
-
+if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
+then
+   touch "$VSSBEPINEXLOGOUTPUT"
+   # If we are on a BepInEx config, watch the BepInEx LogOutput and output lines to our rotated logs
+   tail -fqn0 "$VSSBEPINEXLOGOUTPUT" | "$VSSLOGFILTER"
+else
+   # tail quiet watch new lines
+   tail -fqn0 "$VALHEIMSERVERLOGPATH" | "$VSSLOGFILTER" --tail-pipe-input
+fi

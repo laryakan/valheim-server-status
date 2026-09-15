@@ -1,8 +1,15 @@
 #!/bin/bash
 # author: laryakan, date 2021/03/12
 # Basic env init
-CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$CWD/.env"
+# Checking .env init
+if [ -z "$VSSDIR" ]
+then
+   # Basic env init
+   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+   source "$CWD/.env"
+else
+   CWD="$VSSDIR"
+fi
 
 # Log search tool
 cat $VALHEIMSERVERLOGPATH | grep "$1"

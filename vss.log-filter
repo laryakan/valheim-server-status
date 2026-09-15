@@ -1,16 +1,20 @@
 #!/bin/bash
 # author: laryakan, date 2021/03/12
 
-# Basic env init
-CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/crash.log"
+# Checking .env init
+if [ -z "$VSSDIR" ]
+then
+   # Basic env init
+   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+   source "$CWD/.env"
+else
+   CWD="$VSSDIR"
+fi
 
 # Test by-pass
 if [ "${DEBUGMODE:-0}" -eq 1 ];
 then
    source "$CWD/.env.test"
-else
-   source "$CWD/.env"
 fi
 
 # Valheim Server log filter
@@ -19,7 +23,7 @@ fi
 
 # Read log lines from STDIN to filter server logs and distribute them
 # This file is registering online/offline players
-# Filter to remove debug dans blanks
+# Filter to remove debug and blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
 mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" ) $( dirname "$STEAMIDMAPFILE" ) $( dirname "$LASTWORLDSAVEFILE" )
@@ -30,10 +34,16 @@ LASTWORLDSAVEFILE="${LASTWORLDSAVEFILE:-$CWD/data/last-world-save}"
 CURRENT_STEAMID=""
 
 while read LINE; do
+   case "$LINE" in
+   "Failed to hook dlsym, ignoring it. Error: no such function: dlsym"|"Failed to hook dup2, ignoring it. Error: no such function: dup2")
+      continue
+      ;;
+   esac
+
    # Remove debug and blank lines
    if [ "$1" != '--tail-pipe-input' ]
    then
-      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log" 
+      echo "${LINE}" |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log"
    fi
 
    # Capture a current SteamID from the opening connection stack line.

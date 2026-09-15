@@ -111,7 +111,8 @@ if [ "$SENDSERVERCONNECTIONINFO" -gt 0 ];then echo -e "$(ColorMagenta 'Discord')
 if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE" | head -1|cut -d' ' -f6) ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME (valheim server) is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME (valheim server) is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME (vss over http) is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME (vss over http) is $(ColorRed 'missing') in system";fi
-if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME (realtime events) is $(ColorGreen 'present') in system";else echo -e  "$VSSPIPESERVICENAME (realtime events) is $(ColorRed 'missing') in system";fi
+if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME is $(ColorGreen 'present') in system (needed to catch outside logs e.g BepInEx or not VSS server)";else echo -e  "$VSSPIPESERVICENAME is $(ColorRed 'missing') in system (needed to catch outside logs e.g BepInEx or not VSS server)";fi
+if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];then echo -e "BepInEx packaged version $(ColorGreen 'activated') on VSS server";else echo -e  "BepInEx packaged version is $(ColorRed 'deactivated') on VSS server";fi
 echo ""
 echo "--Ports--"
 echo -e "Please, run \e[1msudo ufw status\e[0m (firewall) to see if these ports are open:"
@@ -366,9 +367,9 @@ function set_logrotate(){
 	fi
 }
 
-# WIP - auto-setup
-function auto_setup(){
-	echo -e "Not yet implemented"
+# Install / Active BepInEx_Valheim packaged version
+function bepinex(){
+	replace_env_value "$2" "VSSBEPINEXENABLED"
 }
 
 # new menus
@@ -652,7 +653,7 @@ $(ColorBlue 'we can setup a service based on tail if you already have a your ser
 $(ColorBlue 'just setup a valid logs path (wildcards accepted). Then you will not need to use the custom launcher')
 $(ColorGreen '5)') setup wanted Valheim Server logs path (file or directory)
 * standalone *
-$(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (not needed if you use the VSS custom launcher)
+$(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (needed to watch log outputing outside custom launch, like BepInEx logs)
 $(ColorGreen '7)') $(ColorRed 'sudo required') remove vss.pipe.service
 * logrotate *
 $(ColorGreen '8)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
@@ -663,6 +664,10 @@ $(ColorGreen '10)') setup the user who will execute service $(ColorRed 'prior') 
 
 ** Uninstall all **
 $(ColorGreen '11)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
+
+** BepInEx **
+$(ColorGreen '12)') activate BepInEx packaged version
+$(ColorGreen '13)') deactivate BepInEx packaged version
 
 $(ColorGreen '0)') quit
 $(ColorGreen 'CTRL+C)') quit
@@ -682,6 +687,8 @@ $(ColorBlue 'choose an option:') "
 			9) sudo rm '/etc/logrotate.d/valheim' ; clear ; new_menu ;;
 			10) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
 	     	11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; rm "$CWD/systemd/valheim.logrotate" ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
+			12) replace_env_value 'VSSBEPINEXENABLED' 1 ; $VSSDIR/bepinex/install_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
+			13) replace_env_value 'VSSBEPINEXENABLED' 0 ; $VSSDIR/bepinex/remove_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
 		
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;

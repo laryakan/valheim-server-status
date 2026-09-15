@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Basic env init
+# Checking .env init
+if [ -z "$VSSDIR" ]
+then
+   # Basic env init
+   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+   source "$CWD/.env"
+else
+   CWD="$VSSDIR"
+fi
+
+mkdir -p "$VALHEIMSERVERLOGDIR"
+
+# Filter to remove debug and blanks
+NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
+
+while read LINE; do
+do
+    case "$LINE" in
+        "Failed to hook dlsym, ignoring it. Error: no such function: dlsym"|"Failed to hook dup2, ignoring it. Error: no such function: dup2")
+            continue
+            ;;
+    esac
+
+   # Remove debug and blank lines
+   if [ "$1" != '--tail-pipe-input' ]
+   then
+      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log" 
+   fi
+done
