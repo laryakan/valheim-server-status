@@ -35,7 +35,8 @@ LAUNCH_ARGS=(
   -name "$VHSERVERNAME"
   -port "$VHSERVERPORT"
   -world "$VHSERVERWORLD"
-  -world_seed "$VHSERVERSEED"
+  # -world_seed DO NOT APPEAR TO WORK, if you want to set a seed, you need to do it in the world creation process with a local client (google how to do it)
+  # -world_seed "$VHSERVERSEED"
   -savedir "$VHSERVERSAVEDIR"
   -password "$VHSERVERPASSWD"
   $( cat $CWD/launcher-args)

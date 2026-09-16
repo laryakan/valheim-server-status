@@ -529,7 +529,7 @@ $(ColorGreen '3)') setup wanted Valheim server listening port
 $(ColorGreen '4)') setup wanted Valheim server name
 $(ColorGreen '5)') setup wanted Valheim server world name
 $(ColorGreen '6)') setup wanted Valheim server password
-$(ColorGreen '7)') setup wanted Valheim server $(ColorYellow 'seed') value $(ColorRed '(you will start on a new map after server restart)')
+$(ColorGreen '7)') setup current Valheim server $(ColorYellow 'seed') value $(ColorYellow '(The server can`t impose a seed, informative purpose only for DISCORD)')
 $(ColorGreen '8)') setup wanted Valheim server savedir value
 $(ColorGreen '9)') setup crossplay
 $(ColorGreen '10)') $(ColorRed 'sudo required') create or reinstall valheim-server.service in /etc/systemd/system
@@ -552,7 +552,7 @@ mkdir -p "$CWD/systemd"
 	        4) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server name ?" 'VHSERVERNAME' ; clear ; launcher_menu ;;
 	        5) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; launcher_menu ;;
 	        6) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
-			7) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
+			7) setup_value_prompt "what is your current $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
 			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
 			9) setup_value_prompt 'set crossplay on/off: 1 = crossplay active, 0 = crossplay inactive' 'VHSERVERCROSSPLAY' ; clear ; launcher_menu ;;
 			10) set_service "$VHSERVERSERVICENAME"; sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
