@@ -71,14 +71,14 @@ while read LINE; do
 
       if [ "${DEBUGMODE:-0}" -eq 1 ];
       then
-         echo -e "\n\nDetected Valheim server version update: $FOUND_VERSION at $VERSION_TS"
+         echo -e "\n\nDetected Valheim server version: $FOUND_VERSION at $VERSION_TS"
       fi
    fi
 
    # Detect BepInEx Version if activated
    if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
    then
-      if [[ "$LINE" =~ ^\[Message:[[:space:]]+BepInEx\][[:space:]]+BepInEx[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+-[[:space:]]+([A-Za-z0-9_-]+)[[:space:]]+\(([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})\)$ ]]; then
+      if [[ "$LINE" =~ \[Message:[[:space:]]+BepInEx\][[:space:]]+BepInEx[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+-[[:space:]]+([A-Za-z0-9_-]+)[[:space:]]+\(([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})\)$ ]]; then
          FOUND_VERSION="${BASH_REMATCH[1]}"
          VERSION_TS="${BASH_REMATCH[3]} ${BASH_REMATCH[4]}"
          if [ "${BEPINEXVERSION:-0.0.0}" != "$FOUND_VERSION" ]; then
