@@ -59,7 +59,7 @@ while read LINE; do
    fi
 
    # Detect Valheim server version update
-   if [[ "$LINE" =~ ^([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*Valheim[[:space:]]version[[:space:]:-]*([A-Za-z0-9._-]+) ]]; then
+   if [[ "$LINE" =~ ([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*Valheim[[:space:]]version[[:space:]:-]*([A-Za-z0-9._-]+) ]]; then
       VERSION_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
       FOUND_VERSION="${BASH_REMATCH[4]}"
       if [ "${VALSERVERVERSION:-0.0.0}" != "$FOUND_VERSION" ]; then
@@ -75,9 +75,29 @@ while read LINE; do
       fi
    fi
 
+   # Detect BepInEx Version if activated
+   if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
+   then
+      if [[ "$LINE" =~ ^\[Message:[[:space:]]+BepInEx\][[:space:]]+BepInEx[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+-[[:space:]]+([A-Za-z0-9_-]+)[[:space:]]+\(([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})\)$ ]]; then
+         FOUND_VERSION="${BASH_REMATCH[1]}"
+         VERSION_TS="${BASH_REMATCH[3]} ${BASH_REMATCH[4]}"
+         if [ "${BEPINEXVERSION:-0.0.0}" != "$FOUND_VERSION" ]; then
+            sed -i "s|^BEPINEXVERSION=.*|BEPINEXVERSION=\"${FOUND_VERSION}\"|" "$CWD/.env"
+            sed -i "s|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE=\"${VERSION_TS}\"|" "$CWD/.env"
+            BEPINEXVERSION="$FOUND_VERSION"
+            BEPINEXLASTUPDATE="$VERSION_TS"
+         fi
+
+         if [ "${DEBUGMODE:-0}" -eq 1 ];
+         then
+            echo -e "\n\nDetected BepInEx version update: $FOUND_VERSION at $VERSION_TS"
+         fi
+      fi
+   fi
+
    # Detect final world save completion and persist the save timestamp for status output
    # We only care about the final save step, exactly as in: "09/09/2026 23:55:30: World save (5/5) done. Total time [420ms]"
-   if [[ "$LINE" =~ ^([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*World[[:space:]]save[[:space:]]\(5/5\)[[:space:]]done\.[[:space:]]*Total[[:space:]]time[[:space:]]\[[^]]+\] ]]; then
+   if [[ "$LINE" =~ ([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*World[[:space:]]save[[:space:]]\(5/5\)[[:space:]]done\.[[:space:]]*Total[[:space:]]time[[:space:]]\[[^]]+\] ]]; then
       SAVE_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
       printf '%s\n' "$SAVE_TS" > "$LASTWORLDSAVEFILE"
 

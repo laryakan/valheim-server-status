@@ -60,12 +60,14 @@ printf '%s\n' \
 | ./vss.log-filter
 
 echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: First connection detection (1 steamid and 1 json output expected with event \"first_join\")') :"
+echo "" > "$CONNECTEDPLAYERSFILE"
+echo "" > "$STEAMIDMAPFILE"
 
 printf '%s\n' \
 "09/10/2026 12:17:48: Connections 0 ZDOS:44824 sent:0 recv:0" \
 "09/10/2026 12:22:15: Got status changed msg k_ESteamNetworkingConnectionState_Connecting" \
 "09/10/2026 12:22:15: New connection" \
-"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:3" \
+"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:35" \
 "09/10/2026 12:22:15: Accepting connection k_EResultOK" \
 "09/10/2026 12:22:15: Connecting to Steamworks.SteamNetworkingIdentity" \
 "09/10/2026 12:22:15: Got status changed msg k_ESteamNetworkingConnectionState_Connected" \
@@ -77,7 +79,7 @@ printf '%s\n' \
 "09/10/2026 12:22:24: Server: New peer connected,sending global keys" \
 "09/10/2026 12:22:24: Checking for any blocked players in the historical player list..." \
 "09/10/2026 12:22:42: Checking for any blocked players in the historical player list..." \
-"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 2569070:4" \
+"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:4" \
 "09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:1" \
 "09/10/2026 12:27:48: Unloading unused assets" \
 "Unloading 0 Unused Serialized files (Serialized files now loaded: 20)" \
@@ -85,12 +87,14 @@ printf '%s\n' \
 | ./vss.log-filter
 
 echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Connection detection (1 steamid 1 json output expected with \"connected\")') :"
+echo "" > "$CONNECTEDPLAYERSFILE"
+echo "76561190000000;Laryakan" > "$STEAMIDMAPFILE"
 
 printf '%s\n' \
 "09/10/2026 12:17:48: Connections 0 ZDOS:44824 sent:0 recv:0" \
 "09/10/2026 12:22:15: Got status changed msg k_ESteamNetworkingConnectionState_Connecting" \
 "09/10/2026 12:22:15: New connection" \
-"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:3" \
+"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:35" \
 "09/10/2026 12:22:15: Accepting connection k_EResultOK" \
 "09/10/2026 12:22:15: Connecting to Steamworks.SteamNetworkingIdentity" \
 "09/10/2026 12:22:15: Got status changed msg k_ESteamNetworkingConnectionState_Connected" \
@@ -102,7 +106,6 @@ printf '%s\n' \
 "09/10/2026 12:22:24: Server: New peer connected,sending global keys" \
 "09/10/2026 12:22:24: Checking for any blocked players in the historical player list..." \
 "09/10/2026 12:22:42: Checking for any blocked players in the historical player list..." \
-"09/10/2026 12:22:47: Got character ZDOID from Laryakan : 2569070:4" \
 "09/10/2026 12:22:47: Got character ZDOID from Laryakan : 328410070:1" \
 "09/10/2026 12:27:48: Unloading unused assets" \
 "Unloading 0 Unused Serialized files (Serialized files now loaded: 20)" \
@@ -146,14 +149,12 @@ echo "" > "$CONNECTEDPLAYERSFILE"
 printf '%s\n' \
 "09/10/2026 19:34:37: Got status changed msg k_ESteamNetworkingConnectionState_Connected" \
 "09/10/2026 19:34:37: Connected" \
-"09/10/2026 19:34:37: Got connection SteamID 76561190000000" \
 "09/10/2026 19:34:37: Got handshake from client 76561190000000" \
 "09/10/2026 19:34:39: Network version check, their:39, mine:39" \
 "09/10/2026 19:34:39: Checking for any blocked players in the historical player list..." \
 "09/10/2026 19:34:39: Server: New peer connected,sending global keys" \
 "09/10/2026 19:34:41: Checking for any blocked players in the historical player list..." \
 "09/10/2026 19:34:55: Checking for any blocked players in the historical player list..." \
-"09/10/2026 19:35:02: Got character ZDOID from Laryakan : -106309146:4" \
 "09/10/2026 19:35:13: RPC_Disconnect" \
 "09/10/2026 19:35:13: Destroying abandoned non persistent zdo -106309146:1 owner -106309146" \
 "09/10/2026 19:35:13: Disposing socket" \
