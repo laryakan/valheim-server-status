@@ -349,6 +349,15 @@ function restart_valheim_service(){
   fi
 }
 
+function restart_vsspipe_service(){
+  if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ]; then
+    sudo systemctl restart "$VSSPIPESERVICENAME"
+    echo -e "$(ColorGreen 'VSS pipe service restarted')"
+  else
+    echo -e "$(ColorRed 'VSS pipe service does not exist')" >&2
+  fi
+}
+
 # Setup service with conf values, setup is $1=1; setdown is $1=2
 function set_logrotate(){
 	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
@@ -654,20 +663,21 @@ $(ColorBlue 'just setup a valid logs path (wildcards accepted). Then you will no
 $(ColorGreen '5)') setup wanted Valheim Server logs path (file or directory)
 * standalone *
 $(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (needed to watch log outputing outside custom launch, like BepInEx logs)
-$(ColorGreen '7)') $(ColorRed 'sudo required') remove vss.pipe.service
+$(ColorGreen '7)') $(ColorRed 'sudo required') restart vss.pipe.service
+$(ColorGreen '8)') $(ColorRed 'sudo required') remove vss.pipe.service
 * logrotate *
-$(ColorGreen '8)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
-$(ColorGreen '9)') $(ColorRed 'sudo required') remove logrotate on server logs
+$(ColorGreen '9)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
+$(ColorGreen '10)') $(ColorRed 'sudo required') remove logrotate on server logs
 
 ** Service user **
-$(ColorGreen '10)') setup the user who will execute service $(ColorRed 'prior') to services install, default is $USER
+$(ColorGreen '11)') setup the user who will execute service $(ColorRed 'prior') to services install, default is $USER
 
 ** Uninstall all **
-$(ColorGreen '11)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
+$(ColorGreen '12)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
 
 ** BepInEx **
-$(ColorGreen '12)') activate BepInEx packaged version
-$(ColorGreen '13)') deactivate BepInEx packaged version
+$(ColorGreen '13)') activate BepInEx packaged version
+$(ColorGreen '14)') deactivate BepInEx packaged version
 
 $(ColorGreen '0)') quit
 $(ColorGreen 'CTRL+C)') quit
@@ -682,13 +692,14 @@ $(ColorBlue 'choose an option:') "
 			4) clear ; admin_menu ;;
 			5) setup_value_prompt 'where are your logs (or where do you want it, file or dir, wildcards are valid) ?' 'VALHEIMSERVERLOGPATH' ; clear ; new_menu ;;
 			6) set_service "$VSSPIPESERVICENAME"; sleep 2 ; clear ; new_menu ;;
-			7) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
-			8) set_logrotate ; sleep 5 ; clear ;  new_menu ;;
-			9) sudo rm '/etc/logrotate.d/valheim' ; clear ; new_menu ;;
-			10) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
-	     	11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; rm "$CWD/systemd/valheim.logrotate" ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
-			12) replace_env_value 'VSSBEPINEXENABLED' 1 ; $VSSDIR/bepinex/install_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
-			13) replace_env_value 'VSSBEPINEXENABLED' 0 ; $VSSDIR/bepinex/remove_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
+			7) restart_vsspipe_service ; clear ; new_menu ;;
+			8) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
+			9) set_logrotate ; sleep 5 ; clear ;  new_menu ;;
+			10) sudo rm '/etc/logrotate.d/valheim' ; clear ; new_menu ;;
+			11) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
+	     	12) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; rm "$CWD/systemd/valheim.logrotate" ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
+			13) replace_env_value 'VSSBEPINEXENABLED' 1 ; $VSSDIR/bepinex/install_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
+			14) replace_env_value 'VSSBEPINEXENABLED' 0 ; $VSSDIR/bepinex/remove_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
 		
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
