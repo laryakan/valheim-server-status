@@ -51,6 +51,7 @@ CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
 CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
 CURRENT_START_TS="0"
 LAST_WORLD_SAVE_TS="$(cat "$LASTWORLDSAVEFILE" 2>/dev/null || echo "unknown")"
+BEPINEXVERSION_LABEL="Disabled"
 if [ -n "$PROCESS_START_TS" ] && [ "$PROCESS_START_TS" != "unknown" ]; then
 	CURRENT_START_TS="$PROCESS_START_TS"
 fi
@@ -60,7 +61,10 @@ fi
 if [ "$CURRENT_START_TS" = "unknown" ]; then
 	CURRENT_START_TS="${VALSERVERLASTSTART:-unknown}"
 fi
-
+if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
+then
+	BEPINEXVERSION_LABEL="${BEPINEXVERSION} ${BEPINEXLASTUPDATE:-not_installed}"
+fi
 
 CURRENT_SEED="${VHSERVERSEED:-unknown}"
 CURRENT_WORLD="${VHSERVERWORLD:-unknown}"
@@ -92,6 +96,7 @@ then
 		{\"name\":\"$(T cpu)\",\"value\": \"${CPUUSAGE}%\",\"inline\":true},
 		{\"name\":\"$(T ram)\",\"value\": \"${RAMUSAGE}%\",\"inline\":true},
 		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},
+		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
 		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
 		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},
 		{\"name\":\"seed\",\"value\": \"||${CURRENT_SEED}||\",\"inline\":true},

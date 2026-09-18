@@ -86,11 +86,10 @@ while read LINE; do
             sed -i "s|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE=\"${VERSION_TS}\"|" "$CWD/.env"
             BEPINEXVERSION="$FOUND_VERSION"
             BEPINEXLASTUPDATE="$VERSION_TS"
-         fi
-
-         if [ "${DEBUGMODE:-0}" -eq 1 ];
-         then
-            echo -e "\n\nDetected BepInEx version update: $FOUND_VERSION at $VERSION_TS"
+            if [ "${DEBUGMODE:-0}" -eq 1 ];
+            then
+               echo -e "\n\nDetected BepInEx version update: $FOUND_VERSION at $VERSION_TS"
+            fi
          fi
       fi
    fi
