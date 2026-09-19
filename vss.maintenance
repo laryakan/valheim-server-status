@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Checking .env init
+if [ -z "$VSSDIR" ]
+then
+   # Basic env init
+   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+   source "$CWD/.env"
+else
+   CWD="$VSSDIR"
+fi
+
+# Bash file dedicated to planned maintenance (can be called through a crontab to make a Valheim server service restart/update)
+# But first, check if there is any connected player
+
+CURRENTLYCONNECTEDNUM=$( wc -l "$CONNECTEDPLAYERSFILE" | cut -d ' ' -f1 )
+if [ $CURRENTLYCONNECTEDNUM > 0 ]
+then
+   # There is still some player connected on the server, we will delay the maintenance for 5 minutes but send a warning on discord first
+   echo -e "{
+   \"title\": \"Planned maintenance\",
+   \"embeds\": [{
+      \"title\": \"Planned maintenance\",
+      \"color\": 3447003,
+      \"description\": \"A planned maintenance has been scheduled on the Valheim Server, but we saw there is still some connected player(s). We are delaying the maintenance for 5 minutes. Get your things in order \!\"
+   }]
+   }" | "$CWD/discord/webhook.json-sender"
+   # Wait for 5 minutes to player to disconnect
+   sleep 5m
+fi
+
+if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
+   sudo systemctl restart "$VHSERVERSERVICENAME"
+   echo -e "$(ColorGreen 'Valheim server service restarted')"
+else
+   echo -e "$(ColorRed 'Valheim server service does not exist')" >&2
+fi
