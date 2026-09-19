@@ -17,7 +17,6 @@ mkdir -p "$VALHEIMSERVERLOGDIR"
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 
 while read LINE; do
-do
     case "$LINE" in
         "Failed to hook dlsym, ignoring it. Error: no such function: dlsym"|"Failed to hook dup2, ignoring it. Error: no such function: dup2")
             continue
