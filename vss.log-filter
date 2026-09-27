@@ -46,6 +46,20 @@ while read LINE; do
       echo "${LINE}" |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log"
    fi
 
+   # Detect server start and online player cleaning routine
+   # Pattern : 09/27/2026 05:15:27: Loading first scene!
+   # Pattern : 09/27/2026 09:46:40: Connections 0 ZDOS:487114 sent:0 recv:0
+   if [[ "$LINE" == *"Loading first scene"* ]] ||
+      [[ "$LINE" =~ Connections[[:space:]]+0([[:space:]]|$) ]]
+   then
+      # If the server has just started, or if it tells us that nobody is online, clean up the online-players file
+      cat "$CONNECTEDPLAYERSFILE" >> "$OFFLINEPLAYERSFILE"
+      : > "$CONNECTEDPLAYERSFILE"
+
+      # Cleaning offline players
+      sort -u "$OFFLINEPLAYERSFILE" -o "$OFFLINEPLAYERSFILE"
+   fi
+
    # Capture a current SteamID from the opening connection stack line.
    # Keep it as session context across the following log lines until a
    # new SteamID token arrives, so the later ZDOID line can complete the
