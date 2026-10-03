@@ -206,6 +206,7 @@ printf '%s\n' \
 "Unloading 0 unused Assets to reduce memory usage. Loaded Objects now: 278474." \
 "Total: 732.065177 ms (FindLiveObjects: 58.432439 ms CreateObjectMapping: 69.834765 ms MarkObjects: 602.341838 ms  DeleteObjects: 1.454970 ms)" \
 "10/03/2026 21:20:04: Time 783270,25787827, day:435    nextm:785070,000010729  skipspeed:149,978511038236" \
+"10/04/2026 01:07:43: Time 795831,77718268, day:441    nextm:795870,000010729  skipspeed:3,18523567076772" \
 "10/03/2026 21:20:24: Available space to current user: 104770367488. Saving is blocked if below: 42158640 bytes. Warnings are given if below: 84317280" \
 "10/03/2026 21:20:24: GetSaveClonePerChunk. Calculated number of actual chunk files: 42  Number of dirty chunks to save: 4 [130ms]" \
 "10/03/2026 21:20:24: PrepareSave: ZDOExtraData.PrepareSave done [169ms]" \
