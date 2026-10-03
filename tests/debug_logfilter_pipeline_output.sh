@@ -197,3 +197,24 @@ printf '%s\n' \
 "09/10/2026 13:11:02: Considering autobackup for World. World time: 42193,48, short time: 7200, long time: 43200, backup count: 2" \
 "09/10/2026 13:11:02: SaveSystem.Reload for World is done [9ms]" \
 | ./vss.log-filter
+
+echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Day number (1 output expected with day number)') :"
+
+printf '%s\n' \
+"Unloading 0 Unused Serialized files (Serialized files now loaded: 22)" \
+"10/03/2026 21:16:47:  Connections 1 ZDOS:490391  sent:0 recv:745" \
+"Unloading 0 unused Assets to reduce memory usage. Loaded Objects now: 278474." \
+"Total: 732.065177 ms (FindLiveObjects: 58.432439 ms CreateObjectMapping: 69.834765 ms MarkObjects: 602.341838 ms  DeleteObjects: 1.454970 ms)" \
+"10/03/2026 21:20:04: Time 783270,25787827, day:435    nextm:785070,000010729  skipspeed:149,978511038236" \
+"10/03/2026 21:20:24: Available space to current user: 104770367488. Saving is blocked if below: 42158640 bytes. Warnings are given if below: 84317280" \
+"10/03/2026 21:20:24: GetSaveClonePerChunk. Calculated number of actual chunk files: 42  Number of dirty chunks to save: 4 [130ms]" \
+"10/03/2026 21:20:24: PrepareSave: ZDOExtraData.PrepareSave done [169ms]" \
+"10/03/2026 21:20:24:  ### Save World Thread Started! ###" \
+"10/03/2026 21:20:24: Considering autobackup for World. World time: 57816,06, short time: 7200, long time: 43200, backup count: 4" \
+"10/03/2026 21:20:24: SaveSystem.Reload for World is done [102ms]" \
+"10/03/2026 21:20:24: No autobackup needed yet..." \
+"10/03/2026 21:20:24: World save (1/5) Cloud & Backup checks done [0ms] => Save number 1203" \
+"10/03/2026 21:20:25: World save (2/5) Chunks writing done [710ms]" \
+"10/03/2026 21:20:25: World save (3/5) DB2 writing done [33ms]" \
+| ./vss.log-filter
+
