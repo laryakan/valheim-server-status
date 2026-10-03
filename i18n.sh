@@ -18,6 +18,7 @@ case "${VSS_LANG:-en}" in
     T_STATUS="Statut"
     T_EVENT_TITLE="Événement serveur Valheim"
     T_CURRENT_DAY="Jour en jeu"
+    T_WEATHER_FORECAST="Prévision météo"
     T_PLAYER_CONNECTED="Joueur connecté"
     T_PLAYER_DISCONNECTED="Joueur déconnecté"
     T_FIRST_CONNECTION="Première connexion"
@@ -77,6 +78,7 @@ case "${VSS_LANG:-en}" in
     T_STATUS="Status"
     T_EVENT_TITLE="Valheim server event"
     T_CURRENT_DAY="Current in-game day"
+    T_WEATHER_FORECAST="Weather forecast"
     T_PLAYER_CONNECTED="Player connected"
     T_PLAYER_DISCONNECTED="Player disconnected"
     T_FIRST_CONNECTION="First connection"
@@ -176,6 +178,7 @@ T() {
     connection_info_title) echo "$T_CONNECTION_INFO_TITLE" ;;
     server_info_title) echo "$T_SERVER_INFO_TITLE" ;;
     current_day) echo "$T_CURRENT_DAY" ;;
+    weather_forecast) echo "$T_WEATHER_FORECAST" ;;
     ip) echo "$T_IP" ;;
     server_name) echo "$T_SERVER_NAME" ;;
     password) echo "$T_PASSWORD" ;;
