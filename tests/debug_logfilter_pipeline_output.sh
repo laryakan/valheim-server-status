@@ -198,7 +198,7 @@ printf '%s\n' \
 "09/10/2026 13:11:02: SaveSystem.Reload for World is done [9ms]" \
 | ./vss.log-filter
 
-echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Day number (1 output expected with day number)') :"
+echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Day number (1 output expected with day number, and updated value in .env)') :"
 
 printf '%s\n' \
 "Unloading 0 Unused Serialized files (Serialized files now loaded: 22)" \
@@ -218,3 +218,4 @@ printf '%s\n' \
 "10/03/2026 21:20:25: World save (3/5) DB2 writing done [33ms]" \
 | ./vss.log-filter
 
+echo -e ".env file updated with new day number: $(grep INGAMEDAYNUMBER .env | cut -d '=' -f2)"
