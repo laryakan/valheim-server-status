@@ -1,7 +1,6 @@
 #!/bin/bash
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/../crash.log"
 
 # Test by-pass
 if [ "${DEBUGMODE:-0}" -eq 0 ];
