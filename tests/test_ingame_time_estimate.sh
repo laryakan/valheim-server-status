@@ -16,6 +16,7 @@ cat > "$TEMP_DIR/.env" <<EOF
 set -o allexport
 VSSDIR="$TEMP_DIR"
 DEBUGMODE=0
+EVENTREALTIME=0
 VALHEIMSERVERLOGDIR="$TEMP_DIR/logs"
 CONNECTEDPLAYERSFILE="$TEMP_DIR/data/online-players"
 OFFLINEPLAYERSFILE="$TEMP_DIR/data/offline-players"
@@ -41,22 +42,28 @@ printf '%s\n' \
   'Time 795831,77718268, day:441 nextm:795870,000010729 skipspeed:3,18523567076772' \
   | VSSDIR= "$TEMP_DIR/vss.log-filter"
 
-IFS=';' read -r SAMPLE_TIME SAMPLE_DAY NEXTM_TIME SKIPSPEED SAMPLE_EPOCH < "$TEMP_DIR/data/ingame-time"
+IFS=';' read -r SAMPLE_TIME SAMPLE_DAY SAMPLE_EPOCH < "$TEMP_DIR/data/ingame-time"
 [[ "$SAMPLE_TIME" == "795831.77718268" ]]
 [[ "$SAMPLE_DAY" == "441" ]]
-[[ "$NEXTM_TIME" == "795870.000010729" ]]
-[[ "$SKIPSPEED" == "3.18523567076772" ]]
 [[ "$SAMPLE_EPOCH" =~ ^[0-9]+\.[0-9]{9}$ ]]
 
-SAMPLE_EPOCH=$(awk -v now="$(date +%s.%N)" 'BEGIN { printf "%.9f", now - 13 }')
-printf '%s;%s;%s;%s;%s\n' "$SAMPLE_TIME" "$SAMPLE_DAY" "$NEXTM_TIME" "$SKIPSPEED" "$SAMPLE_EPOCH" > "$TEMP_DIR/data/ingame-time"
+LOG_TIMESTAMP=$(date '+%m/%d/%Y %H:%M:%S')
+IFS='/ :' read -r LOG_MONTH LOG_DAY LOG_YEAR LOG_HOUR LOG_MINUTE LOG_SECOND <<< "$LOG_TIMESTAMP"
+EXPECTED_LOG_EPOCH=$(date -d "$LOG_YEAR-$LOG_MONTH-$LOG_DAY $LOG_HOUR:$LOG_MINUTE:$LOG_SECOND" +%s.%N)
+printf '%s\n' "$LOG_TIMESTAMP: Time 795831,77718268, day:441 nextm:795870,000010729 skipspeed:3,18523567076772" \
+  | VSSDIR= "$TEMP_DIR/vss.log-filter"
+IFS=';' read -r SAMPLE_TIME SAMPLE_DAY SAMPLE_EPOCH < "$TEMP_DIR/data/ingame-time"
+[[ "$SAMPLE_EPOCH" == "$EXPECTED_LOG_EPOCH" ]]
+
+SAMPLE_EPOCH=$(awk -v now="$(date +%s.%N)" 'BEGIN { printf "%.9f", now - 1 }')
+printf '%s;%s;%s\n' "$SAMPLE_TIME" "$SAMPLE_DAY" "$SAMPLE_EPOCH" > "$TEMP_DIR/data/ingame-time"
 touch "$TEMP_DIR/data/online-players" "$TEMP_DIR/data/offline-players" "$TEMP_DIR/data/last-world-save"
 printf '2026-10-04.00:00:00;test-player;1:1\n' > "$TEMP_DIR/data/online-players"
 
 STATUS_OUTPUT=$(bash "$TEMP_DIR/status/server-status")
 grep -Fq '**Approx. in-game time**' <<< "$STATUS_OUTPUT"
 grep -Fq '442' <<< "$STATUS_OUTPUT"
-grep -Eq '^03:3[6-9]$' <<< "$STATUS_OUTPUT"
+grep -Eq '^03:4[0-9]$' <<< "$STATUS_OUTPUT"
 
 WEBHOOK_OUTPUT=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
 grep -Fq '"name":"Approx. in-game time"' <<< "$WEBHOOK_OUTPUT"
@@ -68,6 +75,39 @@ PAUSED_WEBHOOK=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
 grep -Fq '"name":"Current in-game day","value": "441"' <<< "$PAUSED_WEBHOOK"
 grep -Fq '"name":"Approx. in-game time","value": "03:05"' <<< "$PAUSED_WEBHOOK"
 grep -Fq '[Link](https://example.invalid/weather#441)' <<< "$PAUSED_WEBHOOK"
+
+DISCONNECT_LOG_TIMESTAMP=$(date '+%m/%d/%Y %H:%M:%S')
+IFS='/ :' read -r LOG_MONTH LOG_DAY LOG_YEAR LOG_HOUR LOG_MINUTE LOG_SECOND <<< "$DISCONNECT_LOG_TIMESTAMP"
+DISCONNECT_EPOCH=$(date -d "$LOG_YEAR-$LOG_MONTH-$LOG_DAY $LOG_HOUR:$LOG_MINUTE:$LOG_SECOND" +%s.%N)
+DISCONNECT_START_EPOCH=$(awk -v now="$DISCONNECT_EPOCH" 'BEGIN { printf "%.9f", now - 10 }')
+printf '9260;5;%s\n' "$DISCONNECT_START_EPOCH" > "$TEMP_DIR/data/ingame-time"
+printf '2026-10-04.00:00:00;player-one;111:1\n2026-10-04.00:00:00;player-two;123:1\n' > "$TEMP_DIR/data/online-players"
+printf '%s\n' \
+  "$DISCONNECT_LOG_TIMESTAMP: Destroying abandoned non persistent zdo 111:1 owner 111" \
+  "$DISCONNECT_LOG_TIMESTAMP: Destroying abandoned non persistent zdo 123:1 owner 123" \
+  | VSSDIR= "$TEMP_DIR/vss.log-filter"
+
+IFS=';' read -r DISCONNECTED_TIME DISCONNECTED_DAY DISCONNECTED_EPOCH < "$TEMP_DIR/data/ingame-time"
+awk -v time="$DISCONNECTED_TIME" 'BEGIN { exit !(time >= 9739 && time <= 9741) }'
+[[ "$DISCONNECTED_DAY" == "6" ]]
+awk -v previous="$DISCONNECT_START_EPOCH" -v updated="$DISCONNECTED_EPOCH" 'BEGIN { exit !(updated > previous) }'
+[[ "$DISCONNECTED_EPOCH" == "$DISCONNECT_EPOCH" ]]
+[[ ! -s "$TEMP_DIR/data/online-players" ]]
+
+PAUSED_AFTER_DISCONNECT=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
+grep -Fq '"name":"Approx. in-game time","value": "09:52"' <<< "$PAUSED_AFTER_DISCONNECT"
+
+RECONNECT_LOG_TIMESTAMP=$(date '+%m/%d/%Y %H:%M:%S')
+IFS='/ :' read -r LOG_MONTH LOG_DAY LOG_YEAR LOG_HOUR LOG_MINUTE LOG_SECOND <<< "$RECONNECT_LOG_TIMESTAMP"
+RECONNECT_EPOCH=$(date -d "$LOG_YEAR-$LOG_MONTH-$LOG_DAY $LOG_HOUR:$LOG_MINUTE:$LOG_SECOND" +%s.%N)
+RECONNECT_START_EPOCH=$(awk -v now="$RECONNECT_EPOCH" 'BEGIN { printf "%.9f", now - 60 }')
+printf '%s;%s;%s\n' "$DISCONNECTED_TIME" "$DISCONNECTED_DAY" "$RECONNECT_START_EPOCH" > "$TEMP_DIR/data/ingame-time"
+printf '%s\n' "$RECONNECT_LOG_TIMESTAMP: Got character ZDOID from player-two : 123:2" | VSSDIR= "$TEMP_DIR/vss.log-filter"
+IFS=';' read -r RECONNECTED_TIME RECONNECTED_DAY RECONNECTED_EPOCH < "$TEMP_DIR/data/ingame-time"
+[[ "$RECONNECTED_TIME" == "$DISCONNECTED_TIME" ]]
+[[ "$RECONNECTED_DAY" == "$DISCONNECTED_DAY" ]]
+awk -v previous="$RECONNECT_START_EPOCH" -v updated="$RECONNECTED_EPOCH" 'BEGIN { exit !(updated > previous) }'
+[[ "$RECONNECTED_EPOCH" == "$RECONNECT_EPOCH" ]]
 
 if grep -q '^INGAMEDAYNUMBER=' "$TEMP_DIR/.env"; then
   printf '%s\n' 'day number should come from the stored clock sample, not .env' >&2
