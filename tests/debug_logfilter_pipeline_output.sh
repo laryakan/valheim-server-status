@@ -6,7 +6,7 @@ source .env.test
 export DEBUGMODE=1
 
 # Idempotence
-rm -f "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE" "$STEAMIDMAPFILE" "$LASTWORLDSAVEFILE"
+rm -f "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE" "$STEAMIDMAPFILE" "$LASTWORLDSAVEFILE" "$INGAMETIMEFILE"
 
 # Colors
 red='\e[31m'
@@ -198,7 +198,7 @@ printf '%s\n' \
 "09/10/2026 13:11:02: SaveSystem.Reload for World is done [9ms]" \
 | ./vss.log-filter
 
-echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Day number (1 output expected with day number, and updated value in .env)') :"
+echo -e "\n---\n\n$(ColorYellow 'Testing log filter pipeline output: Day number (2 clock samples expected, latest day stored in data)') :"
 
 printf '%s\n' \
 "Unloading 0 Unused Serialized files (Serialized files now loaded: 22)" \
@@ -219,4 +219,15 @@ printf '%s\n' \
 "10/03/2026 21:20:25: World save (3/5) DB2 writing done [33ms]" \
 | ./vss.log-filter
 
-echo -e ".env file updated with new day number: $(grep INGAMEDAYNUMBER .env | cut -d '=' -f2)"
+STORED_INGAMEDAY=$(cut -d ';' -f2 "$INGAMETIMEFILE")
+if [ "$STORED_INGAMEDAY" != "441" ]; then
+	printf 'FAIL: expected stored in-game day 441, got %s\n' "$STORED_INGAMEDAY" >&2
+	exit 1
+fi
+echo -e "Stored in-game day number: $STORED_INGAMEDAY"
+STORED_INGAMETIME=$(awk -F';' '{ time = $1; gsub(/,/, ".", time); phase = time - int(time / 1800) * 1800; total_minutes = int(phase * 24 * 60 / 1800); printf "%02d:%02d", int(total_minutes / 60), total_minutes % 60 }' "$INGAMETIMEFILE")
+if [ "$STORED_INGAMETIME" != "03:05" ]; then
+	printf 'FAIL: expected sampled in-game time 03:05, got %s\n' "$STORED_INGAMETIME" >&2
+	exit 1
+fi
+echo -e "Sampled in-game time: $STORED_INGAMETIME"
