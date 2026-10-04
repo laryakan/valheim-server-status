@@ -25,16 +25,12 @@ server_status_project_ingame_time() {
 	local advance_clock="${5:-1}"
 
 	LC_ALL=C awk -v sample_time="$sample_time" -v sample_day="$sample_day" -v sample_epoch="$sample_epoch" -v now_epoch="$now_epoch" -v advance_clock="$advance_clock" '
-		function day_index(time_value, index_value) {
-			index_value = (time_value - 270) / 1800
-			return index_value < int(index_value) ? int(index_value) - 1 : int(index_value)
-		}
 		BEGIN {
 			elapsed = now_epoch - sample_epoch
 			if (!advance_clock) elapsed = 0
 			if (elapsed < 0) exit
-			estimated_time = sample_time + elapsed * 48
-			current_day = sample_day + day_index(estimated_time) - day_index(sample_time)
+			estimated_time = sample_time + elapsed
+			current_day = sample_day
 			day_phase = estimated_time - int(estimated_time / 1800) * 1800
 			if (day_phase < 0) day_phase += 1800
 			game_clock_seconds = day_phase * 48

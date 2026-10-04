@@ -41,6 +41,11 @@ done
 STATUS_ROOT="$TEMP_DIR"
 source "$TEMP_DIR/lib/server-status-ingame-time.sh"
 BOUNDARY_EPOCH=$(date +%s.%N)
+REAL_SAMPLE_EPOCH=$(date -d '2026-10-04 02:26:54' +%s.%N)
+REAL_SAMPLE_NOW=$(awk -v epoch="$REAL_SAMPLE_EPOCH" 'BEGIN { printf "%.9f", epoch + 49316 }')
+REAL_SAMPLE_ESTIMATE=$(server_status_project_ingame_time 797262.099461015 442 "$REAL_SAMPLE_EPOCH" "$REAL_SAMPLE_NOW" 1)
+[[ "$REAL_SAMPLE_ESTIMATE" == 442\|* ]]
+grep -Fq '|☀️ 07:42' <<< "$REAL_SAMPLE_ESTIMATE"
 [[ "$(server_status_project_ingame_time 270 1 "$BOUNDARY_EPOCH" "$BOUNDARY_EPOCH" 0)" == *'|☀️ 03:36' ]]
 [[ "$(server_status_project_ingame_time 1530 1 "$BOUNDARY_EPOCH" "$BOUNDARY_EPOCH" 0)" == *'|☀️ 20:24' ]]
 [[ "$(server_status_project_ingame_time 1531.25 1 "$BOUNDARY_EPOCH" "$BOUNDARY_EPOCH" 0)" == *'|🌙 20:25' ]]
@@ -64,20 +69,21 @@ IFS=';' read -r SAMPLE_TIME SAMPLE_DAY SAMPLE_EPOCH < "$TEMP_DIR/data/ingame-tim
 [[ "$SAMPLE_EPOCH" == "$EXPECTED_LOG_EPOCH" ]]
 
 SAMPLE_EPOCH=$(awk -v now="$(date +%s.%N)" 'BEGIN { printf "%.9f", now - 1 }')
-printf '%s;%s;%s\n' "$SAMPLE_TIME" "$SAMPLE_DAY" "$SAMPLE_EPOCH" > "$TEMP_DIR/data/ingame-time"
+printf '795831.77718268;441;%s\n' "$SAMPLE_EPOCH" > "$TEMP_DIR/data/ingame-time"
 touch "$TEMP_DIR/data/online-players" "$TEMP_DIR/data/offline-players" "$TEMP_DIR/data/last-world-save"
 printf '2026-10-04.00:00:00;test-player;1:1\n' > "$TEMP_DIR/data/online-players"
 
 STATUS_OUTPUT=$(bash "$TEMP_DIR/status/server-status")
 grep -Fq '**Approx. in-game time**' <<< "$STATUS_OUTPUT"
-grep -Fq '442' <<< "$STATUS_OUTPUT"
-grep -Eq '^☀️ 03:4[0-9]$' <<< "$STATUS_OUTPUT"
+grep -Fq '**Current in-game day**' <<< "$STATUS_OUTPUT"
+grep -Fxq '441' <<< "$STATUS_OUTPUT"
+grep -Eq '^🌙 03:0[6-9]$' <<< "$STATUS_OUTPUT"
 
 WEBHOOK_OUTPUT=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
 grep -Fq '"name":"Approx. in-game time"' <<< "$WEBHOOK_OUTPUT"
-grep -Fq '"value": "442"' <<< "$WEBHOOK_OUTPUT"
-grep -Eq '"name":"Approx. in-game time","value": "☀️ 03:4[0-9]"' <<< "$WEBHOOK_OUTPUT"
-grep -Fq '[Link](https://example.invalid/weather#442)' <<< "$WEBHOOK_OUTPUT"
+grep -Fq '"name":"Current in-game day","value": "441"' <<< "$WEBHOOK_OUTPUT"
+grep -Eq '"name":"Approx. in-game time","value": "🌙 03:0[6-9]"' <<< "$WEBHOOK_OUTPUT"
+grep -Fq '[Link](https://example.invalid/weather#441)' <<< "$WEBHOOK_OUTPUT"
 
 : > "$TEMP_DIR/data/online-players"
 PAUSED_WEBHOOK=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
@@ -97,14 +103,14 @@ printf '%s\n' \
   | VSSDIR= "$TEMP_DIR/vss.log-filter"
 
 IFS=';' read -r DISCONNECTED_TIME DISCONNECTED_DAY DISCONNECTED_EPOCH < "$TEMP_DIR/data/ingame-time"
-awk -v time="$DISCONNECTED_TIME" 'BEGIN { exit !(time >= 9739 && time <= 9741) }'
-[[ "$DISCONNECTED_DAY" == "6" ]]
+awk -v time="$DISCONNECTED_TIME" 'BEGIN { exit !(time >= 9269 && time <= 9271) }'
+[[ "$DISCONNECTED_DAY" == "5" ]]
 awk -v previous="$DISCONNECT_START_EPOCH" -v updated="$DISCONNECTED_EPOCH" 'BEGIN { exit !(updated > previous) }'
 [[ "$DISCONNECTED_EPOCH" == "$DISCONNECT_EPOCH" ]]
 [[ ! -s "$TEMP_DIR/data/online-players" ]]
 
 PAUSED_AFTER_DISCONNECT=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
-grep -Fq '"name":"Approx. in-game time","value": "☀️ 09:52"' <<< "$PAUSED_AFTER_DISCONNECT"
+grep -Fq '"name":"Approx. in-game time","value": "☀️ 03:36"' <<< "$PAUSED_AFTER_DISCONNECT"
 
 RECONNECT_LOG_TIMESTAMP=$(date '+%m/%d/%Y %H:%M:%S')
 IFS='/ :' read -r LOG_MONTH LOG_DAY LOG_YEAR LOG_HOUR LOG_MINUTE LOG_SECOND <<< "$RECONNECT_LOG_TIMESTAMP"
