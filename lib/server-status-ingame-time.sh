@@ -40,7 +40,8 @@ server_status_project_ingame_time() {
 			game_clock_seconds = day_phase * 48
 			hour = int(game_clock_seconds / 3600)
 			minute = int((game_clock_seconds - hour * 3600) / 60)
-			printf "%d|%.9f|%02d:%02d", current_day, estimated_time, hour, minute
+			sky = game_clock_seconds >= 12960 && game_clock_seconds <= 73440 ? "☀️" : "🌙"
+			printf "%d|%.9f|%s %02d:%02d", current_day, estimated_time, sky, hour, minute
 		}'
 	}
 
