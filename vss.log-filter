@@ -17,10 +17,6 @@ then
    source "$CWD/.env.test"
 fi
 
-STATUS_ROOT="$CWD"
-VSS_STATUS_ENV_LOADED=1
-source "$CWD/lib/server-status-ingame-time.sh"
-
 # Valheim Server log filter
 # This script brings a Valheim Log Management which doesn't exist directly through steamcmd and Valheim server ATM
 # YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how, the vss.standalone.pipe do this with a tail
@@ -30,8 +26,9 @@ source "$CWD/lib/server-status-ingame-time.sh"
 # Filter to remove debug and blanks
 NO_DEBUG_FILTER="/^[[:space:]]*$/d;/^$/d;/Debug/d"
 INGAMETIMEFILE="${INGAMETIMEFILE:-$CWD/data/ingame-time}"
+INGAMETIMEEVENTSFILE="${INGAMETIMEEVENTSFILE:-$CWD/data/ingame-time-events}"
 
-mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" ) $( dirname "$STEAMIDMAPFILE" ) $( dirname "$LASTWORLDSAVEFILE" ) $( dirname "$INGAMETIMEFILE" )
+mkdir -p "$VALHEIMSERVERLOGDIR" $( dirname "$CONNECTEDPLAYERSFILE" ) $( dirname "$OFFLINEPLAYERSFILE" ) $( dirname "$STEAMIDMAPFILE" ) $( dirname "$LASTWORLDSAVEFILE" ) $( dirname "$INGAMETIMEFILE" ) $( dirname "$INGAMETIMEEVENTSFILE" )
 touch "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE" "$STEAMIDMAPFILE" "$LASTWORLDSAVEFILE"
 
 STEAMIDMAPFILE="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
@@ -57,8 +54,8 @@ while read LINE; do
    if [[ "$LINE" == *"Loading first scene"* ]] ||
       [[ "$LINE" =~ Connections[[:space:]]+0([[:space:]]|$) ]]
    then
-      if [[ "$LINE" =~ Connections[[:space:]]+0([[:space:]]|$) ]] && awk -F';' 'NF >= 3 && $2 != "" { found=1; exit } END { exit !found }' "$CONNECTEDPLAYERSFILE"; then
-         server_status_update_ingame_sample "$(server_status_log_epoch "$LINE")" 1 || true
+      if awk -F';' 'NF >= 3 && $2 != "" { found=1; exit } END { exit !found }' "$CONNECTEDPLAYERSFILE"; then
+         printf 'paused|%s\n' "$LINE" >> "$INGAMETIMEEVENTSFILE"
       fi
 
       # If the server has just started, or if it tells us that nobody is online, clean up the online-players file
@@ -69,17 +66,19 @@ while read LINE; do
       sort -u "$OFFLINEPLAYERSFILE" -o "$OFFLINEPLAYERSFILE"
    fi
 
-   # Capture the game clock and anchor the sample to the log's timestamp.
+   # Store the raw calibration line; the status library interprets it.
    # Pattern : 10/03/2026 21:20:04: Time 783270,25787827, day:435    nextm:785070,000010729  skipspeed:149,978511038236
    # Other : 10/04/2026 01:07:43: Time 795831,77718268, day:441    nextm:795870,000010729  skipspeed:3,18523567076772
-   if [[ "$LINE" =~ Time[[:space:]]+([0-9]+[,.][0-9]+|[0-9]+),?[[:space:]]+day[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
-      TIME_VALUE="${BASH_REMATCH[1]//,/.}"
-      INGAMEDAYNUMBER="${BASH_REMATCH[2]}"
-      SAMPLE_EPOCH=$(server_status_log_epoch "$LINE")
-      printf '%s;%s;%s\n' "$TIME_VALUE" "$INGAMEDAYNUMBER" "$SAMPLE_EPOCH" > "$INGAMETIMEFILE"
+   if [[ "$LINE" =~ Time[[:space:]]+[0-9][0-9,.]*,?[[:space:]]+day[[:space:]]*:[[:space:]]*[0-9]+.*nextm[[:space:]]*:[[:space:]]*[0-9][0-9,.]* ]]; then
+      printf '%s\n' "$LINE" > "$INGAMETIMEFILE"
+      if awk -F';' 'NF >= 3 && $2 != "" { found=1; exit } END { exit !found }' "$CONNECTEDPLAYERSFILE"; then
+         printf 'active|%s\n' "$LINE" > "$INGAMETIMEEVENTSFILE"
+      else
+         printf 'paused|%s\n' "$LINE" > "$INGAMETIMEEVENTSFILE"
+      fi
       if [ "${DEBUGMODE:-0}" -eq 1 ];
       then
-         echo -e "\n\nDetected in-game clock sample, day number: $INGAMEDAYNUMBER"
+         echo -e "\n\nStored in-game day calibration line"
       fi
    fi
 
@@ -189,7 +188,7 @@ while read LINE; do
          fi
 
          if ! awk -F';' 'NF >= 3 && $2 != "" { found=1; exit } END { exit !found }' "$CONNECTEDPLAYERSFILE"; then
-            server_status_update_ingame_sample "$(server_status_log_epoch "$LINE")" 0 || true
+            printf 'active|%s\n' "$LINE" >> "$INGAMETIMEEVENTSFILE"
          fi
 
          CHOUR=`date +'%F.%T'`
@@ -251,7 +250,7 @@ while read LINE; do
          sed -i '/^$/d' "$CONNECTEDPLAYERSFILE"
          sed -i '/^$/d' "$OFFLINEPLAYERSFILE"
          if ! awk -F';' 'NF >= 3 && $2 != "" { found=1; exit } END { exit !found }' "$CONNECTEDPLAYERSFILE"; then
-            server_status_update_ingame_sample "$(server_status_log_epoch "$LINE")" 1 || true
+            printf 'paused|%s\n' "$LINE" >> "$INGAMETIMEEVENTSFILE"
          fi
          if [ $EVENTREALTIME != 0 ]
          then

@@ -1,36 +1,63 @@
 #!/bin/bash
 
-SERVER_STATUS_LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$SERVER_STATUS_LIB_DIR/server-status-common.sh"
+LIBDIR="${LIBDIR:-$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )}"
+source "$LIBDIR/server-status-common.sh"
 
 server_status_log_epoch() {
 	local line="${1:-}"
 	if [[ "$line" =~ ([0-9]{1,2})/([0-9]{1,2})/([0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
-		local log_date="${BASH_REMATCH[3]}-${BASH_REMATCH[1]}-${BASH_REMATCH[2]} ${BASH_REMATCH[4]}"
-		local log_epoch
-		log_epoch=$(LC_ALL=C date -d "$log_date" +%s.%N 2>/dev/null) || log_epoch=""
-		if [ -n "$log_epoch" ]; then
-			printf '%s\n' "$log_epoch"
-			return 0
-		fi
+		date -d "${BASH_REMATCH[3]}-${BASH_REMATCH[1]}-${BASH_REMATCH[2]} ${BASH_REMATCH[4]}" +%s.%N 2>/dev/null && return 0
 	fi
 	date +%s.%N
+}
+
+server_status_active_elapsed() {
+	local sample_epoch="$1"
+	local now_epoch="$2"
+	local has_players="$3"
+	local events_file="${INGAMETIMEEVENTSFILE:-$VSSDIR/data/ingame-time-events}"
+	local active=0 active_since=0 total=0 event_type event_line event_epoch
+
+	if [ -r "$events_file" ]; then
+		while IFS='|' read -r event_type event_line; do
+			event_epoch=$(server_status_log_epoch "$event_line")
+			case "$event_type" in
+				active)
+					active=1
+					active_since="$event_epoch"
+					;;
+				paused)
+					if [ "$active" -eq 1 ] && awk -v start="$active_since" -v end="$event_epoch" 'BEGIN { exit !(end >= start) }'; then
+						total=$(awk -v total="$total" -v start="$active_since" -v end="$event_epoch" 'BEGIN { printf "%.9f", total + end - start }')
+					fi
+					active=0
+					;;
+			esac
+		done < "$events_file"
+	elif [ "$has_players" -eq 1 ]; then
+		active=1
+		active_since="$sample_epoch"
+	fi
+
+	if [ "$active" -eq 1 ] && [ "$has_players" -eq 1 ] && awk -v start="$active_since" -v end="$now_epoch" 'BEGIN { exit !(end >= start) }'; then
+		total=$(awk -v total="$total" -v start="$active_since" -v end="$now_epoch" 'BEGIN { printf "%.9f", total + end - start }')
+	fi
+	printf '%s\n' "$total"
 }
 
 server_status_project_ingame_time() {
 	local sample_time="${1//,/.}"
 	local sample_day="$2"
-	local sample_epoch="$3"
-	local now_epoch="$4"
-	local advance_clock="${5:-1}"
+	local active_seconds="$3"
 
-	LC_ALL=C awk -v sample_time="$sample_time" -v sample_day="$sample_day" -v sample_epoch="$sample_epoch" -v now_epoch="$now_epoch" -v advance_clock="$advance_clock" '
+	LC_ALL=C awk -v sample_time="$sample_time" -v sample_day="$sample_day" -v active_seconds="$active_seconds" '
+		function day_index(time_value, index_value) {
+			index_value = (time_value - 270) / 1800
+			return index_value < int(index_value) ? int(index_value) - 1 : int(index_value)
+		}
 		BEGIN {
-			elapsed = now_epoch - sample_epoch
-			if (!advance_clock) elapsed = 0
-			if (elapsed < 0) exit
-			estimated_time = sample_time + elapsed
-			current_day = sample_day
+			estimated_time = sample_time + active_seconds
+			current_day = sample_day + day_index(estimated_time) - day_index(sample_time)
 			day_phase = estimated_time - int(estimated_time / 1800) * 1800
 			if (day_phase < 0) day_phase += 1800
 			game_clock_seconds = day_phase * 48
@@ -41,36 +68,22 @@ server_status_project_ingame_time() {
 		}'
 	}
 
-server_status_update_ingame_sample() {
-	local now_epoch="${1:-$(date +%s.%N)}"
-	local advance_clock="${2:-1}"
-	INGAMETIMEFILE="${INGAMETIMEFILE:-$STATUS_ROOT/data/ingame-time}"
-	[ -r "$INGAMETIMEFILE" ] || return 1
-	local sample_time sample_day sample_epoch
-	IFS=';' read -r sample_time sample_day sample_epoch < "$INGAMETIMEFILE"
-	if [[ ! "$sample_time" =~ ^[0-9]+([.,][0-9]+)?$ || ! "$sample_day" =~ ^[0-9]+$ || ! "$sample_epoch" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-		return 1
-	fi
-	local estimate
-	estimate=$(server_status_project_ingame_time "$sample_time" "$sample_day" "$sample_epoch" "$now_epoch" "$advance_clock")
-	[ -n "$estimate" ] || return 1
-	local updated_day updated_time display_time
-	IFS='|' read -r updated_day updated_time display_time <<< "$estimate"
-	printf '%s;%s;%s\n' "$updated_time" "$updated_day" "$now_epoch" > "$INGAMETIMEFILE"
-}
-
 server_status_calculate_ingame_clock() {
-	INGAMETIMEFILE="${INGAMETIMEFILE:-$STATUS_ROOT/data/ingame-time}"
+	INGAMETIMEFILE="${INGAMETIMEFILE:-$VSSDIR/data/ingame-time}"
+	INGAMETIMEEVENTSFILE="${INGAMETIMEEVENTSFILE:-$VSSDIR/data/ingame-time-events}"
 	INGAME_TIME_LABEL="unknown"
 	CURRENT_INGAMEDAYNUMBER="unknown"
 	if [ -n "$VALHEIM_PID" ] && [ -r "$INGAMETIMEFILE" ]; then
-		IFS=';' read -r SAMPLE_TIME SAMPLE_DAY SAMPLE_EPOCH < "$INGAMETIMEFILE"
-		if [[ "$SAMPLE_TIME" =~ ^[0-9]+([.,][0-9]+)?$ && "$SAMPLE_DAY" =~ ^[0-9]+$ && "$SAMPLE_EPOCH" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-			SAMPLE_TIME="${SAMPLE_TIME//,/.}"
+		IFS= read -r SAMPLE_LINE < "$INGAMETIMEFILE"
+		if [[ "$SAMPLE_LINE" =~ Time[[:space:]]+[0-9]+([,.][0-9]+)?,?[[:space:]]+day[[:space:]]*:[[:space:]]*([0-9]+).*nextm[[:space:]]*:[[:space:]]*([0-9]+([,.][0-9]+)?|[0-9]+) ]]; then
+			SAMPLE_DAY="${BASH_REMATCH[2]}"
+			SAMPLE_TIME="${BASH_REMATCH[3]//,/.}"
+			SAMPLE_EPOCH=$(server_status_log_epoch "$SAMPLE_LINE")
 			NOW_EPOCH=$(date +%s.%N)
 			HAS_CONNECTED_PLAYERS=$(awk -F';' 'NF >= 3 && $2 != "" { print 1; exit }' "$CONNECTEDPLAYERSFILE" 2>/dev/null)
 			HAS_CONNECTED_PLAYERS="${HAS_CONNECTED_PLAYERS:-0}"
-			INGAME_STATUS=$(server_status_project_ingame_time "$SAMPLE_TIME" "$SAMPLE_DAY" "$SAMPLE_EPOCH" "$NOW_EPOCH" "$HAS_CONNECTED_PLAYERS")
+			ACTIVE_ELAPSED=$(server_status_active_elapsed "$SAMPLE_EPOCH" "$NOW_EPOCH" "$HAS_CONNECTED_PLAYERS")
+			INGAME_STATUS=$(server_status_project_ingame_time "$SAMPLE_TIME" "$SAMPLE_DAY" "$ACTIVE_ELAPSED")
 			if [ -n "$INGAME_STATUS" ]; then
 				IFS='|' read -r CURRENT_INGAMEDAYNUMBER ESTIMATED_INGAME_TIME INGAME_TIME_LABEL <<< "$INGAME_STATUS"
 			fi

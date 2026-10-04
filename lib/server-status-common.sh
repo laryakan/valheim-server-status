@@ -1,15 +1,14 @@
 #!/bin/bash
 
-SERVER_STATUS_LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-STATUS_ROOT="${STATUS_ROOT:-${VSSDIR:-$SERVER_STATUS_LIB_DIR}}"
-
-if [ "${VSS_STATUS_ENV_LOADED:-0}" != 1 ]; then
-	source "$STATUS_ROOT/.env"
-	VSS_STATUS_ENV_LOADED=1
+LIBDIR="${LIBDIR:-$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )}"
+if [ -z "${VSSDIR:-}" ]; then
+	CWD="$(dirname "$LIBDIR")"
+	source "$CWD/.env"
+else
+	CWD="$VSSDIR"
 fi
 
-STATUS_ROOT="${VSSDIR:-$STATUS_ROOT}"
-if [ "${VSS_STATUS_I18N_LOADED:-0}" != 1 ]; then
-	source "$STATUS_ROOT/i18n.sh"
-	VSS_STATUS_I18N_LOADED=1
+LIBDIR="${LIBDIR:-$VSSDIR/lib}"
+if ! declare -F T >/dev/null; then
+	source "$CWD/i18n.sh"
 fi

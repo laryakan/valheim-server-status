@@ -6,7 +6,7 @@ source .env.test
 export DEBUGMODE=1
 
 # Idempotence
-rm -f "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE" "$STEAMIDMAPFILE" "$LASTWORLDSAVEFILE" "$INGAMETIMEFILE"
+rm -f "$CONNECTEDPLAYERSFILE" "$OFFLINEPLAYERSFILE" "$STEAMIDMAPFILE" "$LASTWORLDSAVEFILE" "$INGAMETIMEFILE" "$INGAMETIMEEVENTSFILE"
 
 # Colors
 red='\e[31m'
@@ -220,14 +220,14 @@ printf '%s\n' \
 | ./vss.log-filter
 
 STORED_INGAMEDAY=$(cut -d ';' -f2 "$INGAMETIMEFILE")
-if [ "$STORED_INGAMEDAY" != "441" ]; then
-	printf 'FAIL: expected stored in-game day 441, got %s\n' "$STORED_INGAMEDAY" >&2
+if [ "$STORED_INGAMEDAY" != "442" ]; then
+	printf 'FAIL: expected calibrated in-game day 442, got %s\n' "$STORED_INGAMEDAY" >&2
 	exit 1
 fi
 echo -e "Stored in-game day number: $STORED_INGAMEDAY"
 STORED_INGAMETIME=$(awk -F';' '{ time = $1; gsub(/,/, ".", time); phase = time - int(time / 1800) * 1800; total_minutes = int(phase * 24 * 60 / 1800); printf "%02d:%02d", int(total_minutes / 60), total_minutes % 60 }' "$INGAMETIMEFILE")
-if [ "$STORED_INGAMETIME" != "03:05" ]; then
-	printf 'FAIL: expected sampled in-game time 03:05, got %s\n' "$STORED_INGAMETIME" >&2
+if [ "$STORED_INGAMETIME" != "03:36" ]; then
+	printf 'FAIL: expected calibrated in-game time 03:36, got %s\n' "$STORED_INGAMETIME" >&2
 	exit 1
 fi
 echo -e "Sampled in-game time: $STORED_INGAMETIME"

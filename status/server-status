@@ -5,12 +5,13 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
 VSSDIR="${VSSDIR:-$CWD}"
+LIBDIR="${LIBDIR:-$VSSDIR/lib}"
 
-source "$VSSDIR/lib/server-status-common.sh"
-source "$VSSDIR/lib/server-status-process.sh"
-source "$VSSDIR/lib/server-status-ingame-time.sh"
-source "$VSSDIR/lib/server-status-game-version.sh"
-source "$VSSDIR/lib/server-status-bepinex.sh"
+source "$LIBDIR/server-status-common.sh"
+source "$LIBDIR/server-status-process.sh"
+source "$LIBDIR/server-status-ingame-time.sh"
+source "$LIBDIR/server-status-game-version.sh"
+source "$LIBDIR/server-status-bepinex.sh"
 server_status_collect_process_stats
 server_status_calculate_ingame_clock
 server_status_prepare_weather
