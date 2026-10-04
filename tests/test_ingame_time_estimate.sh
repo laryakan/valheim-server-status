@@ -5,14 +5,16 @@ ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-mkdir -p "$TEMP_DIR/data" "$TEMP_DIR/logs" "$TEMP_DIR/status" "$TEMP_DIR/launcher"
+mkdir -p "$TEMP_DIR/data" "$TEMP_DIR/logs" "$TEMP_DIR/status" "$TEMP_DIR/launcher" "$TEMP_DIR/lib"
 cp "$ROOT_DIR/vss.log-filter" "$TEMP_DIR/vss.log-filter"
 cp "$ROOT_DIR/status/server-status" "$TEMP_DIR/status/server-status"
+cp "$ROOT_DIR"/lib/server-status-*.sh "$TEMP_DIR/lib/"
 cp "$ROOT_DIR/i18n.sh" "$TEMP_DIR/i18n.sh"
 printf '\n' > "$TEMP_DIR/launcher/launcher-args"
 
 cat > "$TEMP_DIR/.env" <<EOF
 set -o allexport
+VSSDIR="$TEMP_DIR"
 DEBUGMODE=0
 VALHEIMSERVERLOGDIR="$TEMP_DIR/logs"
 CONNECTEDPLAYERSFILE="$TEMP_DIR/data/online-players"
@@ -31,6 +33,10 @@ WEATHERFORECASTURLBASE="https://example.invalid/weather#"
 set +o allexport
 EOF
 
+for module in "$TEMP_DIR"/lib/server-status-*.sh; do
+  STATUS_ROOT="$TEMP_DIR" bash -c 'source "$1"; declare -F T >/dev/null; [[ "${VSS_STATUS_ENV_LOADED:-0}" == 1 && "${VSS_STATUS_I18N_LOADED:-0}" == 1 ]]' _ "$module"
+done
+
 printf '%s\n' \
   'Time 795831,77718268, day:441 nextm:795870,000010729 skipspeed:3,18523567076772' \
   | VSSDIR= "$TEMP_DIR/vss.log-filter"
@@ -45,6 +51,7 @@ IFS=';' read -r SAMPLE_TIME SAMPLE_DAY NEXTM_TIME SKIPSPEED SAMPLE_EPOCH < "$TEM
 SAMPLE_EPOCH=$(awk -v now="$(date +%s.%N)" 'BEGIN { printf "%.9f", now - 13 }')
 printf '%s;%s;%s;%s;%s\n' "$SAMPLE_TIME" "$SAMPLE_DAY" "$NEXTM_TIME" "$SKIPSPEED" "$SAMPLE_EPOCH" > "$TEMP_DIR/data/ingame-time"
 touch "$TEMP_DIR/data/online-players" "$TEMP_DIR/data/offline-players" "$TEMP_DIR/data/last-world-save"
+printf '2026-10-04.00:00:00;test-player;1:1\n' > "$TEMP_DIR/data/online-players"
 
 STATUS_OUTPUT=$(bash "$TEMP_DIR/status/server-status")
 grep -Fq '**Approx. in-game time**' <<< "$STATUS_OUTPUT"
@@ -55,6 +62,13 @@ WEBHOOK_OUTPUT=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
 grep -Fq '"name":"Approx. in-game time"' <<< "$WEBHOOK_OUTPUT"
 grep -Fq '"value": "442"' <<< "$WEBHOOK_OUTPUT"
 grep -Fq '[Link](https://example.invalid/weather#442)' <<< "$WEBHOOK_OUTPUT"
+
+: > "$TEMP_DIR/data/online-players"
+PAUSED_WEBHOOK=$(bash "$TEMP_DIR/status/server-status" --for-webhook)
+grep -Fq '"name":"Current in-game day","value": "441"' <<< "$PAUSED_WEBHOOK"
+grep -Fq '"name":"Approx. in-game time","value": "03:05"' <<< "$PAUSED_WEBHOOK"
+grep -Fq '[Link](https://example.invalid/weather#441)' <<< "$PAUSED_WEBHOOK"
+
 if grep -q '^INGAMEDAYNUMBER=' "$TEMP_DIR/.env"; then
   printf '%s\n' 'day number should come from the stored clock sample, not .env' >&2
   exit 1
