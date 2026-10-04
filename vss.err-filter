@@ -26,6 +26,6 @@ while read LINE; do
    # Remove debug and blank lines
    if [ "$1" != '--tail-pipe-input' ]
    then
-      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log" 
+      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stderr.log" 
    fi
 done
