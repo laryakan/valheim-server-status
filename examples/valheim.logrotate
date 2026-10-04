@@ -3,8 +3,7 @@
 	rotate 4
 	weekly
 	missingok
-	notifempty
+	ifempty
 	compress
 	delaycompress
-	size 10M
 }
