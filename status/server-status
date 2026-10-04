@@ -4,8 +4,9 @@
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
 source "$CWD/../.env"
+source "$CWD/../i18n.sh"
 
-# Stats
+### PROCESS ###
 TOTALCPU=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
 TOTALCPU=$(( TOTALCPU > 0 ? TOTALCPU : 1 ))
 TOTALRAM=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | cut -d' ' -f9 || echo 0) / 1024 ))
@@ -45,13 +46,28 @@ else
 	RAMUSAGE=0
 fi
 
-source "$CWD/../i18n.sh"
+###############
 
+### VERSION ###
 CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
 CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
-CURRENT_START_TS="0"
+VERSION_LABEL="${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
+###############
+
+### SAVE ###
 LAST_WORLD_SAVE_TS="$(cat "$LASTWORLDSAVEFILE" 2>/dev/null || echo "unknown")"
+############
+
+### BEPINEX ###
 BEPINEXVERSION_LABEL="Disabled"
+if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
+then
+	BEPINEXVERSION_LABEL="${BEPINEXVERSION} ${BEPINEXLASTUPDATE:-not_installed}"
+fi
+###############
+
+### SERVER START ###
+CURRENT_START_TS="0"
 if [ -n "$PROCESS_START_TS" ] && [ "$PROCESS_START_TS" != "unknown" ]; then
 	CURRENT_START_TS="$PROCESS_START_TS"
 fi
@@ -61,14 +77,19 @@ fi
 if [ "$CURRENT_START_TS" = "unknown" ]; then
 	CURRENT_START_TS="${VALSERVERLASTSTART:-unknown}"
 fi
-if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
-then
-	BEPINEXVERSION_LABEL="${BEPINEXVERSION} ${BEPINEXLASTUPDATE:-not_installed}"
-fi
+####################
 
+### INTERNAL WORLD META ###
 CURRENT_SEED="${VHSERVERSEED:-unknown}"
 CURRENT_WORLD="${VHSERVERWORLD:-unknown}"
-VERSION_LABEL="${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
+# IN GAME DAY AND TIME REFRESH
+source "$VSSDIR/lib/ingame-time.sh"
+refresh_ingame_time_values_cache
+# $INGAMEDAY is now accessible !
+# $INGAMETIME is now accessible !
+INGAMETIMEANDEMOGI=$(get_ingame_time_with_emoji)
+
+###########################
 
 if [ "$1" = '--for-webhook' ]
 then
@@ -95,13 +116,14 @@ then
 		\"fields\":[
 		{\"name\":\"$(T cpu)\",\"value\": \"${CPUUSAGE}%\",\"inline\":true},
 		{\"name\":\"$(T ram)\",\"value\": \"${RAMUSAGE}%\",\"inline\":true},
-		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},
-		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
-		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
-		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},
+		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":false},
+		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":false},
+		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":false},
+		{\"name\":\"$(T current_day)\",\"value\": \"${INGAMEDAY}\",\"inline\":true},
+		{\"name\":\"$(T current_time)\",\"value\": \"${INGAMETIMEANDEMOGI}\",\"inline\":true},
 		{\"name\":\"seed\",\"value\": \"||${CURRENT_SEED}||\",\"inline\":true},
-		{\"name\":\"$(T current_day)\",\"value\": \"${INGAMEDAYNUMBER}\",\"inline\":true},
-		{\"name\":\"$(T weather_forecast)\",\"value\": \"[Link](${WEATHERFORECASTURL})\",\"inline\":false},
+		{\"name\":\"$(T weather_forecast)\",\"value\": \"[Link](${WEATHERFORECASTURL}${INGAMEDAY})\",\"inline\":false},
+		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
 		{\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST}\",\"inline\":true},
 		{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST}\",\"inline\":true},
 		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}
@@ -140,7 +162,11 @@ echo -e "${LAST_WORLD_SAVE_TS}"
 echo -e "\n**Server seed**"
 echo -e "${CURRENT_SEED}"
 echo -e "\n**$(T current_day)**"
-echo -e "${INGAMEDAYNUMBER}"
+echo -e "${INGAMEDAY}"
+echo -e "\n**$(T current_time)**"
+echo -e "${INGAMETIME}"
+echo -e "\n**BepInEx**"
+echo -e "${BEPINEXVERSION_LABEL}"
 
 echo -e "\n**Server consumption**"
 echo -e "CPU ($TOTALCPU cores) : $CPUUSAGE%"

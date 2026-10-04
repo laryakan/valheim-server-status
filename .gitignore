@@ -10,3 +10,4 @@ savedir
 last-world-save
 launcher/launcher-args
 fake-server
+tests/ingame-time-snapshot.test.cache
