@@ -95,14 +95,14 @@ then
 		\"fields\":[
 		{\"name\":\"$(T cpu)\",\"value\": \"${CPUUSAGE}%\",\"inline\":true},
 		{\"name\":\"$(T ram)\",\"value\": \"${RAMUSAGE}%\",\"inline\":true},
-		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},
-		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
-		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
-		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},
+		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":false},
+		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":false},
+		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":false},
 		{\"name\":\"seed\",\"value\": \"||${CURRENT_SEED}||\",\"inline\":true},
+		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
+		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},
 		{\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST}\",\"inline\":true},
-		{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST}\",\"inline\":true},
-		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}
+		{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST}\",\"inline\":true}
 		]}
 		]}"
 	fi
