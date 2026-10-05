@@ -92,12 +92,16 @@ refresh_ingame_time_values_cache() {
     # Very important: If calculation get messy, it probably come from here:
     CURRENTTIMEINSECONDS=$(awk -v t="$SNAPSHOTTIME" -v e="$ELAPSED" 'BEGIN {print t+e}')
 
+    # Still have around 4:12 of drifting comparing to ingame time...
+    CURRENTTIMEINSECONDS=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$INGAMETIMEDRIFTINSECONDS" \
+        'BEGIN {print int(t) + int(d)}')
+
     # Considering a "new day" start at 0.15 * 24 = 3:36 (correspond to nextm value in snapshot, 761670,000010729, which is 761670 seconds = 423,15 days -> 3:36)
     # We dont care for our attemp to get precise
     SECONDSPERINGAMEDAY=1800
     # Remember a simple rule, once a day is over (mathematicaly), you are in the next day ! so we need to increment it by 1! (When Jesus was born, we were in year 1, not 0)
     INGAMEDAY=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$SECONDSPERINGAMEDAY" \
-        'BEGIN {print int(t/d) + 1}')
+        'BEGIN {print int(t/d)}')
     MODULOINGAMETIME=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$SECONDSPERINGAMEDAY" \
         'BEGIN {print t%d}')
     SECONDSPERINGAMEHOUR=$(awk -v d="$SECONDSPERINGAMEDAY" \
@@ -132,8 +136,8 @@ refresh_ingame_time_values_cache() {
     CURRENTLYCONNECTEDNUM=$( wc -l "$CONNECTEDPLAYERSFILE" | cut -d ' ' -f1 )
 
     # Building cache file
-    # Pattern reminder : 10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695
-    printf '%s: Time %s,000000000, day:%s    nextm:%s,000000000  skipspeed:1,000000000000 Connections %s\n' \
+    # Pattern reminder : 10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695 Connections 1
+    printf '%s: Time %s,000000000, day:%s    nextm:%s,000010729  skipspeed:42,111709269695 Connections %s\n' \
     "$NOW" "$CURRENTTIMEINSECONDS" "$INGAMEDAY" "$PREDICTEDNEXTM" "$CURRENTLYCONNECTEDNUM" > "$SNAPSHOTCACHEFILE"
 }
 
