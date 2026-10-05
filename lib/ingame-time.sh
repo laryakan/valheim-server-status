@@ -38,8 +38,10 @@ fi
 # 10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695 Connections 1
 refresh_ingame_time_values_cache() {
     SNAPSHOTCACHEFILE="$INGAMETIMESNAPSHOTFILE.cache"
+    USINGREALSNAPSHOT=1
     if [ -f "$SNAPSHOTCACHEFILE" ]; then
         SLEEPSNAPSHOT=$(cat "$SNAPSHOTCACHEFILE" 2>/dev/null || echo "0")
+        USINGREALSNAPSHOT=0
     else
         SLEEPSNAPSHOT=$(cat "$INGAMETIMESNAPSHOTFILE" 2>/dev/null || echo "0")
     fi
@@ -91,10 +93,12 @@ refresh_ingame_time_values_cache() {
 
     # Very important: If calculation get messy, it probably come from here:
     CURRENTTIMEINSECONDS=$(awk -v t="$SNAPSHOTTIME" -v e="$ELAPSED" 'BEGIN {print t+e}')
-
+    
     # Still have around 4:12 of drifting comparing to ingame time...
-    CURRENTTIMEINSECONDS=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$INGAMETIMEDRIFTINSECONDS" \
+    if [ "${USINGREALSNAPSHOT:-1}" -eq 0 ]; then
+        CURRENTTIMEINSECONDS=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$INGAMETIMEDRIFTINSECONDS" \
         'BEGIN {print int(t) + int(d)}')
+    fi
 
     # Considering a "new day" start at 0.15 * 24 = 3:36 (correspond to nextm value in snapshot, 761670,000010729, which is 761670 seconds = 423,15 days -> 3:36)
     # We dont care for our attemp to get precise
