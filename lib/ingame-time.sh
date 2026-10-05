@@ -34,6 +34,8 @@ fi
 # Strategy : 
 # - Check occurences of Connections[[:space:]]+0([[:space:]]|$) to pause time increment since last "Time/Day" log in today's logs
 # - Check occurences of Connections[[:space:]]+[1-9].[0-9]?([[:space:]]|$) to unpause time increment since last "Time/Day" log in today's logs
+# Log filter and this file artificially add number of Connections when we are doing the snapshot or the cache at the end of line
+# 10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695 Connections 1
 refresh_ingame_time_values_cache() {
     SNAPSHOTCACHEFILE="$INGAMETIMESNAPSHOTFILE.cache"
     if [ -f "$SNAPSHOTCACHEFILE" ]; then
@@ -47,33 +49,45 @@ refresh_ingame_time_values_cache() {
     exit 1
     fi
 
-    if [[ "$SLEEPSNAPSHOT" =~ ^([0-9]+/[0-9]{2}/[0-9]{4})[[:space:]]+([0-9]{2}:[0-9]{2}:[0-9]{2}):[[:space:]]+Time[[:space:]]+([0-9]+),([0-9]+),[[:space:]]+day:([0-9]+)[[:space:]]+nextm:([0-9]+),([0-9]+)[[:space:]]+skipspeed:([0-9]+),([0-9]+)$ ]]; then
+    if [[ "$SLEEPSNAPSHOT" =~ ^([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]+([0-9]{2}:[0-9]{2}:[0-9]{2}):[[:space:]]+Time[[:space:]]+([0-9]+),([0-9]+),[[:space:]]+day:([0-9]+)[[:space:]]+nextm:([0-9]+),([0-9]+)[[:space:]]+skipspeed:([0-9]+),([0-9]+)[[:space:]]+Connections[[:space:]]+([0-9]+)$ ]]; then
         SNAPSHOTDATE=$(date -d "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}" +%s)
         SNAPSHOTTIME="${BASH_REMATCH[3]},${BASH_REMATCH[4]}"
         SNAPSHOTDAY="${BASH_REMATCH[5]}"
         SNAPSHOTNEXTM="${BASH_REMATCH[6]},${BASH_REMATCH[7]}"
         SNAPSHOTSKIPSPEED="${BASH_REMATCH[8]},${BASH_REMATCH[9]}"
+        SNAPSHOTCONNECTIONS="${BASH_REMATCH[10]}"
         LOGFILENAMETOSEARCH="${BASH_REMATCH[1]:6:4}-${BASH_REMATCH[1]:3:2}-${BASH_REMATCH[1]:0:2}"
     else
-        echo "[INGAMETIME] Invalid ingame time snapshot format in $INGAMETIMESNAPSHOTFILE. You need to sleep ingame or create a manual snapshot following this pattern \"10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695\"" >&2
+        echo "[INGAMETIME] Invalid ingame time snapshot format in $INGAMETIMESNAPSHOTFILE. You need to sleep ingame or create a manual snapshot following this pattern \"10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695 Connections 1\"" >&2
         exit 1
     fi
     
-    ACTIVITYELAPSED=$(
-    for file in "$VSSDIR"/valheim-logs.d/*.stdout.log; do
-        [ "$(basename "$file" .stdout.log)" \< "$LOGFILENAMETOSEARCH" ] && continue
-        grep 'Connections [0-9]' "$file"
-    done |
-    while read date time _ connections rest; do
-        [[ "$date" =~ ^[0-9]{2}/[0-9]{2}/[0-9]{4}$ ]] || continue
-        timestamp=$(date -d "$date ${time%:}" +%s)
-        [ "$timestamp" -gt "$SNAPSHOTDATE" ] && echo "$timestamp $connections"
-    done
-    )
+    # We need to consider is someone is connected by the time the snapshot ot the cached file was created, 
+    # if so, we need to consider the time elapsed starting from snapshot or cache
+    ACTIVITYELAPSED=$({
+        # activity when snapshot/cache
+        echo "$SNAPSHOTDATE $SNAPSHOTCONNECTIONS"
 
+        # following activity
+        for file in "$VSSDIR"/valheim-logs.d/*.stdout.log; do
+            [ "$(basename "$file" .stdout.log)" \< "$LOGFILENAMETOSEARCH" ] && continue
+            grep 'Connections [0-9]' "$file"
+        done |
+        while read date time _ connections rest; do
+            [[ "$date" =~ ^[0-9]{2}/[0-9]{2}/[0-9]{4}$ ]] || continue
+            timestamp=$(date -d "$date ${time%:}" +%s)
+
+            [ "$timestamp" -gt "$SNAPSHOTDATE" ] &&
+                echo "$timestamp $connections"
+        done
+    })
+
+    # If "Connections 0", no body is connected, the time in game is stopped
+    # If "Connections 1" (or more than 1), at least 1 person is connected and the time in game is running
     ELAPSED=$(echo "$ACTIVITYELAPSED" |
     awk 'NR>1 && prev>0 {sum += $1-last} {last=$1; prev=$2}
         END {if(prev>0) sum += systime()-last; print sum+0}')
+    # We need to consider the time runing if someone is actually connected (if the last line is "Connections 1+"")
 
     # Very important: If calculation get messy, it probably come from here:
     CURRENTTIMEINSECONDS=$(awk -v t="$SNAPSHOTTIME" -v e="$ELAPSED" 'BEGIN {print t+e}')
@@ -81,8 +95,9 @@ refresh_ingame_time_values_cache() {
     # Considering a "new day" start at 0.15 * 24 = 3:36 (correspond to nextm value in snapshot, 761670,000010729, which is 761670 seconds = 423,15 days -> 3:36)
     # We dont care for our attemp to get precise
     SECONDSPERINGAMEDAY=1800
+    # Remember a simple rule, once a day is over (mathematicaly), you are in the next day ! so we need to increment it by 1! (When Jesus was born, we were in year 1, not 0)
     INGAMEDAY=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$SECONDSPERINGAMEDAY" \
-        'BEGIN {print int(t/d)}')
+        'BEGIN {print int(t/d) + 1}')
     MODULOINGAMETIME=$(awk -v t="$CURRENTTIMEINSECONDS" -v d="$SECONDSPERINGAMEDAY" \
         'BEGIN {print t%d}')
     SECONDSPERINGAMEHOUR=$(awk -v d="$SECONDSPERINGAMEDAY" \
@@ -113,10 +128,13 @@ refresh_ingame_time_values_cache() {
         echo "NewSnapshot   : $NOW: Time $CURRENTTIMEINSECONDS,000000000, day:$INGAMEDAY, nextm:$PREDICTEDNEXTM"
     fi
 
+    # Is there someone connected to the server by the time we are making the snapshot or not ? To know if time is running
+    CURRENTLYCONNECTEDNUM=$( wc -l "$CONNECTEDPLAYERSFILE" | cut -d ' ' -f1 )
+
     # Building cache file
     # Pattern reminder : 10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695
-    printf '%s: Time %s,000000000, day:%s    nextm:%s  skipspeed:1,000000000000\n' \
-    "$NOW" "$CURRENTTIMEINSECONDS" "$INGAMEDAY" "$PREDICTEDNEXTM" > "$SNAPSHOTCACHEFILE"
+    printf '%s: Time %s,000000000, day:%s    nextm:%s  skipspeed:1,000000000000 Connections %s\n' \
+    "$NOW" "$CURRENTTIMEINSECONDS" "$INGAMEDAY" "$PREDICTEDNEXTM" "$CURRENTLYCONNECTEDNUM" > "$SNAPSHOTCACHEFILE"
 }
 
 get_ingame_time_with_emoji() {

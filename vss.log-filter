@@ -63,7 +63,9 @@ while read LINE; do
    # Detect in-game day change
    # Pattern : 10/03/2026 21:20:04: Time 783270,25787827, day:435    nextm:785070,000010729  skipspeed:149,978511038236
    if [[ "$LINE" =~ ([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})(:)?[[:space:]]*Time[[:space:]]+[0-9,]+[[:space:]]+day:([0-9]+) ]]; then
-      echo "${LINE}" > "$INGAMETIMESNAPSHOTFILE"
+      # Does someone is connected to know if time is still running by the time we are making the snapshot or not ?
+      CURRENTLYCONNECTEDNUM=$( wc -l "$CONNECTEDPLAYERSFILE" | cut -d ' ' -f1 )
+      echo "${LINE} Connections ${CURRENTLYCONNECTEDNUM}" > "$INGAMETIMESNAPSHOTFILE"
       # Delete cache file if it exist
       if [ -f "$INGAMETIMESNAPSHOTFILE.cache" ]; then
          rm -f "$INGAMETIMESNAPSHOTFILE.cache"
