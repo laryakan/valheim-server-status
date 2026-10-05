@@ -133,7 +133,7 @@ refresh_ingame_time_values_cache() {
 
     # Building cache file
     # Pattern reminder : 10/03/2026 13:45:33: Time 761164,659499492, day:422    nextm:761670,000010729  skipspeed:42,111709269695
-    printf '%s: Time %s,000000000, day:%s    nextm:%s  skipspeed:1,000000000000 Connections %s\n' \
+    printf '%s: Time %s,000000000, day:%s    nextm:%s,000000000  skipspeed:1,000000000000 Connections %s\n' \
     "$NOW" "$CURRENTTIMEINSECONDS" "$INGAMEDAY" "$PREDICTEDNEXTM" "$CURRENTLYCONNECTEDNUM" > "$SNAPSHOTCACHEFILE"
 }
 
