@@ -364,13 +364,24 @@ function set_logrotate(){
 
 	# set real path
 	sed -i "s[###VALHEIMSERVERLOGPATH###[${VALHEIMSERVERLOGPATH}[g" "$CWD/systemd/valheim.logrotate"
-	sudo ln -s "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
+
+	# Delete old file if exist
+	sudo rm -f '/etc/logrotate.d/valheim'
+
+	# Copy new file
+	sudo cp "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
+
+	# Change chown and chmod
+	sudo chown root:root /etc/logrotate.d/valheim
+	sudo chmod 0644 /etc/logrotate.d/valheim
 	NOSUDO=$?
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
-		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')" >&2
-		echo -e "sudo ln -s \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"" >&2
+		echo -e "$(ColorRed 'Since sudo has failed, here is the commands we tried : ')" >&2
+		echo -e "sudo cp \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"" >&2
+		echo -e "sudo chown root:root /etc/logrotate.d/valheim" >&2
+		echo -e "sudo chmod 0644 /etc/logrotate.d/valheim" >&2
 	else 
 		echo -e "$(ColorGreen 'logrotate set')"
 	fi
