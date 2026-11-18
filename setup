@@ -264,21 +264,49 @@ function load_server_profile() {
 function select_server_profile() {
   local profile
   local choice
+  local notice=""
+  local -a profiles=()
   while true; do
-    echo
-    echo "=== Valheim Server Status — Select a server ==="
+    profiles=()
     while IFS= read -r profile; do
-      [ -n "$profile" ] && printf '  %s\n' "$profile"
+      [ -n "$profile" ] && profiles+=("$profile")
     done < <(list_server_profiles)
-    echo "  n) Create a server profile"
-    echo "  q) Quit"
-    read -r -p "Server name or choice: " choice
+
+    setup_ui_header "Select a server"
+    if [ -n "$notice" ]; then
+      printf '\n%s\n' "$notice"
+      notice=""
+    fi
+    printf 'Choose an existing profile, create one, or quit.\n\n'
+    if [ "${#profiles[@]}" -eq 0 ]; then
+      printf '  No server profiles found yet.\n\n'
+    else
+      for profile in "${profiles[@]}"; do
+        if [ "$profile" = "${VSS_SERVER_NAME:-}" ]; then
+          printf '  * %s  (current)\n' "$profile"
+        else
+          printf '    %s\n' "$profile"
+        fi
+      done
+      printf '\n'
+    fi
+    printf '  n  Create a profile\n'
+    printf '  q  Quit setup\n\n'
+    printf 'Profile name or choice: '
+    read -r choice || return 1
     case "$choice" in
       n|N)
-        read -r -p "World name: " profile
-        if create_server_profile "$profile"; then
+        printf 'World name: '
+        read -r profile || return 1
+        if ! vss_validate_server_name "$profile"; then
+          notice="Invalid world name. Use letters, numbers, dots, underscores, and hyphens."
+        elif [ -e "$CWD/.env.$profile" ]; then
+          notice="A profile named '$profile' already exists."
+        elif create_server_profile "$profile"; then
           SELECTED_SERVER_PROFILE="$profile"
           return 0
+        else
+          notice="Could not create '$profile'. Check crash.log for details."
         fi
         ;;
       q|Q) return 1 ;;
@@ -287,7 +315,7 @@ function select_server_profile() {
           SELECTED_SERVER_PROFILE="$choice"
           return 0
         fi
-        echo "No profile named '$choice'." >&2
+        notice="No profile named '$choice'. Choose a listed profile, n, or q."
         ;;
     esac
   done
@@ -305,22 +333,83 @@ yellow='\e[93m'
 magenta='\e[35m'
 clear='\e[0m'
 ColorRed(){
-	echo -ne $red$1$clear
+	if [ -n "${NO_COLOR:-}" ]; then printf '%s' "$1"; else printf '%b%s%b' "$red" "$1" "$clear"; fi
 }
 ColorGreen(){
-	echo -ne $green$1$clear
+	if [ -n "${NO_COLOR:-}" ]; then printf '%s' "$1"; else printf '%b%s%b' "$green" "$1" "$clear"; fi
 }
 ColorBlue(){
-	echo -ne $blue$1$clear
+	if [ -n "${NO_COLOR:-}" ]; then printf '%s' "$1"; else printf '%b%s%b' "$blue" "$1" "$clear"; fi
 }
 ColorCyan(){
-	echo -ne $cyan$1$clear
+	if [ -n "${NO_COLOR:-}" ]; then printf '%s' "$1"; else printf '%b%s%b' "$cyan" "$1" "$clear"; fi
 }
 ColorYellow(){
-	echo -ne $yellow$1$clear
+	if [ -n "${NO_COLOR:-}" ]; then printf '%s' "$1"; else printf '%b%s%b' "$yellow" "$1" "$clear"; fi
 }
 ColorMagenta(){
-	echo -ne $magenta$1$clear
+	if [ -n "${NO_COLOR:-}" ]; then printf '%s' "$1"; else printf '%b%s%b' "$magenta" "$1" "$clear"; fi
+}
+
+function setup_ui_color() {
+  if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    printf '\033[%sm' "$1"
+  fi
+}
+
+function setup_ui_reset_color() {
+  if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    printf '\033[0m'
+  fi
+}
+
+function setup_ui_clear() {
+  [ -t 1 ] || return 0
+  [ -n "${TERM:-}" ] || return 0
+  [ -z "${VSS_SETUP_NO_CLEAR:-}" ] || return 0
+  command -v clear >/dev/null 2>&1 && command clear
+}
+
+function setup_ui_header() {
+  local section="$1"
+  setup_ui_clear
+  printf '\n'
+  setup_ui_color '1;36'
+  printf 'VALHEIM SERVER STATUS\n'
+  setup_ui_reset_color
+  printf 'Multi-server control panel'
+  [ -z "$section" ] || printf '  /  %s' "$section"
+  printf '\n'
+  printf '%s\n' '------------------------------------------------------------'
+}
+
+function setup_ui_unit_state() {
+  if [ -e "/etc/systemd/system/$1" ]; then
+    printf 'installed'
+  else
+    printf 'not installed'
+  fi
+}
+
+function setup_ui_dashboard() {
+  local server_pid
+  local server_state="offline"
+
+  server_pid="$(vss_find_server_pid || true)"
+  if [ -n "$server_pid" ] && ps -p "$server_pid" >/dev/null 2>&1; then
+    server_state="running (PID $server_pid)"
+  fi
+
+  setup_ui_color '1'
+  printf '\nProfile: %s\n' "${VSS_SERVER_NAME:-none selected}"
+  setup_ui_reset_color
+  printf 'World: %s  |  Valheim: %s\n' "${VHSERVERWORLD:-not configured}" "$server_state"
+  printf 'Ports: game %s  |  HTTP %s\n' "${VHSERVERPORT:-unknown}" "${STATUSPORT:-unknown}"
+  printf 'Services: server %s  |  pipe %s  |  HTTP %s\n' \
+    "$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")" \
+    "$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")" \
+    "$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
+  printf '%s\n' '------------------------------------------------------------'
 }
 
 # get the setup status
@@ -585,30 +674,51 @@ function uninstall_service(){
 }
 
 function stop_valheim_service(){
-  if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ] && systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
-    sudo systemctl stop "$VHSERVERSERVICENAME"
-    echo -e "$(ColorGreen 'Valheim service stopped')"
-  else
-    echo -e "$(ColorYellow 'Valheim service is not running or does not exist')" >&2
+  if [ ! -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
+    echo "Valheim service does not exist: $VHSERVERSERVICENAME" >&2
+    return 1
   fi
+  if ! systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    echo "Valheim service is not running: $VHSERVERSERVICENAME"
+    return 0
+  fi
+  if ! sudo systemctl stop "$VHSERVERSERVICENAME"; then
+    echo "Failed to stop Valheim service: $VHSERVERSERVICENAME" >&2
+    return 1
+  fi
+  echo "Valheim service stopped: $VHSERVERSERVICENAME"
 }
 
 function start_valheim_service(){
-  if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ] && ! systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
-    sudo systemctl start "$VHSERVERSERVICENAME"
-    echo -e "$(ColorGreen 'Valheim service started')"
-  else
-    echo -e "$(ColorYellow 'Valheim service is already running or does not exist')" >&2
+  if [ ! -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
+    echo "Valheim service does not exist: $VHSERVERSERVICENAME" >&2
+    return 1
   fi
+  if systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    echo "Valheim service is already running: $VHSERVERSERVICENAME"
+    return 0
+  fi
+  if ! sudo systemctl start "$VHSERVERSERVICENAME"; then
+    echo "Failed to start Valheim service: $VHSERVERSERVICENAME" >&2
+    return 1
+  fi
+  echo "Valheim service started: $VHSERVERSERVICENAME"
 }
 
 function restart_valheim_service(){
-  if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
-    sudo systemctl restart "$VHSERVERSERVICENAME"
-    echo -e "$(ColorGreen 'Valheim service restarted')"
-  else
-    echo -e "$(ColorRed 'Valheim service does not exist')" >&2
+  if [ ! -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
+    echo "Valheim service does not exist: $VHSERVERSERVICENAME" >&2
+    return 1
   fi
+  if ! sudo systemctl restart "$VHSERVERSERVICENAME"; then
+    echo "Failed to restart Valheim service: $VHSERVERSERVICENAME" >&2
+    return 1
+  fi
+  echo "Valheim service restarted: $VHSERVERSERVICENAME"
+}
+
+function status_valheim_service(){
+  systemctl status --no-pager "$VHSERVERSERVICENAME"
 }
 
 function restart_vsspipe_service(){
@@ -711,7 +821,7 @@ mkdir -p "$CWD/systemd"
 			10) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; discord_menu ;;
 			11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; discord_menu ;;
 			
-		0) clear ; new_menu ;;
+		0) setup_ui_clear; return 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
@@ -867,7 +977,7 @@ mkdir -p "$CWD/systemd"
 				fi
 				sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
 
-		0) clear ; new_menu ;;
+		0) setup_ui_clear; return 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
@@ -902,7 +1012,7 @@ mkdir -p "$CWD/systemd"
 			7) admin_list_show 'permitted' ; sleep 5 ; clear ; admin_menu ;;
 			8) admin_list_add 'permitted' ; sleep 5 ; clear ; admin_menu ;;
 			9) admin_list_remove 'permitted' ; sleep 5 ; clear ; admin_menu ;;
-		0) clear ; new_menu ;;
+		0) setup_ui_clear; return 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
@@ -927,85 +1037,139 @@ mkdir -p "$CWD/systemd"
 			 2) set_service "$VSSHTTPSERVICENAME"; sleep 2 ; clear ; http_status_menu ;;
 			 3) uninstall_service "$VSSHTTPSERVICENAME" ; clear ; http_status_menu ;;
 
-		0) clear ; new_menu ;;
+		0) setup_ui_clear; return 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
 
 # Main menu
 new_menu(){
-vss_header
-echo -ne "
-*** Main menu ***
-$(ColorGreen '1)') VSS $(ColorMagenta 'Discord') menu
-$(ColorGreen '2)') VSS Launcher menu
-$(ColorGreen '3)') VSS over HTTP menu
-$(ColorGreen '4)') VSS Admin menu $(ColorRed '(only available for VSS launched server)')
+  local a
+  local notice=""
+  while true; do
+    setup_ui_header "Main menu"
+    if [ -n "$notice" ]; then
+      printf '\n%s\n' "$notice"
+      notice=""
+    fi
+    setup_ui_dashboard
+    printf '\nCONFIGURATION\n'
+    printf '  1  Discord and webhook\n'
+    printf '  2  Valheim launcher and server\n'
+    printf '  3  HTTP status endpoint\n'
+    printf '  4  Admin, ban, and permitted lists\n'
+    printf '\nMONITORING AND SERVICES\n'
+    printf '  5  Configure server log path\n'
+    printf '  6  Install or update log pipe service (sudo)\n'
+    printf '  7  Restart log pipe service (sudo)\n'
+    printf '  8  Remove log pipe service (sudo)\n'
+    printf '  9  Install shared log rotation (sudo)\n'
+    printf ' 10  Remove shared log rotation (sudo)\n'
+    printf '\nMAINTENANCE\n'
+    printf ' 11  Set system service user\n'
+    printf " 12  Remove this profile's services and scheduled update (sudo)\n"
+    printf ' 13  Enable packaged BepInEx\n'
+    printf ' 14  Disable packaged BepInEx\n'
+    printf ' 15  Switch server profile\n'
+    printf '\n  0  Exit\n\n'
+    printf 'Select an action: '
+    read -r a || return 0
+    case "$a" in
+      1) setup_ui_clear; discord_menu ;;
+      2) setup_ui_clear; launcher_menu ;;
+      3) setup_ui_clear; http_status_menu ;;
+      4) setup_ui_clear; admin_menu ;;
+      5) setup_value_prompt 'Where are your server logs (file, directory, or wildcard path)?' 'VALHEIMSERVERLOGPATH' ;;
+      6) set_service "$VSSPIPESERVICENAME"; sleep 2 ;;
+      7) restart_vsspipe_service ;;
+      8) uninstall_service "$VSSPIPESERVICENAME" ;;
+      9) set_logrotate; sleep 5 ;;
+      10) remove_shared_logrotate ;;
+      11) setup_value_prompt 'Which user should run the services?' 'USERSERVICE' ;;
+      12)
+        replace_env_value 'CRONTABWEBHOOKFREQ' 0
+        set_cron
+        uninstall_service "$VHSERVERSERVICENAME"
+        uninstall_service "$VSSHTTPSERVICENAME"
+        uninstall_service "$VSSPIPESERVICENAME"
+        ;;
+      13) replace_env_value 'VSSBEPINEXENABLED' 1; "$VSSDIR/bepinex/install_bepinex.sh"; sleep 1 ;;
+      14) replace_env_value 'VSSBEPINEXENABLED' 0; "$VSSDIR/bepinex/remove_bepinex.sh"; sleep 1 ;;
+      15)
+        if select_server_profile; then
+          load_server_profile "$SELECTED_SERVER_PROFILE" || continue
+        fi
+        ;;
+      0) exit 0 ;;
+      *) notice="Unknown option: $a" ;;
+    esac
+  done
+}
 
-** Logs **
-$(ColorBlue 'we can setup a service based on tail if you already have a your server log outputting somewhere')
-$(ColorBlue 'just setup a valid logs path (wildcards accepted). Then you will not need to use the custom launcher')
-$(ColorGreen '5)') setup wanted Valheim Server logs path (file or directory)
-* standalone *
-$(ColorGreen '6)') $(ColorRed 'sudo required') add and activate vss.pipe.service (needed to watch log outputing outside custom launch, like BepInEx logs)
-$(ColorGreen '7)') $(ColorRed 'sudo required') restart vss.pipe.service
-$(ColorGreen '8)') $(ColorRed 'sudo required') remove vss.pipe.service
-* logrotate *
-$(ColorGreen '9)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
-$(ColorGreen '10)') $(ColorRed 'sudo required') remove shared logrotate configuration
+function setup_usage() {
+  cat <<'EOF'
+Usage:
+  ./setup [SERVER_NAME]
+  ./setup --list
+  ./setup --create SERVER_NAME
+  ./setup --start-server SERVER_NAME
+  ./setup --stop-server SERVER_NAME
+  ./setup --restart-server SERVER_NAME
+  ./setup --status-server SERVER_NAME
+  ./setup --discord-update SERVER_NAME
+EOF
+}
 
-** Service user **
-$(ColorGreen '11)') setup the user who will execute service $(ColorRed 'prior') to services install, default is $USER
+function run_discord_update() {
+  printf 'Updating Discord for profile %s...\n' "$VSS_SERVER_NAME"
+  if ! "$CWD/discord/update"; then
+    printf 'Discord update failed for profile %s; see crash.log for details.\n' "$VSS_SERVER_NAME"
+    return 1
+  fi
+  printf 'Discord update completed for profile %s.\n' "$VSS_SERVER_NAME"
+}
 
-** Uninstall all **
-$(ColorGreen '12)') $(ColorRed 'sudo required') remove this profile's services and cron job
-
-** BepInEx **
-$(ColorGreen '13)') activate BepInEx packaged version
-$(ColorGreen '14)') deactivate BepInEx packaged version
-$(ColorGreen '15)') switch server profile
-
-$(ColorGreen '0)') quit
-$(ColorGreen 'CTRL+C)') quit
-$(ColorBlue 'You can scroll up to see previous screens')
-$(ColorBlue 'choose an option:') "
-        read a
-        case $a in
-	        
-			1) clear ; discord_menu ;;
-			2) clear ; launcher_menu ;;
-			3) clear ; http_status_menu ;;
-			4) clear ; admin_menu ;;
-			5) setup_value_prompt 'where are your logs (or where do you want it, file or dir, wildcards are valid) ?' 'VALHEIMSERVERLOGPATH' ; clear ; new_menu ;;
-			6) set_service "$VSSPIPESERVICENAME"; sleep 2 ; clear ; new_menu ;;
-			7) restart_vsspipe_service ; clear ; new_menu ;;
-			8) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
-			9) set_logrotate ; sleep 5 ; clear ;  new_menu ;;
-			10) remove_shared_logrotate ; clear ; new_menu ;;
-			11) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
-			12) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
-			13) replace_env_value 'VSSBEPINEXENABLED' 1 ; $VSSDIR/bepinex/install_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
-			14) replace_env_value 'VSSBEPINEXENABLED' 0 ; $VSSDIR/bepinex/remove_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
-			15) if select_server_profile; then load_server_profile "$SELECTED_SERVER_PROFILE" && clear && new_menu; else clear; new_menu; fi ;;
-		
-		0) exit 0 ;;
-		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
-        esac
+function run_server_cli_action() {
+  local action="$1"
+  case "$action" in
+    --start-server) start_valheim_service 2>&1 ;;
+    --stop-server) stop_valheim_service 2>&1 ;;
+    --restart-server) restart_valheim_service 2>&1 ;;
+    --status-server) status_valheim_service 2>&1 ;;
+    --discord-update) run_discord_update 2>&1 ;;
+    *) printf 'Unsupported direct action: %s\n' "$action"; return 2 ;;
+  esac
 }
 
 function setup_main() {
   local selected_profile="${VSS_SERVER_NAME:-}"
+  local direct_action=""
 
   case "${1:-}" in
     --help|-h)
-      echo "Usage: ./setup [SERVER_NAME|--list|--create SERVER_NAME]"
+      setup_usage
       return 0
       ;;
     --list)
       list_server_profiles
       return 0
       ;;
+    --start-server|--stop-server|--restart-server|--status-server|--discord-update)
+      if [ -z "${2:-}" ] || [ -n "${3:-}" ]; then
+        printf 'Option %s requires exactly one server name.\n' "$1"
+        setup_usage
+        return 2
+      fi
+      direct_action="$1"
+      ;;
   esac
+
+  if [ -n "$direct_action" ]; then
+    migrate_legacy_config 2>&1 || return 1
+    load_server_profile "$2" 2>&1 || return 1
+    run_server_cli_action "$direct_action"
+    return $?
+  fi
 
   migrate_legacy_config || return 1
 
@@ -1031,7 +1195,7 @@ function setup_main() {
   esac
 
   load_server_profile "$selected_profile" || return 1
-  clear
+  setup_ui_clear
   new_menu
 }
 

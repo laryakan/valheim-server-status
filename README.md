@@ -28,6 +28,18 @@ Choose an existing profile or create one by entering its world name. Profiles ca
 ./setup MyWorld
 ```
 
+Server actions can run without opening the interactive menu. Lifecycle actions use that profile's systemd unit (and may prompt for `sudo`); Discord updates use its webhook configuration:
+
+```bash
+./setup --start-server MyWorld
+./setup --stop-server MyWorld
+./setup --restart-server MyWorld
+./setup --status-server MyWorld
+./setup --discord-update MyWorld
+```
+
+The interactive setup dashboard shows the selected world, Valheim process state, ports, and installed service units. Menus are grouped by configuration, monitoring, and maintenance; the profile picker accepts a profile name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
+
 World names used as profile IDs must contain only letters, numbers, dots, underscores, and hyphens, and must be unique. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
 
 Each profile gets its own launcher arguments file:
