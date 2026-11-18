@@ -343,18 +343,30 @@ function create_server_profile() {
     status_port=$((status_port + 1))
   done
 
-  cp "$CWD/.env.server.dist" "$env_file" || return 1
-  write_env_value "$env_file" VHSERVERWORLD "$name"
-  write_env_value "$env_file" VHSERVERPORT "$valheim_port"
-  write_env_value "$env_file" STATUSPORT "$status_port"
-  cp "$CWD/examples/launcher-args" "$args_file" || return 1
+  if ! cp "$CWD/.env.server.dist" "$env_file"; then
+    printf 'Could not create profile configuration for %s.\n' "$name" >&2
+    rm -f -- "$env_file" "$args_file" || printf 'Could not clean up incomplete profile files for %s.\n' "$name" >&2
+    return 1
+  fi
+  if ! write_env_value "$env_file" VHSERVERWORLD "$name" ||
+     ! write_env_value "$env_file" VHSERVERPORT "$valheim_port" ||
+     ! write_env_value "$env_file" STATUSPORT "$status_port"; then
+    printf 'Could not finish creating profile %s; removing the incomplete profile.\n' "$name" >&2
+    rm -f -- "$env_file" "$args_file" || printf 'Could not clean up incomplete profile files for %s.\n' "$name" >&2
+    return 1
+  fi
+  if ! cp "$CWD/examples/launcher-args" "$args_file"; then
+    printf 'Could not create launcher arguments for profile %s; removing the incomplete profile.\n' "$name" >&2
+    rm -f -- "$env_file" "$args_file" || printf 'Could not clean up incomplete profile files for %s.\n' "$name" >&2
+    return 1
+  fi
   VSS_SERVER_NAME="$name"
   VSS_ENV_FILE="$env_file"
   export VSS_SERVER_NAME VSS_ENV_FILE
   echo "Created server profile '$name' in $env_file" >&2
 }
 
-function load_server_profile() {
+function load_server_profile_unchecked() {
   local name="$1"
   if ! vss_validate_server_name "$name"; then
     echo "Invalid server profile name: '$name'" >&2
@@ -376,6 +388,27 @@ function load_server_profile() {
   if [ ! -f "$VHSERVERLAUNCHERARGS" ]; then
     cp "$CWD/examples/launcher-args" "$VHSERVERLAUNCHERARGS" || return 1
   fi
+}
+
+function load_server_profile() {
+  local requested_name="$1"
+  local previous_name="${VSS_SERVER_NAME:-}"
+  local load_status
+  VSS_PROFILE_RESTORE_FAILED=0
+
+  if load_server_profile_unchecked "$requested_name"; then
+    return 0
+  else
+    load_status=$?
+  fi
+
+  if [ -n "$previous_name" ] && ! load_server_profile_unchecked "$previous_name"; then
+    printf 'Failed to restore the previously active profile %s after loading %s failed.\n' \
+      "$previous_name" "$requested_name" >&2
+    VSS_PROFILE_RESTORE_FAILED=1
+    return 1
+  fi
+  return "$load_status"
 }
 
 function select_server_profile() {
@@ -522,7 +555,7 @@ function setup_ui_dashboard() {
   setup_ui_reset_color
   printf 'World: %s  |  Valheim: %s\n' "${VHSERVERWORLD:-not configured}" "$server_state"
   printf 'Ports: game %s  |  HTTP %s\n' "${VHSERVERPORT:-unknown}" "${STATUSPORT:-unknown}"
-  printf 'Services: server %s  |  pipe %s  |  HTTP %s\n' \
+  printf 'Services: server %s  |  standalone pipe %s  |  HTTP %s\n' \
     "$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")" \
     "$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")" \
     "$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
@@ -548,7 +581,7 @@ if [ "$SENDSERVERCONNECTIONINFO" -gt 0 ];then echo -e "$(ColorMagenta 'Discord')
 if crontab -l 2>/dev/null | grep -Fq "# vss-profile:$VSS_SERVER_NAME";then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME (valheim server) is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME (valheim server) is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME (vss over http) is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME (vss over http) is $(ColorRed 'missing') in system";fi
-if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME is $(ColorGreen 'present') in system (needed to catch outside logs e.g BepInEx or not VSS server)";else echo -e  "$VSSPIPESERVICENAME is $(ColorRed 'missing') in system (needed to catch outside logs e.g BepInEx or not VSS server)";fi
+if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME is $(ColorGreen 'present') in system (captures BepInEx or externally redirected logs)";else echo -e  "$VSSPIPESERVICENAME is $(ColorRed 'missing') in system (installed automatically for BepInEx or external logs)";fi
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];then echo -e "BepInEx packaged version $(ColorGreen 'activated') on VSS server";else echo -e  "BepInEx packaged version is $(ColorRed 'deactivated') on VSS server";fi
 echo ""
 echo "--Ports--"
@@ -659,21 +692,61 @@ function replace_env_value() {
 
 # param1=value_label, param2=value_variable_in_.env
 function setup_value_prompt() {
+  local is_secret=0
+  local new_value
   echo ""
-	echo "**$1**"
-	echo -e "current value : ${!2}"
-	echo "enter new value ('n' to leave unchanged) :"
-	read NEWVALUE
-	if [ "$NEWVALUE" = 'n' ];then
-	  echo "value unchanged"
-	  return
-	fi
-	if ! replace_env_value "$2" "$NEWVALUE"; then
-	  echo "value unchanged" >&2
-	  return 1
-	fi
-	echo "new value set : ${!2}"
-	echo ""
+  echo "**$1**"
+  case "$2" in
+    WEBHOOKURL|WEBHOOKTOKEN|VHSERVERPASSWD)
+      is_secret=1
+      if [ -n "${!2:-}" ]; then
+        printf 'current value: configured (hidden)\n'
+      else
+        printf 'current value: not configured\n'
+      fi
+      ;;
+    *)
+      printf 'current value: %s\n' "${!2}"
+      ;;
+  esac
+  if [ "$is_secret" -eq 1 ] && [ -t 0 ]; then
+    read -r -s -p "enter new value ('n' to leave unchanged): " new_value || return 1
+    printf '\n'
+  else
+    printf "enter new value ('n' to leave unchanged): "
+    read -r new_value || return 1
+  fi
+  if [ "$new_value" = 'n' ]; then
+    echo "value unchanged"
+    return 0
+  fi
+  if ! replace_env_value "$2" "$new_value"; then
+    echo "value unchanged" >&2
+    return 1
+  fi
+  if [ "$is_secret" -eq 1 ]; then
+    echo "new value set (hidden)"
+  else
+    echo "new value set: ${!2}"
+  fi
+  echo ""
+}
+
+function setup_menu_render() {
+  local section="$1"
+  local notice="${2:-}"
+  setup_ui_header "$section"
+  setup_ui_dashboard
+  if [ -n "$notice" ]; then
+    printf '\n%s\n' "$notice"
+  fi
+}
+
+function setup_ui_pause() {
+  local ignored
+  if [ -t 0 ]; then
+    read -r -p "Press Enter to continue..." ignored || true
+  fi
 }
 
 # trying autoconfig
@@ -745,7 +818,10 @@ function set_cron() {
 	    updated_cron="$(printf '%s\n%s\n' "$updated_cron" "*/$CRONTABWEBHOOKFREQ * * * * VSS_SERVER_NAME=$profile $WEBHOOKUPDATE $marker")"
 	  fi
 	done
-	printf '%s\n' "$updated_cron" | crontab -
+	if ! printf '%s\n' "$updated_cron" | crontab -; then
+	  echo "Could not update the per-profile Discord cron jobs." >&2
+	  return 1
+	fi
 	echo "$(ColorGreen 'crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
 }
 
@@ -756,7 +832,10 @@ function remove_profile_cron() {
   local updated_cron
   current_cron="$(crontab -l 2>/dev/null || true)"
   updated_cron="$(printf '%s\n' "$current_cron" | grep -Fv "$marker" || true)"
-  printf '%s\n' "$updated_cron" | crontab -
+  if ! printf '%s\n' "$updated_cron" | crontab -; then
+    printf 'Could not remove the cron job for profile %s.\n' "$profile" >&2
+    return 1
+  fi
 }
 
 function set_maintenance_cron() {
@@ -953,13 +1032,54 @@ function set_service(){
 }
 
 function uninstall_service(){
-	SERVICENAME="$1"
-	sudo systemctl stop "$SERVICENAME"
-	sudo systemctl disable "$SERVICENAME"
-	sudo rm "/etc/systemd/system/$SERVICENAME"
-	sudo systemctl daemon-reload
-	sudo systemctl reset-failed
-	rm -f "$CWD/systemd/$SERVICENAME"
+  local service_name="$1"
+  local systemd_dir="${2:-/etc/systemd/system}"
+  local unit_file="$systemd_dir/$service_name"
+  local unit_managed=0
+
+  if [[ -e "$unit_file" || -L "$unit_file" ]] ||
+     systemctl is-active --quiet "$service_name" ||
+     systemctl is-enabled --quiet "$service_name"; then
+    unit_managed=1
+  fi
+
+  if systemctl is-active --quiet "$service_name"; then
+    if ! sudo systemctl stop "$service_name"; then
+      printf 'Failed to stop service %s; its unit files were kept.\n' "$service_name" >&2
+      return 1
+    fi
+    if systemctl is-active --quiet "$service_name"; then
+      printf 'Service %s is still active; its unit files were kept.\n' "$service_name" >&2
+      return 1
+    fi
+  fi
+
+  if [[ "$unit_managed" -eq 1 ]]; then
+    if ! sudo systemctl disable "$service_name"; then
+      printf 'Failed to disable service %s; its unit files were kept.\n' "$service_name" >&2
+      return 1
+    fi
+    if ! sudo systemctl reset-failed "$service_name"; then
+      printf 'Failed to reset service state for %s; its unit files were kept.\n' "$service_name" >&2
+      return 1
+    fi
+    if [[ -e "$unit_file" || -L "$unit_file" ]]; then
+      if ! sudo rm -f -- "$unit_file"; then
+        printf 'Failed to remove systemd unit file %s.\n' "$unit_file" >&2
+        return 1
+      fi
+    fi
+    if ! sudo systemctl daemon-reload; then
+      printf 'Failed to reload systemd after removing %s.\n' "$service_name" >&2
+      return 1
+    fi
+  fi
+
+  if ! rm -f -- "$CWD/systemd/$service_name"; then
+    printf 'Failed to remove generated unit file for %s.\n' "$service_name" >&2
+    return 1
+  fi
+  printf 'Service removed: %s\n' "$service_name"
 }
 
 function stop_valheim_service(){
@@ -973,6 +1093,10 @@ function stop_valheim_service(){
   fi
   if ! sudo systemctl stop "$VHSERVERSERVICENAME"; then
     echo "Failed to stop Valheim service: $VHSERVERSERVICENAME" >&2
+    return 1
+  fi
+  if systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    echo "Valheim service is still active after stop returned: $VHSERVERSERVICENAME" >&2
     return 1
   fi
   echo "Valheim service stopped: $VHSERVERSERVICENAME"
@@ -991,6 +1115,10 @@ function start_valheim_service(){
     echo "Failed to start Valheim service: $VHSERVERSERVICENAME" >&2
     return 1
   fi
+  if ! systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    echo "Valheim service did not remain active after start: $VHSERVERSERVICENAME" >&2
+    return 1
+  fi
   echo "Valheim service started: $VHSERVERSERVICENAME"
 }
 
@@ -1001,6 +1129,10 @@ function restart_valheim_service(){
   fi
   if ! sudo systemctl restart "$VHSERVERSERVICENAME"; then
     echo "Failed to restart Valheim service: $VHSERVERSERVICENAME" >&2
+    return 1
+  fi
+  if ! systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    echo "Valheim service did not remain active after restart: $VHSERVERSERVICENAME" >&2
     return 1
   fi
   echo "Valheim service restarted: $VHSERVERSERVICENAME"
@@ -1024,9 +1156,16 @@ function restart_vsspipe_service(){
 function set_logrotate(){
 	local logrotate_name="valheim-vss.logrotate"
 	local logrotate_dir="${1:-/etc/logrotate.d}"
-	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/$logrotate_name"
+	mkdir -p "$CWD/systemd" || return 1
+	if ! cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/$logrotate_name"; then
+		echo "Could not create the shared logrotate configuration." >&2
+		return 1
+	fi
 
-	sed -i "s[###VALHEIMSERVERLOGDIR###[$VALHEIMSERVERLOGDIR[g" "$CWD/systemd/$logrotate_name"
+	if ! sed -i "s[###VALHEIMSERVERLOGDIR###[$VALHEIMSERVERLOGDIR[g" "$CWD/systemd/$logrotate_name"; then
+		echo "Could not configure the shared logrotate path." >&2
+		return 1
+	fi
 	if grep -q '###.*###' "$CWD/systemd/$logrotate_name"; then
 		echo "Unresolved placeholder in shared logrotate configuration" >&2
 		return 1
@@ -1044,27 +1183,40 @@ function set_logrotate(){
 
 function remove_shared_logrotate() {
   local confirmation
+  VSS_SETUP_NOTICE=''
   read -r -p "Remove the shared logrotate configuration for every server? Type REMOVE to confirm: " confirmation
   if [ "$confirmation" != "REMOVE" ]; then
     echo "Shared logrotate configuration was kept."
+    VSS_SETUP_NOTICE='Shared log rotation was kept.'
     return 0
   fi
-  sudo rm -f /etc/logrotate.d/valheim-vss || return 1
-  rm -f "$CWD/systemd/valheim-vss.logrotate"
+  if ! sudo rm -f /etc/logrotate.d/valheim-vss; then
+    echo "Could not remove the shared logrotate configuration." >&2
+    return 1
+  fi
+  if ! rm -f "$CWD/systemd/valheim-vss.logrotate"; then
+    echo "Could not remove the generated shared logrotate file." >&2
+    return 1
+  fi
+  VSS_SETUP_NOTICE='Shared log rotation removed.'
+  return 0
 }
 
 function remove_profile_services() {
   local confirmation
+  VSS_SETUP_NOTICE=''
   read -r -p "Remove this profile's services and scheduled update? Type REMOVE to confirm: " confirmation
   if [ "$confirmation" != "REMOVE" ]; then
     echo "Profile services and scheduled update were kept."
+    VSS_SETUP_NOTICE="Profile services and scheduled update for $VSS_SERVER_NAME were kept."
     return 0
   fi
 
-  remove_profile_cron "$VSS_SERVER_NAME" || return 1
   uninstall_service "$VHSERVERSERVICENAME" || return 1
   uninstall_service "$VSSHTTPSERVICENAME" || return 1
-  uninstall_service "$VSSPIPESERVICENAME"
+  uninstall_service "$VSSPIPESERVICENAME" || return 1
+  remove_profile_cron "$VSS_SERVER_NAME" || return 1
+  VSS_SETUP_NOTICE="Services and scheduled update removed for $VSS_SERVER_NAME."
 }
 
 # Install / Active BepInEx_Valheim packaged version
@@ -1072,89 +1224,361 @@ function bepinex(){
 	replace_env_value "$2" "VSSBEPINEXENABLED"
 }
 
+function bepinex_pipe_was_preexisting() {
+  case "${VSSPIPEPREEXISTING:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [[ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ||
+     -L "/etc/systemd/system/$VSSPIPESERVICENAME" ]] ||
+    systemctl is-active --quiet "$VSSPIPESERVICENAME" ||
+    systemctl is-enabled --quiet "$VSSPIPESERVICENAME"
+}
+
+function restore_bepinex_activation() {
+  local restart_server="$1"
+  local recovery_failed=0
+
+  if ! replace_env_value 'VSSBEPINEXENABLED' 0; then
+    printf 'Failed to disable BepInEx for profile %s during recovery.\n' "$VSS_SERVER_NAME" >&2
+    recovery_failed=1
+  fi
+  if ! "$VSSDIR/bepinex/remove_bepinex.sh"; then
+    printf 'Failed to remove legacy BepInEx server links for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    recovery_failed=1
+  fi
+  if bepinex_pipe_was_preexisting; then
+    if ! set_service "$VSSPIPESERVICENAME"; then
+      printf 'Failed to restore the pre-existing log pipe for profile %s.\n' "$VSS_SERVER_NAME" >&2
+      recovery_failed=1
+    fi
+  elif ! uninstall_service "$VSSPIPESERVICENAME"; then
+    printf 'Failed to remove the BepInEx log pipe for profile %s during recovery.\n' "$VSS_SERVER_NAME" >&2
+    recovery_failed=1
+  fi
+
+  if [ "$restart_server" -eq 1 ] && ! systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    sudo systemctl reset-failed "$VHSERVERSERVICENAME" || {
+      printf 'Failed to clear the failed state for %s before recovery.\n' "$VHSERVERSERVICENAME" >&2
+      recovery_failed=1
+    }
+    if ! start_valheim_service; then
+      printf 'Could not restore the previously running server %s.\n' "$VHSERVERSERVICENAME" >&2
+      recovery_failed=1
+    fi
+  fi
+
+  return "$recovery_failed"
+}
+
 function enable_bepinex_profile() {
+  local server_was_active=0
+  local pipe_was_active=0
+  local pipe_was_preexisting=0
+  local running_pid
+  VSS_SETUP_NOTICE=''
+
+  if [ "${VSSBEPINEXENABLED:-0}" = 1 ]; then
+    if systemctl is-active --quiet "$VSSPIPESERVICENAME"; then
+      pipe_was_active=1
+    fi
+    if ! "$VSSDIR/bepinex/install_bepinex.sh" ||
+       ! set_service "$VSSPIPESERVICENAME"; then
+      VSS_SETUP_NOTICE="BepInEx is enabled, but its profile or log pipe could not be prepared."
+      return 1
+    fi
+    if [ "$pipe_was_active" -eq 1 ] && ! restart_vsspipe_service; then
+      VSS_SETUP_NOTICE="BepInEx is enabled, but its log pipe could not be restarted."
+      return 1
+    fi
+    VSS_SETUP_NOTICE="BepInEx was already enabled; its profile and log pipe are ready."
+    return 0
+  fi
+
+  if systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    server_was_active=1
+    if ! stop_valheim_service; then
+      VSS_SETUP_NOTICE="Could not stop $VHSERVERSERVICENAME; BepInEx was not enabled."
+      if systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+        VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The service is still active; its profile configuration was left unchanged."
+        return 1
+      fi
+      if ! start_valheim_service; then
+        VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+      fi
+      return 1
+    fi
+  else
+    running_pid="$(vss_find_server_pid || true)"
+    if [ -n "$running_pid" ]; then
+      printf 'Valheim is running outside its systemd service (PID %s); stop it before enabling BepInEx.\n' "$running_pid" >&2
+      VSS_SETUP_NOTICE="BepInEx was not enabled because the running server is not managed by its systemd unit."
+      return 1
+    fi
+  fi
+
+  if systemctl is-active --quiet "$VSSPIPESERVICENAME"; then
+    pipe_was_active=1
+  fi
+
+  if [ "${VSSBEPINEXENABLED:-0}" != 1 ]; then
+    if [[ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ||
+          -L "/etc/systemd/system/$VSSPIPESERVICENAME" ]] ||
+       systemctl is-active --quiet "$VSSPIPESERVICENAME" ||
+       systemctl is-enabled --quiet "$VSSPIPESERVICENAME"; then
+      pipe_was_preexisting=1
+    fi
+    if ! replace_env_value 'VSSPIPEPREEXISTING' "$pipe_was_preexisting"; then
+      VSS_SETUP_NOTICE="Could not record the existing log-pipe state for profile $VSS_SERVER_NAME."
+      if [ "$server_was_active" -eq 1 ] && ! start_valheim_service; then
+        VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+      fi
+      return 1
+    fi
+  fi
+
   if ! replace_env_value 'VSSBEPINEXENABLED' 1; then
+    VSS_SETUP_NOTICE="Could not update the BepInEx setting for profile $VSS_SERVER_NAME."
+    if ! restore_bepinex_activation "$server_was_active"; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE Recovery was incomplete; check the service status."
+    fi
     return 1
   fi
   if ! "$VSSDIR/bepinex/install_bepinex.sh"; then
-    if ! replace_env_value 'VSSBEPINEXENABLED' 0; then
-      printf 'Failed to reset VSSBEPINEXENABLED for profile %s after installation failed.\n' "$VSS_SERVER_NAME" >&2
+    VSS_SETUP_NOTICE="BepInEx installation failed; the profile was returned to disabled mode."
+    if ! restore_bepinex_activation "$server_was_active"; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE Recovery was incomplete; check the service status."
     fi
     return 1
   fi
-  if ! set_service "$VSSPIPESERVICENAME" || ! restart_vsspipe_service; then
-    if ! replace_env_value 'VSSBEPINEXENABLED' 0; then
-      printf 'Failed to reset VSSBEPINEXENABLED for profile %s after pipe setup failed.\n' "$VSS_SERVER_NAME" >&2
-    fi
-    if ! "$VSSDIR/bepinex/remove_bepinex.sh"; then
-      printf 'Failed to remove legacy BepInEx server links for profile %s.\n' "$VSS_SERVER_NAME" >&2
-    fi
-    if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ] && ! restart_vsspipe_service; then
-      printf 'Failed to restore the standard log pipe for profile %s.\n' "$VSS_SERVER_NAME" >&2
+  if ! set_service "$VSSPIPESERVICENAME"; then
+    VSS_SETUP_NOTICE="Could not install or start the BepInEx log pipe; BepInEx was disabled again."
+    if ! restore_bepinex_activation "$server_was_active"; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE Recovery was incomplete; check the service status."
     fi
     return 1
+  fi
+  if [ "$pipe_was_active" -eq 1 ] && ! restart_vsspipe_service; then
+    VSS_SETUP_NOTICE="Could not restart the BepInEx log pipe; BepInEx was disabled again."
+    if ! restore_bepinex_activation "$server_was_active"; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE Recovery was incomplete; check the service status."
+    fi
+    return 1
+  fi
+
+  if [ "$server_was_active" -eq 1 ]; then
+    if ! start_valheim_service; then
+      VSS_SETUP_NOTICE="BepInEx server start failed; restoring the server in disabled mode."
+      if ! restore_bepinex_activation 1; then
+        VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE Recovery was incomplete; check the service status."
+      fi
+      return 1
+    fi
+    VSS_SETUP_NOTICE="BepInEx enabled; the previously running server was restarted with BepInEx."
+  else
+    VSS_SETUP_NOTICE="BepInEx enabled; the server remains stopped and will load BepInEx on its next start."
   fi
   return 0
 }
 
 function disable_bepinex_profile() {
-  replace_env_value 'VSSBEPINEXENABLED' 0 || return 1
-  "$VSSDIR/bepinex/remove_bepinex.sh" || return 1
-  if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ]; then
-    restart_vsspipe_service || return 1
+  local server_was_active=0
+  local keep_pipe=0
+  local running_pid
+  VSS_SETUP_NOTICE=''
+
+  if systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    server_was_active=1
+    if ! stop_valheim_service; then
+      VSS_SETUP_NOTICE="Could not stop $VHSERVERSERVICENAME; BepInEx settings and its log pipe were left unchanged."
+      if ! systemctl is-active --quiet "$VHSERVERSERVICENAME" &&
+         ! start_valheim_service; then
+        VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+      fi
+      return 1
+    fi
+  else
+    running_pid="$(vss_find_server_pid || true)"
+    if [ -n "$running_pid" ]; then
+      VSS_SETUP_NOTICE="BepInEx was not disabled because the running server is not managed by its systemd unit."
+      return 1
+    fi
   fi
-  printf 'Restart the Valheim server to ensure Doorstop is unloaded for profile %s.\n' "$VSS_SERVER_NAME"
+
+  if ! replace_env_value 'VSSBEPINEXENABLED' 0; then
+    VSS_SETUP_NOTICE="Could not disable BepInEx in profile $VSS_SERVER_NAME."
+    if [ "$server_was_active" -eq 1 ] && ! start_valheim_service; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+    fi
+    return 1
+  fi
+  if ! "$VSSDIR/bepinex/remove_bepinex.sh"; then
+    VSS_SETUP_NOTICE="Could not remove BepInEx links for profile $VSS_SERVER_NAME; restoring enabled mode."
+    replace_env_value 'VSSBEPINEXENABLED' 1 || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The enabled flag could not be restored."
+    "$VSSDIR/bepinex/install_bepinex.sh" || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE BepInEx links could not be restored."
+    if [ "$server_was_active" -eq 1 ]; then
+      set_service "$VSSPIPESERVICENAME" || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The BepInEx log pipe could not be restored."
+      start_valheim_service || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+    fi
+    return 1
+  fi
+
+  if bepinex_pipe_was_preexisting; then
+    keep_pipe=1
+    if ! set_service "$VSSPIPESERVICENAME"; then
+      VSS_SETUP_NOTICE="Could not keep the pre-existing log pipe for profile $VSS_SERVER_NAME; restoring enabled mode."
+      replace_env_value 'VSSBEPINEXENABLED' 1 || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The enabled flag could not be restored."
+      "$VSSDIR/bepinex/install_bepinex.sh" || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE BepInEx links could not be restored."
+      set_service "$VSSPIPESERVICENAME" || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The log pipe could not be restored."
+      if [ "$server_was_active" -eq 1 ]; then
+        start_valheim_service || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+      fi
+      return 1
+    fi
+  elif ! uninstall_service "$VSSPIPESERVICENAME"; then
+    VSS_SETUP_NOTICE="Could not remove the BepInEx log pipe for profile $VSS_SERVER_NAME; restoring enabled mode."
+    replace_env_value 'VSSBEPINEXENABLED' 1 || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The enabled flag could not be restored."
+    "$VSSDIR/bepinex/install_bepinex.sh" || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE BepInEx links could not be restored."
+    set_service "$VSSPIPESERVICENAME" || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The BepInEx log pipe could not be restored."
+    if [ "$server_was_active" -eq 1 ]; then
+      start_valheim_service || VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+    fi
+    return 1
+  fi
+
+  if ! replace_env_value 'VSSPIPEPREEXISTING' ''; then
+    VSS_SETUP_NOTICE="BepInEx was disabled, but the previous log-pipe state could not be cleared."
+    if [ "$server_was_active" -eq 1 ] && ! start_valheim_service; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+    fi
+    return 1
+  fi
+
+  if [ "$server_was_active" -eq 1 ]; then
+    if ! start_valheim_service; then
+      VSS_SETUP_NOTICE="BepInEx was disabled and its log pipe removed, but the vanilla server could not be restarted."
+      return 1
+    fi
+    if [ "$keep_pipe" -eq 1 ]; then
+      VSS_SETUP_NOTICE="BepInEx disabled; the pre-existing log pipe was kept, and the server was restarted in vanilla mode."
+    else
+      VSS_SETUP_NOTICE="BepInEx disabled and its log pipe removed; the previously running server was restarted in vanilla mode."
+    fi
+  else
+    if [ "$keep_pipe" -eq 1 ]; then
+      VSS_SETUP_NOTICE="BepInEx disabled; the pre-existing log pipe was kept, and the server remains stopped."
+    else
+      VSS_SETUP_NOTICE="BepInEx disabled and its log pipe removed; the server remains stopped."
+    fi
+  fi
+  return 0
 }
 
 # new menus
-vss_header(){
-echo -ne "
----------------------------------------
-===== Valheim Server Status - VSS =====
-"
-setup_status
-}
-
-discord_menu(){
-vss_header
-echo -ne "
-*** $(ColorMagenta 'Discord') menu ***
-$(ColorYellow 'Webhook credentials and send options are shared across profiles; message IDs belong to this profile.')
-$(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (in appereance menu)')
-$(ColorGreen '1)') setup current $(ColorMagenta 'Discord') webhook URL
-$(ColorGreen '2)') setup 'how many' wanted last logs on your $(ColorMagenta 'Discord') channel
-$(ColorGreen '3)') force $(ColorMagenta 'Discord') webhook update
-$(ColorGreen '4)') setup current $(ColorMagenta 'Discord') webhook status message id
-$(ColorGreen '5)') setup current $(ColorMagenta 'Discord') webhook last logs message id
-$(ColorGreen '6)') setup current $(ColorMagenta 'Discord') webhook connection info message id
-$(ColorGreen '7)') enable or disable connection info on your webhook (1 or 0)
-$(ColorGreen '8)') enable or disable realtime in-game event update on your webhook (1 or 0) (things using the log-filter have to restart)
-$(ColorGreen '9)') setup webhook language (available: en, fr)
-$(ColorGreen '10)') setup $(ColorMagenta 'Discord') webhook update cron frequency (Valheim Server heartbeat)
-$(ColorGreen '11)') remove webhook crontab (no more auto-update)
-
-$(ColorGreen '0)') return to previous menu
-$(ColorGreen 'CTRL+C)') quit
-$(ColorBlue 'You can scroll up to see previous screens')
-$(ColorBlue 'choose an option:') "
-mkdir -p "$CWD/systemd"
-        read a
-        case $a in
-			1) setup_value_prompt "what's your $(ColorMagenta 'Discord') webhook url ?" 'WEBHOOKURL' ; clear ; discord_menu ;;
-	        2) setup_value_prompt "how many logs do you want on your $(ColorMagenta 'Discord') ? set '0' if you dont want any" 'SENDLASTLOGS' ; clear ; discord_menu ;;
-	        3) "$CWD/discord/update" ; clear ; discord_menu ;;
-	        4) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook status message id ?" 'STATUSMESSAGEID' ; clear ; discord_menu ;;
-	        5) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook 'last logs' message id ?" 'LASTLOGMESSAGEID' ; clear ; discord_menu ;;
-			6) setup_value_prompt "what's the $(ColorMagenta 'Discord') webhook 'connection info' message id ?" 'SERVERCONNECTIONINFOMESSAGEID' ; clear ; discord_menu ;;
-			7) setup_value_prompt 'do you want the connection info message to be sent to Discord ? (set "1" for true, "0" for false)' 'SENDSERVERCONNECTIONINFO' ; clear ; discord_menu ;;
-			8) setup_value_prompt 'do you want the webhook messages to auto-update at each in-game event ? (set "1" for true, "0" for false)' 'EVENTREALTIME' ; clear ; discord_menu ;;
-			9) setup_value_prompt 'choose your Discord webhook language (available values: en, fr)' 'VSS_LANG' ; clear ; discord_menu ;;
-			10) setup_value_prompt "at which frequency do you want your $(ColorMagenta 'Discord') webhook to send message (in minutes) ? set '0' if you dont want an auto-update cron" 'CRONTABWEBHOOKFREQ' ; set_cron ; sleep 2 ; clear ; discord_menu ;;
-			11) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sleep 2 ; clear ; discord_menu ;;
-			
-		0) setup_ui_clear; return 0 ;;
-		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
-        esac
+function discord_menu() {
+  local choice
+  local notice=''
+  while true; do
+    setup_menu_render 'Discord and webhook' "$notice"
+    notice=''
+    printf 'One Discord webhook URL is shared by all profiles; only message IDs differ.\n\n'
+    printf '  1  Set shared webhook URL\n'
+    printf '  2  Set shared number of recent logs\n'
+    printf '  3  Send an update for this profile now\n'
+    printf '  4  Set this profile status message ID\n'
+    printf '  5  Set this profile recent-logs message ID\n'
+    printf '  6  Set this profile connection-info message ID\n'
+    printf '  7  Toggle shared connection-info updates\n'
+    printf '  8  Toggle shared real-time event updates\n'
+    printf '  9  Set shared webhook language (en/fr)\n'
+    printf ' 10  Set shared automatic update frequency (minutes; 0 disables)\n'
+    printf ' 11  Disable automatic updates for every profile\n'
+    printf '\n  0  Return\n\n'
+    printf 'Select an action: '
+    read -r choice || return 0
+    case "$choice" in
+      1)
+        if setup_value_prompt 'Shared Discord webhook URL (hidden)' WEBHOOKURL; then
+          notice='Shared webhook URL updated for all profiles.'
+        else
+          notice='Webhook URL was not changed.'
+        fi
+        ;;
+      2)
+        if setup_value_prompt 'Number of recent logs sent to Discord' SENDLASTLOGS; then
+          notice='Recent-log setting updated.'
+        else
+          notice='Recent-log setting was not changed.'
+        fi
+        ;;
+      3)
+        if run_discord_update; then
+          notice="Discord update completed for $VSS_SERVER_NAME."
+        else
+          notice="Discord update failed for $VSS_SERVER_NAME; review the error above."
+        fi
+        ;;
+      4)
+        if setup_value_prompt 'Status message ID for this profile' STATUSMESSAGEID; then
+          notice='Status message ID updated.'
+        else
+          notice='Status message ID was not changed.'
+        fi
+        ;;
+      5)
+        if setup_value_prompt 'Recent-logs message ID for this profile' LASTLOGMESSAGEID; then
+          notice='Recent-logs message ID updated.'
+        else
+          notice='Recent-logs message ID was not changed.'
+        fi
+        ;;
+      6)
+        if setup_value_prompt 'Connection-info message ID for this profile' SERVERCONNECTIONINFOMESSAGEID; then
+          notice='Connection-info message ID updated.'
+        else
+          notice='Connection-info message ID was not changed.'
+        fi
+        ;;
+      7)
+        if setup_value_prompt 'Send connection-info messages? (1=yes, 0=no)' SENDSERVERCONNECTIONINFO; then
+          notice='Shared connection-info setting updated.'
+        else
+          notice='Connection-info setting was not changed.'
+        fi
+        ;;
+      8)
+        if setup_value_prompt 'Send real-time event updates? (1=yes, 0=no)' EVENTREALTIME; then
+          notice='Shared real-time update setting changed; restart running log filters to apply it.'
+        else
+          notice='Real-time update setting was not changed.'
+        fi
+        ;;
+      9)
+        if setup_value_prompt 'Shared webhook language (en or fr)' VSS_LANG; then
+          notice='Shared webhook language updated.'
+        else
+          notice='Webhook language was not changed.'
+        fi
+        ;;
+      10)
+        if setup_value_prompt 'Shared automatic update frequency in minutes (0 disables)' CRONTABWEBHOOKFREQ &&
+           set_cron; then
+          notice='Automatic update jobs refreshed for all profiles.'
+        else
+          notice='Could not update automatic Discord jobs; review the error above.'
+        fi
+        ;;
+      11)
+        if replace_env_value CRONTABWEBHOOKFREQ 0 && set_cron; then
+          notice='Automatic Discord jobs disabled for all profiles.'
+        else
+          notice='Could not remove automatic Discord jobs; review the error above.'
+        fi
+        ;;
+      0) return 0 ;;
+      *) notice="Unknown option: $choice" ;;
+    esac
+  done
 }
 
 # new menus
@@ -1197,11 +1621,11 @@ function known_players_display() {
 function admin_list_show() {
   local list_name="$1"
   local file
-  mkdir -p "$VHSERVERSAVEDIR"
+  mkdir -p "$VHSERVERSAVEDIR" || return 1
   file="$(admin_list_file "$list_name")"
   if [ -f "$file" ]; then
     echo "--- ${list_name} list ---"
-    cat "$file"
+    cat "$file" || return 1
   else
     echo "--- ${list_name} list ---"
     echo "(empty or missing)"
@@ -1212,20 +1636,23 @@ function admin_list_add() {
   local list_name="$1"
   local player_id
   local file
-  mkdir -p "$VHSERVERSAVEDIR"
+  mkdir -p "$VHSERVERSAVEDIR" || return 1
   file="$(admin_list_file "$list_name")"
   known_players_display
   echo "enter player ID to add to ${list_name}:"
-  read -r player_id
+  read -r player_id || return 1
   if [ -z "$player_id" ]; then
     echo "empty value, aborted" >&2
-    return
+    return 1
   fi
   if [ -f "$file" ] && grep -Fqx "V_$player_id" "$file"; then
     echo "V_$player_id already exists in ${list_name} list" >&2
-    return
+    return 1
   fi
-  echo "V_$player_id" >> "$file"
+  if ! printf 'V_%s\n' "$player_id" >> "$file"; then
+    echo "Could not update ${list_name} list." >&2
+    return 1
+  fi
   echo "V_$player_id added to ${list_name} list"
 }
 
@@ -1234,26 +1661,37 @@ function admin_list_remove() {
   local player_id
   local file
   local tmp_file
-  mkdir -p "$VHSERVERSAVEDIR"
+  local grep_status
+  mkdir -p "$VHSERVERSAVEDIR" || return 1
   file="$(admin_list_file "$list_name")"
   known_players_display
   echo "enter player ID to remove from ${list_name}:"
-  read -r player_id
+  read -r player_id || return 1
   if [ -z "$player_id" ]; then
     echo "empty value, aborted" >&2
-    return
+    return 1
   fi
   if [ ! -f "$file" ] || ! grep -Fqx "V_$player_id" "$file"; then
     echo "V_$player_id not found in ${list_name} list" >&2
-    return
+    return 1
   fi
-  tmp_file="$(mktemp)"
+  tmp_file="$(mktemp)" || return 1
   grep -Fvx "V_$player_id" "$file" > "$tmp_file"
-  mv "$tmp_file" "$file"
+  grep_status=$?
+  if [ "$grep_status" -gt 1 ]; then
+    rm -f -- "$tmp_file"
+    echo "Could not read ${list_name} list." >&2
+    return 1
+  fi
+  if ! mv -- "$tmp_file" "$file"; then
+    rm -f -- "$tmp_file"
+    echo "Could not update ${list_name} list." >&2
+    return 1
+  fi
   echo "V_$player_id removed from ${list_name} list"
 }
 
-launcher_menu(){
+function legacy_launcher_menu() {
 vss_header
 echo -ne "
 *** Valheim Server Launcher menu ***
@@ -1315,7 +1753,7 @@ mkdir -p "$CWD/systemd"
         esac
 }
 
-admin_menu(){
+function legacy_admin_menu() {
 vss_header
 echo -ne "
 *** VSS Admin menu ***
@@ -1351,7 +1789,7 @@ mkdir -p "$CWD/systemd"
 }
 
 # new menus
-http_status_menu(){
+function legacy_http_status_menu() {
 vss_header
 echo -ne "
 *** VSS over HTTP menu ***
@@ -1375,6 +1813,230 @@ mkdir -p "$CWD/systemd"
         esac
 }
 
+function reset_profile_world() {
+  local confirmation
+  local running_pid
+  local world_files_dir="$VHSERVERSAVEDIR/worlds_local"
+  local server_was_active=0
+
+  VSS_SETUP_NOTICE=''
+  if [ -z "$VHSERVERWORLD" ]; then
+    VSS_SETUP_NOTICE='World name is empty; no save files were changed.'
+    return 1
+  fi
+
+  printf 'This permanently deletes the local save files for world %s.\n' "$VHSERVERWORLD"
+  printf 'Type DELETE WORLD to continue: '
+  read -r confirmation || return 1
+  if [ "$confirmation" != 'DELETE WORLD' ]; then
+    VSS_SETUP_NOTICE='World reset cancelled; no save files were changed.'
+    return 0
+  fi
+
+  if systemctl is-active --quiet "$VHSERVERSERVICENAME"; then
+    server_was_active=1
+    if ! stop_valheim_service; then
+      VSS_SETUP_NOTICE='Could not stop the Valheim service; world files were not changed.'
+      return 1
+    fi
+  else
+    running_pid="$(vss_find_server_pid || true)"
+    if [ -n "$running_pid" ]; then
+      VSS_SETUP_NOTICE="Valheim is running outside its systemd service (PID $running_pid); world files were not changed."
+      return 1
+    fi
+  fi
+
+  if ! mkdir -p -- "$world_files_dir" ||
+     ! find "$world_files_dir" -maxdepth 1 -type f \
+       \( -name "${VHSERVERWORLD}.fwl" -o -name "${VHSERVERWORLD}.db" \
+          -o -name "${VHSERVERWORLD}*.fwl" -o -name "${VHSERVERWORLD}*.db" \) \
+       -print -delete; then
+    VSS_SETUP_NOTICE="Could not remove save files for $VHSERVERWORLD."
+    if [ "$server_was_active" -eq 1 ] && ! start_valheim_service; then
+      VSS_SETUP_NOTICE="$VSS_SETUP_NOTICE The previously running server could not be restarted."
+    fi
+    return 1
+  fi
+
+  if [ "$server_was_active" -eq 1 ]; then
+    if ! start_valheim_service; then
+      VSS_SETUP_NOTICE="World files for $VHSERVERWORLD were removed, but the server could not be restarted."
+      return 1
+    fi
+    VSS_SETUP_NOTICE="World files for $VHSERVERWORLD were removed and its previously running server was restarted."
+  else
+    VSS_SETUP_NOTICE="World files for $VHSERVERWORLD were removed; the server remains stopped."
+  fi
+  return 0
+}
+
+function launcher_menu() {
+  local choice
+  local notice=''
+  while true; do
+    setup_menu_render 'Valheim server' "$notice"
+    notice=''
+    printf 'Server directory and save directory are shared by all profiles.\n\n'
+    printf '  1  Detect settings from a running VSS server\n'
+    printf '  2  Set shared Valheim server directory\n'
+    printf '  3  Set this profile game port\n'
+    printf '  4  Set this profile server display name\n'
+    printf '  5  Show world/profile ID (read-only)\n'
+    printf '  6  Set this profile server password\n'
+    printf '  7  Set informational world seed\n'
+    printf '  8  Set shared Valheim save directory\n'
+    printf '  9  Set crossplay (1=yes, 0=no)\n'
+    printf ' 10  Install or update this profile server service\n'
+    printf ' 11  Remove this profile server service\n'
+    printf ' 12  Stop this profile server\n'
+    printf ' 13  Start this profile server\n'
+    printf ' 14  Restart this profile server\n'
+    printf ' 15  Reset this world save (confirmation required)\n'
+    printf ' 16  Set optional R2Modman/Thunderstore share code\n'
+    printf '\n  0  Return\n\n'
+    printf 'Select an action: '
+    read -r choice || return 0
+    case "$choice" in
+      1)
+        if auto_conf; then notice='Detected settings were applied.'
+        else notice='Could not detect settings; review the error above.'; fi
+        ;;
+      2)
+        if setup_value_prompt 'Shared Valheim server directory' VHSERVERDIR; then notice='Server directory updated.'
+        else notice='Server directory was not changed.'; fi
+        ;;
+      3)
+        if setup_value_prompt 'Valheim game port for this profile' VHSERVERPORT; then notice='Game port updated.'
+        else notice='Game port was not changed.'; fi
+        ;;
+      4)
+        if setup_value_prompt 'Valheim server display name' VHSERVERNAME; then notice='Server display name updated.'
+        else notice='Server display name was not changed.'; fi
+        ;;
+      5) notice="World/profile ID: $VHSERVERWORLD (rename is not supported here)." ;;
+      6)
+        if setup_value_prompt 'Valheim server password (hidden)' VHSERVERPASSWD; then notice='Server password updated.'
+        else notice='Server password was not changed.'; fi
+        ;;
+      7)
+        if setup_value_prompt 'Informational world seed' VHSERVERSEED; then notice='Informational seed updated.'
+        else notice='Informational seed was not changed.'; fi
+        ;;
+      8)
+        if setup_value_prompt 'Shared Valheim save directory' VHSERVERSAVEDIR; then notice='Save directory updated.'
+        else notice='Save directory was not changed.'; fi
+        ;;
+      9)
+        if setup_value_prompt 'Crossplay (1=yes, 0=no)' VHSERVERCROSSPLAY; then notice='Crossplay setting updated.'
+        else notice='Crossplay setting was not changed.'; fi
+        ;;
+      10)
+        if set_service "$VHSERVERSERVICENAME"; then notice='Valheim service installed and started.'
+        else notice='Could not install or start the Valheim service; review the error above.'; fi
+        ;;
+      11)
+        if uninstall_service "$VHSERVERSERVICENAME"; then notice='Valheim service removed.'
+        else notice='Valheim service removal failed; its remaining state was kept for recovery.'; fi
+        ;;
+      12)
+        if stop_valheim_service; then notice='Valheim service stopped.'
+        else notice='Could not stop the Valheim service; review its status.'; fi
+        ;;
+      13)
+        if start_valheim_service; then notice='Valheim service started.'
+        else notice='Could not start the Valheim service; review its status.'; fi
+        ;;
+      14)
+        if restart_valheim_service; then notice='Valheim service restarted.'
+        else notice='Could not restart the Valheim service; review its status.'; fi
+        ;;
+      15)
+        if reset_profile_world; then notice="${VSS_SETUP_NOTICE:-World reset completed.}"
+        else notice="${VSS_SETUP_NOTICE:-World reset failed; review the error above.}"; fi
+        ;;
+      16)
+        if setup_value_prompt 'Optional R2Modman/Thunderstore share code' R2MODMANCODE; then notice='Mod-manager share code updated.'
+        else notice='Mod-manager share code was not changed.'; fi
+        ;;
+      0) return 0 ;;
+      *) notice="Unknown option: $choice" ;;
+    esac
+  done
+}
+
+function admin_menu() {
+  local choice
+  local notice=''
+  while true; do
+    setup_menu_render 'Admin and access lists' "$notice"
+    notice=''
+    printf 'Admin, banned, and permitted lists are shared by all profiles.\n\n'
+    printf '  1  Show admin list\n'
+    printf '  2  Add admin\n'
+    printf '  3  Remove admin\n'
+    printf '  4  Show banned list\n'
+    printf '  5  Add banned player\n'
+    printf '  6  Remove banned player\n'
+    printf '  7  Show permitted list\n'
+    printf '  8  Add permitted player\n'
+    printf '  9  Remove permitted player\n'
+    printf '\n  0  Return\n\n'
+    printf 'Select an action: '
+    read -r choice || return 0
+    case "$choice" in
+      1|4|7)
+        case "$choice" in 1) admin_list_show admin ;; 4) admin_list_show banned ;; 7) admin_list_show permitted ;; esac
+        setup_ui_pause
+        notice='List displayed above.'
+        ;;
+      2|3|5|6|8|9)
+        case "$choice" in
+          2) if admin_list_add admin; then notice='Admin list updated.'; else notice='Admin list was not changed; review the error above.'; fi ;;
+          3) if admin_list_remove admin; then notice='Admin list updated.'; else notice='Admin list was not changed; review the error above.'; fi ;;
+          5) if admin_list_add banned; then notice='Banned list updated.'; else notice='Banned list was not changed; review the error above.'; fi ;;
+          6) if admin_list_remove banned; then notice='Banned list updated.'; else notice='Banned list was not changed; review the error above.'; fi ;;
+          8) if admin_list_add permitted; then notice='Permitted list updated.'; else notice='Permitted list was not changed; review the error above.'; fi ;;
+          9) if admin_list_remove permitted; then notice='Permitted list updated.'; else notice='Permitted list was not changed; review the error above.'; fi ;;
+        esac
+        ;;
+      0) return 0 ;;
+      *) notice="Unknown option: $choice" ;;
+    esac
+  done
+}
+
+function http_status_menu() {
+  local choice
+  local notice=''
+  while true; do
+    setup_menu_render 'HTTP status endpoint' "$notice"
+    notice=''
+    printf '  1  Set public status URL (http://host:port)\n'
+    printf '  2  Install or update this profile HTTP service\n'
+    printf '  3  Remove this profile HTTP service\n'
+    printf '\n  0  Return\n\n'
+    printf 'Select an action: '
+    read -r choice || return 0
+    case "$choice" in
+      1)
+        if setup_value_prompt 'Public URL for this profile HTTP status' STATUSURL; then notice='HTTP status URL updated.'
+        else notice='HTTP status URL was not changed.'; fi
+        ;;
+      2)
+        if set_service "$VSSHTTPSERVICENAME"; then notice='HTTP status service installed and started.'
+        else notice='Could not install or start the HTTP status service; review the error above.'; fi
+        ;;
+      3)
+        if uninstall_service "$VSSHTTPSERVICENAME"; then notice='HTTP status service removed.'
+        else notice='HTTP status service removal failed; its remaining state was kept for recovery.'; fi
+        ;;
+      0) return 0 ;;
+      *) notice="Unknown option: $choice" ;;
+    esac
+  done
+}
+
 # Main menu
 new_menu(){
   local a
@@ -1394,9 +2056,9 @@ new_menu(){
     printf '  4  Admin, ban, and permitted lists\n'
     printf '\nMONITORING AND SERVICES\n'
     printf '  5  Configure server log path\n'
-    printf '  6  Install or update log pipe service (sudo)\n'
-    printf '  7  Restart log pipe service (sudo)\n'
-    printf '  8  Remove log pipe service (sudo)\n'
+    printf '  6  Repair/install standalone log pipe (BepInEx or external logs; sudo)\n'
+    printf '  7  Restart standalone log pipe (sudo)\n'
+    printf '  8  Remove standalone log pipe (sudo)\n'
     printf '  9  Install shared log rotation (sudo)\n'
     printf ' 10  Remove shared log rotation (sudo)\n'
     printf '\nMAINTENANCE\n'
@@ -1416,19 +2078,69 @@ new_menu(){
       2) setup_ui_clear; launcher_menu ;;
       3) setup_ui_clear; http_status_menu ;;
       4) setup_ui_clear; admin_menu ;;
-      5) setup_value_prompt 'Where are your server logs (file, directory, or wildcard path)?' 'VALHEIMSERVERLOGPATH' ;;
-      6) set_service "$VSSPIPESERVICENAME"; sleep 2 ;;
-      7) restart_vsspipe_service ;;
-      8) uninstall_service "$VSSPIPESERVICENAME" ;;
-      9) set_logrotate; sleep 5 ;;
-      10) remove_shared_logrotate ;;
-      11) setup_value_prompt 'Which user should run the services?' 'USERSERVICE' ;;
-      12) remove_profile_services ;;
-      13) enable_bepinex_profile || notice="Could not enable BepInEx and its log pipe; the profile was left disabled." ;;
-      14) disable_bepinex_profile || notice="Could not disable BepInEx cleanly; review the service status." ;;
+      5)
+        if setup_value_prompt 'Where are your server logs (file, directory, or wildcard path)?' VALHEIMSERVERLOGPATH; then
+          notice='Log-path configuration prompt completed.'
+        else
+          notice='Could not update the log path; review the error above.'
+        fi
+        ;;
+      6)
+        if set_service "$VSSPIPESERVICENAME"; then notice='Standalone log pipe installed and started.'
+        else notice='Could not install or start the standalone log pipe; review the error above.'; fi
+        ;;
+      7)
+        if restart_vsspipe_service; then notice='Standalone log pipe restarted.'
+        else notice='Could not restart the standalone log pipe; review the error above.'; fi
+        ;;
+      8)
+        if uninstall_service "$VSSPIPESERVICENAME"; then notice='Standalone log pipe removed.'
+        else notice='Could not remove the standalone log pipe; its remaining state was kept for recovery.'; fi
+        ;;
+      9)
+        if set_logrotate; then notice='Shared log rotation installed or updated.'
+        else notice='Could not install shared log rotation; review the error above.'; fi
+        ;;
+      10)
+        if remove_shared_logrotate; then notice="${VSS_SETUP_NOTICE:-Shared log rotation removal completed.}"
+        else notice='Could not remove shared log rotation; review the error above.'; fi
+        ;;
+      11)
+        if setup_value_prompt 'Which user should run the services?' USERSERVICE; then
+          notice='Service-user configuration prompt completed.'
+        else
+          notice='Could not update the service user; review the error above.'
+        fi
+        ;;
+      12)
+        if remove_profile_services; then notice="${VSS_SETUP_NOTICE:-Profile service removal completed.}"
+        else notice='Could not remove all profile services; review the errors above.'; fi
+        ;;
+      13)
+        if enable_bepinex_profile; then
+          notice="${VSS_SETUP_NOTICE:-BepInEx enabled.}"
+        else
+          notice="${VSS_SETUP_NOTICE:-Could not enable BepInEx and its log pipe; the profile was left disabled.}"
+        fi
+        ;;
+      14)
+        if disable_bepinex_profile; then
+          notice="${VSS_SETUP_NOTICE:-BepInEx disabled.}"
+        else
+          notice="${VSS_SETUP_NOTICE:-Could not disable BepInEx cleanly; review the service status.}"
+        fi
+        ;;
       15)
         if select_server_profile; then
-          load_server_profile "$SELECTED_SERVER_PROFILE" || continue
+          if load_server_profile "$SELECTED_SERVER_PROFILE"; then
+            notice="Active profile is now $VSS_SERVER_NAME."
+          else
+            if [ "$VSS_PROFILE_RESTORE_FAILED" -eq 1 ]; then
+              notice="Could not load $SELECTED_SERVER_PROFILE; restoration of the previous profile failed."
+            else
+              notice="Could not load $SELECTED_SERVER_PROFILE; the previous profile was restored."
+            fi
+          fi
         fi
         ;;
       16)

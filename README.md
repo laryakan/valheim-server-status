@@ -73,7 +73,9 @@ Setup also rejects overlapping Valheim port ranges and HTTP ports across profile
 
 The interactive setup dashboard shows the selected world, Valheim process state, ports, and installed service units. Menus are grouped by configuration, monitoring, and maintenance; the profile picker accepts a profile name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
 
-World names used as profile IDs must start with a letter or number, contain only letters, numbers, dots, underscores, and hyphens, must not contain `..`, and must be unique. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
+World names used as profile IDs must start with a letter or number, contain only letters, numbers, dots, underscores, and hyphens, must not contain `..`, and must be unique. Profile/world IDs cannot currently be renamed in setup. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
+
+The setup menu can reset the selected world by deleting its matching `.fwl` and `.db` save files. It requires the exact confirmation `DELETE WORLD`, stops and restarts the server only if its managed systemd service was running, and refuses to proceed if the server is running outside that service. This is destructive; preserve a separate world backup if needed.
 
 Each profile gets its own launcher arguments file:
 
@@ -137,11 +139,11 @@ your_valheim_server_launch \
        | VSS_SERVER_NAME=MyWorld ./vss.err-filter --tail-pipe-input >&2)
 ```
 
-Alternatively, configure the existing server's log path in `.env.MyWorld` and use the profile's pipe service. Logs must be readable by the user running that service.
+For an external server not launched by VSS, you can instead configure its existing log path in `.env.MyWorld` and use the profile's standalone pipe service. Logs must be readable by the service user. This pipe service is not needed for a vanilla server managed by VSS: the vanilla launcher sends stdout directly to `vss.log-filter`.
 
 ## Discord
 
-Configure the shared webhook URL and send options in the Discord menu. Message IDs remain profile-specific. To create the initial status messages, select each profile in `./setup` and choose the force-update action, or run:
+All profiles use one shared Discord webhook URL and shared send options; separate webhook URLs per profile are not supported. Message IDs remain profile-specific. To create the initial status messages, select each profile in `./setup` and choose **Send an update for this profile now**, or run:
 
 ```bash
 VSS_SERVER_NAME=MyWorld ./discord/update
@@ -155,7 +157,7 @@ For modded servers, set `VSSBEPINEXENABLED=1` and put the profile's R2Modman/Thu
 
 Each profile has its own BepInEx root under `bepinex/profiles/<world-name>/`. Plugins, plugin configuration, patchers, cache, and `LogOutput.log` are profile-local. The `BepInEx/core` and `doorstop_libs` directories are real per-profile directories whose shared files are symlinked to `bepinex/current`; `BepInEx.cfg` is also a file symlink to the shared `bepinex/current/BepInEx/config/BepInEx.cfg`. The Valheim server files are not populated with shared BepInEx links.
 
-Choose **Enable packaged BepInEx** in the profile's setup menu to prepare that profile and install/start its `vss.pipe.<world-name>.service` from `examples/vss.pipe.service`. The pipe reads that profile's `LogOutput.log`. Disabling BepInEx removes Doorstop injection and BepInEx library search paths from the next server launch and restarts the pipe to use the standard server logs; the profile's plugins and configuration are retained. Restart the Valheim server after changing the enabled flag.
+The vanilla launcher sends stdout directly to `vss.log-filter`; it does not need `vss.pipe`. Choose **Enable packaged BepInEx** to stop a running managed server, prepare the profile, install/start its `vss.pipe.<world-name>.service`, and restart the server with BepInEx. The pipe reads that profile's `LogOutput.log`. Disabling BepInEx stops a running managed server and removes Doorstop links; it also removes the pipe if BepInEx setup created it. A pipe that was already installed before activation is kept for externally redirected logs. Setup then restarts a previously running server in vanilla mode; a stopped server remains stopped. The profile's plugins and configuration are retained. Setup refuses to switch a server that is running outside its managed systemd unit. Re-selecting Enable when BepInEx is already enabled only ensures the profile and pipe are ready; it does not restart Valheim.
 
 Upgrade the shared BepInEx Linux x64 image to the latest official release with:
 
@@ -163,14 +165,16 @@ Upgrade the shared BepInEx Linux x64 image to the latest official release with:
 ./bepinex_upgrade.sh
 ```
 
-The script requires `wget` and `unzip`. It downloads and extracts a versioned image under `bepinex/`, enforces VSS's BepInEx logging settings while preserving other upstream `BepInEx.cfg` options, and prepares each currently enabled profile before atomically switching `bepinex/current`. On the first isolated upgrade, legacy plugin files in the active image's `BepInEx/plugins` and plugin configuration files in `BepInEx/config` are copied into every enabled profile; `BepInEx.cfg` remains shared. Logs, cache, and patchers are not migrated. After a successful switch, the previously active image is removed. If profile preparation fails, the current link and previous image are left in place. If shared plugin/configuration files exist but no profile is enabled, the upgrade stops rather than discard them. For an offline test fixture, set `BEPINEX_RELEASES_LATEST_URL` to a local HTTP JSON fixture whose Linux x64 asset URL points to a local ZIP fixture. The integration test uses `ncat` and the system `base64` utility to serve and decode committed fixtures; it does not require Python.
+The script requires `wget` and `unzip`. It downloads and extracts a versioned image under `bepinex/`, enforces VSS's BepInEx logging settings while preserving other upstream `BepInEx.cfg` options, and prepares each currently enabled profile before atomically switching `bepinex/current`. On the first isolated upgrade, legacy plugin files in the active image's `BepInEx/plugins` and plugin configuration files in `BepInEx/config` are copied into every enabled profile; `BepInEx.cfg` remains shared. Logs, cache, and patchers are not migrated. After a successful switch, the previously active image is removed. A failure before switching leaves the current link and old image untouched. If profile synchronization fails after switching, the script attempts to restore the previous link and re-synchronize profiles; it retains the old image, but filesystem failures can prevent complete rollback. If shared plugin/configuration files exist but no profile is enabled, the upgrade stops rather than discard them. For an offline test fixture, set `BEPINEX_RELEASES_LATEST_URL` to a local HTTP JSON fixture whose Linux x64 asset URL points to a local ZIP fixture. The integration test uses `ncat` and the system `base64` utility to serve and decode committed fixtures; it does not require Python.
 
 `VHSERVERSEED` is informational: VSS displays it in status/Discord but does not pass it to Valheim to set or change world generation.
+
+This project has no staging server, and the BepInEx runtime test uses a stub server rather than real plugin loading. Before upgrading production, back up the active BepInEx image and `bepinex/profiles/`; verify a low-impact profile during a maintenance window. The upgrade removes the previous active image after success, and failed profile preparation can leave files or links to inspect before retrying.
 
 ## Initial Discord setup
 
 1. Create a webhook in the desired Discord channel and copy its URL.
-2. Run `./setup <world-name>` and configure the webhook in that profile's Discord menu.
+2. Run `./setup <world-name>` and configure the shared webhook URL in the Discord menu.
 3. Force an update once to create the connection, status, and logs messages.
 4. Copy the message IDs into that profile if you want VSS to update those messages instead of creating new ones.
 
@@ -211,7 +215,7 @@ for test in tests/test_*.sh tests/debug_logfilter_pipeline_output*.sh; do
 done
 ```
 
-Tests that exercise log parsing and profile state use temporary files and clean them up on exit. The BepInEx runtime test launches two modded profiles and one vanilla profile concurrently against a stub server to verify environment isolation. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
+Tests that exercise log parsing and profile state use temporary files and clean them up on exit. Setup tests cover profile switching, BepInEx pipe ownership, world-reset safeguards, and service-removal failures. The BepInEx runtime test launches two modded profiles and one vanilla profile concurrently against a stub server to verify environment isolation. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
 
 ## Troubleshooting
 

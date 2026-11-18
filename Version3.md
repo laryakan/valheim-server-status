@@ -13,7 +13,7 @@ This document tracks the current branch implementation and the work that remains
 - Each server is selected explicitly by `VSS_SERVER_NAME` and has a `.env.<world-name>` file based on `.env.server.dist`.
 - The root `.env` contains shared installation configuration based on `.env.common.dist`. `VSSDIR` is the shared installation root.
 - `setup` creates shared configuration when needed and synchronizes new template keys into existing configuration without overwriting existing values.
-- Shared settings include server and save paths, service user, log directory, VSS tool paths, public IP, webhook credentials/options, language, and Discord update frequency.
+- Shared settings include server and save paths, service user, log directory, VSS tool paths, public IP, one Discord webhook URL and its options, language, and update frequency. Separate webhook URLs per profile are not supported.
 - The only profile-specific Discord settings are `STATUSMESSAGEID`, `LASTLOGMESSAGEID`, and `SERVERCONNECTIONINFOMESSAGEID`.
 - Profile names are validated and must match `VHSERVERWORLD`. Setup checks game-port range and HTTP-port collisions across profiles.
 - Valheim save files and the `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files remain shared. `VHSERVERSEED` is informational; VSS cannot set or change world generation.
@@ -24,6 +24,7 @@ This document tracks the current branch implementation and the work that remains
 - VSS state files use world-name suffixes: `online-players`, `offline-players`, `steamid-player-map`, and `last-world-save`. Their paths are fixed under `data/` and are derived by the config loader.
 - Server logs use `<date>.<world-name>.stdout.log` and `<date>.<world-name>.stderr.log`. One shared logrotate configuration covers all profiles.
 - Setup renders separate `valheim-server.<world-name>.service`, `vss.pipe.<world-name>.service`, and `vss.http.<world-name>.service` units from shared examples. Units pass the selected profile to their scripts.
+- The vanilla VSS launcher pipes stdout directly to `vss.log-filter`; its service does not need `vss.pipe`. The standalone pipe supports both BepInEx `LogOutput.log` and external servers with redirected log files.
 - Setup includes a Bash dashboard and profile picker, profile creation, per-profile service operations, and direct CLI commands for starting, stopping, restarting, checking status, checking UFW rules, and updating Discord.
 - The UFW check is informational only; it does not alter firewall rules.
 
@@ -49,27 +50,26 @@ This document tracks the current branch implementation and the work that remains
 
 ### BepInEx features currently present
 
-- A profile can enable/disable the packaged BepInEx integration through setup. The launcher enables Doorstop for that process and VSS can tail BepInEx logs through the profile's pipe.
+- A profile can enable/disable the packaged BepInEx integration through setup. The launcher enables Doorstop for that process and VSS tails BepInEx logs through the profile's pipe.
 - Each profile has a distinct BepInEx root at `bepinex/profiles/<world-name>/`. The preloader target, Doorstop library path, plugin directory, plugin configuration, cache, and `LogOutput.log` use that profile's paths.
 - Shared core and Doorstop files are linked file-by-file into real per-profile directories. `BepInEx/config/BepInEx.cfg` is the only shared configuration file and links to `bepinex/current/BepInEx/config/BepInEx.cfg`.
 - BepInEx 5.4.23.5 derives its root from `Path.GetFullPath(DOORSTOP_INVOKE_DLL_PATH)` and then resolves config, plugins, cache, and disk logs from that root. The launcher uses the profile's `DOORSTOP_TARGET_ASSEMBLY`; file-level links keep the target path profile-specific.
-- Setup prepares the profile and installs/starts its `vss.pipe.<world-name>.service` when BepInEx is enabled. Disabling BepInEx removes Doorstop injection and BepInEx library search paths on the next launch, retains that profile's data, and restarts an installed pipe to read standard server logs.
+- Enabling BepInEx stops a running managed server, prepares the profile, records whether a pipe was already installed, ensures its `vss.pipe.<world-name>.service` is running, and restarts the server. Disabling stops a running managed server and removes the pipe only when BepInEx setup created it; a pre-existing pipe is retained for an external log source. It then restarts in vanilla mode; a stopped server remains stopped. Vanilla stdout goes directly to `vss.log-filter`, so no pipe is needed. Setup refuses to switch an unmanaged running server. Profile plugins and configuration are retained.
 - `R2MODMANCODE` is validated and can be displayed in Discord and server status while BepInEx is enabled.
-- `./bepinex_upgrade.sh` downloads the latest official Linux x64 package, validates and extracts it into a versioned directory, enforces VSS logging values in `BepInEx.cfg` while retaining other upstream settings, and atomically switches `bepinex/current`. On the first isolated upgrade, it copies only the active image's plugins and plugin configs to all enabled profiles, keeps `BepInEx.cfg` shared, does not migrate logs, cache, or patchers, and removes the previously active image after success.
+- `./bepinex_upgrade.sh` downloads the latest official Linux x64 package, validates and extracts it into a versioned directory, enforces VSS logging values in `BepInEx.cfg` while retaining other upstream settings, and atomically switches `bepinex/current`. On the first isolated upgrade, it copies only the active image's plugins and plugin configs to all enabled profiles, keeps `BepInEx.cfg` shared, does not migrate logs, cache, or patchers, and removes the previously active image after success. If post-switch profile synchronization fails, rollback of `current` is attempted and the old image is retained; filesystem failures can prevent complete rollback.
 
 ## Remaining work
 
-### 1. Validate isolated BepInEx in production
+### 1. Production validation without a staging environment
 
-- The runtime regression test launches two enabled profiles and one vanilla profile concurrently against a stub server to verify process environment isolation; it does not validate real plugin loading.
-- Start two enabled profiles concurrently and confirm each loads only its own plugins/configuration and writes its own `LogOutput.log`.
-- Confirm each profile's pipe updates only that profile's VSS state.
-- Verify upgrade and recovery procedures against a production-like copy before updating production; the active previous image is removed after a successful upgrade.
+- This project has no staging server. The runtime regression test launches two enabled profiles and one vanilla profile concurrently against a stub server; it verifies environment isolation but not real plugin loading or systemd behavior.
+- Production validation of real plugin loading, per-profile `LogOutput.log` capture, and state updates from each pipe remains outstanding. Roll out BepInEx to one low-impact profile during a maintenance window, verify its logs and status, then proceed to other profiles.
+- Before a production BepInEx upgrade, back up the active image and `bepinex/profiles/` data. A successful upgrade removes the previous active image; post-switch rollback is only attempted on synchronization failure and is not guaranteed if filesystem operations fail.
 - Confirm that disabling/re-enabling one profile preserves its data and does not alter another profile's BepInEx root.
 
 ### 2. Profile rename
 
-Add a controlled rename operation that checks conflicts and updates the profile file, launcher arguments, state paths, service units, and cron entry. Do not remove the old profile until the new configuration has been verified.
+Profile/world IDs cannot currently be renamed in setup. A controlled rename operation would need to check conflicts and update the profile file, launcher arguments, state paths, service units, and cron entry without removing the old profile until the new configuration is verified.
 
 ### 3. Migration verification and rollback
 

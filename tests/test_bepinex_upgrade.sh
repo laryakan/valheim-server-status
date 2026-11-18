@@ -99,6 +99,17 @@ ln -s "BepInEx_linux_x64_5.4.23.5/" "$BEPINEX_DIR/current"
 cp "$ROOT/bepinex_upgrade.sh" "$TEST_ROOT/bepinex_upgrade.sh"
 mkdir -p "$TEST_ROOT/lib"
 cp "$ROOT/lib/config.sh" "$ROOT/lib/bepinex.sh" "$TEST_ROOT/lib/"
+sed -i 's/^vss_bepinex_prepare_profile() {/vss_bepinex_prepare_profile_original() {/' \
+    "$TEST_ROOT/lib/bepinex.sh"
+cat >> "$TEST_ROOT/lib/bepinex.sh" <<'HELPER'
+vss_bepinex_prepare_profile() {
+    if [[ -n "${VSS_TEST_FAIL_IMAGE:-}" && "$2" == "$VSS_TEST_FAIL_IMAGE" ]]; then
+        printf 'Injected post-switch profile sync failure\n' >&2
+        return 1
+    fi
+    vss_bepinex_prepare_profile_original "$@"
+}
+HELPER
 touch "$TEST_ROOT/crash.log"
 cat > "$TEST_ROOT/.env" <<EOF
 VSS_COMMON_CONFIG_VERSION=3
@@ -207,6 +218,25 @@ for expected in \
 done
 if find "$BEPINEX_DIR" -maxdepth 1 -name '.upgrade.*' -print -quit | grep -q .; then
     echo "FAIL: temporary download/archive files were not cleaned up" >&2
+    exit 1
+fi
+
+make_fixture 5.4.23.9
+if VSS_TEST_FAIL_IMAGE="$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.9" \
+    BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.9.json" \
+    "$TEST_ROOT/bepinex_upgrade.sh" > "$TMPDIR_UPGRADE/rollback.out" 2> "$TMPDIR_UPGRADE/rollback.err"; then
+    echo "FAIL: post-switch profile synchronization failure did not fail the upgrade" >&2
+    exit 1
+fi
+ROLLBACK_OLD_VERSION="$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.6"
+if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ||
+      ! -d "$ROLLBACK_OLD_VERSION" ]]; then
+    echo "FAIL: post-switch synchronization failure did not restore current and retain the previous image" >&2
+    cat "$TMPDIR_UPGRADE/rollback.err" >&2
+    exit 1
+fi
+if ! grep -Fq 'previous image was retained' "$TMPDIR_UPGRADE/rollback.err"; then
+    echo "FAIL: post-switch synchronization failure did not report the rollback outcome" >&2
     exit 1
 fi
 

@@ -34,6 +34,33 @@ if [[ "$menu_output" == *$'\033'* ]]; then
   echo "FAIL: setup menu emitted color codes when output was not a terminal" >&2
   exit 1
 fi
+
+launcher_output="$(printf '5\n0\n' | NO_COLOR=1 launcher_menu)"
+if [[ "$launcher_output" != *'Valheim server'* ||
+      "$launcher_output" != *'Show world/profile ID (read-only)'* ||
+      "$launcher_output" != *'rename is not supported here'* ]]; then
+  echo "FAIL: launcher menu does not present the world/profile ID as read-only" >&2
+  exit 1
+fi
+admin_output="$(printf '0\n' | NO_COLOR=1 admin_menu)"
+if [[ "$admin_output" != *'Admin and access lists'* ||
+      "$admin_output" != *'shared by all profiles'* ]]; then
+  echo "FAIL: admin menu does not use the shared dashboard style" >&2
+  exit 1
+fi
+http_output="$(printf '0\n' | NO_COLOR=1 http_status_menu)"
+if [[ "$http_output" != *'HTTP status endpoint'* ||
+      "$http_output" != *'Select an action:'* ]]; then
+  echo "FAIL: HTTP status menu does not use the shared dashboard style" >&2
+  exit 1
+fi
+discord_output="$(printf '0\n' | NO_COLOR=1 discord_menu)"
+if [[ "$discord_output" != *'One Discord webhook URL is shared by all profiles'* ||
+      "$discord_output" != *'only message IDs differ'* ]]; then
+  echo "FAIL: Discord menu does not explain shared webhook behavior" >&2
+  exit 1
+fi
+
 NO_COLOR=1
 color_output="$(ColorRed warning)"
 if [[ "$color_output" != 'warning' ]]; then
@@ -65,7 +92,7 @@ if ! remove_profile_services <<< 'REMOVE' > "$TMPDIR_UI/remove-confirm.out"; the
   echo "FAIL: confirming profile service removal returned an error" >&2
   exit 1
 fi
-expected_removal_calls="cron:UiWorld;$VHSERVERSERVICENAME;$VSSHTTPSERVICENAME;$VSSPIPESERVICENAME;"
+expected_removal_calls="$VHSERVERSERVICENAME;$VSSHTTPSERVICENAME;$VSSPIPESERVICENAME;cron:UiWorld;"
 if [ "$removal_calls" != "$expected_removal_calls" ]; then
   echo "FAIL: confirming profile service removal did not remove the expected profile resources" >&2
   exit 1
@@ -87,30 +114,109 @@ VSSDIR="$TMPDIR_UI"
 VSS_SERVER_NAME='UiWorld'
 VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
 setup_calls=''
-replace_env_value() { setup_calls="${setup_calls}${1}=${2};"; }
-set_service() { setup_calls="${setup_calls}set:$1;"; }
+replace_env_value() {
+  setup_calls="${setup_calls}${1}=${2};"
+  case "$1" in
+    VSSBEPINEXENABLED) VSSBEPINEXENABLED="$2" ;;
+    VSSPIPEPREEXISTING) VSSPIPEPREEXISTING="$2" ;;
+  esac
+}
+TEST_SERVER_ACTIVE=0
+TEST_PIPE_ACTIVE=0
+TEST_PIPE_ENABLED=0
+systemctl() {
+  case "$1" in
+    is-active)
+      case "$3" in
+        "$VHSERVERSERVICENAME") [[ "$TEST_SERVER_ACTIVE" -eq 1 ]] ;;
+        "$VSSPIPESERVICENAME") [[ "$TEST_PIPE_ACTIVE" -eq 1 ]] ;;
+        *) return 1 ;;
+      esac
+      ;;
+    is-enabled)
+      [[ "$TEST_PIPE_ENABLED" -eq 1 && "$3" == "$VSSPIPESERVICENAME" ]]
+      ;;
+    reset-failed) return 0 ;;
+    *) return 0 ;;
+  esac
+}
+sudo() {
+  if [[ "$1" == systemctl ]]; then
+    shift
+    systemctl "$@"
+  else
+    command sudo "$@"
+  fi
+}
+stop_valheim_service() {
+  setup_calls="${setup_calls}stop;"
+  if [[ "${BEPINEX_FAIL_STOP:-0}" == 1 ]]; then
+    return 1
+  fi
+  TEST_SERVER_ACTIVE=0
+}
+start_valheim_service() {
+  setup_calls="${setup_calls}start;"
+  TEST_SERVER_ACTIVE=1
+  [[ "${BEPINEX_FAIL_START:-0}" != 1 ]]
+}
+set_service() {
+  setup_calls="${setup_calls}set:$1;"
+  TEST_PIPE_ACTIVE=1
+  TEST_PIPE_ENABLED=1
+}
 restart_vsspipe_service() { setup_calls="${setup_calls}restart:$VSSPIPESERVICENAME;"; }
+uninstall_service() {
+  setup_calls="${setup_calls}uninstall:$1;"
+  TEST_PIPE_ACTIVE=0
+  TEST_PIPE_ENABLED=0
+}
 
 if ! enable_bepinex_profile; then
   echo "FAIL: enabling BepInEx did not prepare the profile and pipe service" >&2
   exit 1
 fi
-if [[ "$setup_calls" != "VSSBEPINEXENABLED=1;set:vss.pipe.UiWorld.service;restart:vss.pipe.UiWorld.service;" ]] ||
+if [[ "$setup_calls" != "VSSPIPEPREEXISTING=0;VSSBEPINEXENABLED=1;set:vss.pipe.UiWorld.service;" ]] ||
    [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'install' ]]; then
-  echo "FAIL: enabling BepInEx did not install and restart the profile pipe service" >&2
+  echo "FAIL: enabling BepInEx did not install and start the profile pipe service" >&2
+  exit 1
+fi
+if [[ "$VSS_SETUP_NOTICE" != *'server remains stopped'* ]]; then
+  echo "FAIL: BepInEx activation did not report that the stopped server remains stopped" >&2
+  exit 1
+fi
+
+: > "$BEPINEX_TEST_CALLS"
+setup_calls=''
+TEST_SERVER_ACTIVE=1
+TEST_PIPE_ACTIVE=1
+if ! enable_bepinex_profile; then
+  echo "FAIL: enabling BepInEx for a running server failed" >&2
+  exit 1
+fi
+if [[ "$setup_calls" != "set:vss.pipe.UiWorld.service;restart:vss.pipe.UiWorld.service;" ]] ||
+   [[ "$TEST_SERVER_ACTIVE" -ne 1 ]] ||
+   [[ "$VSS_SETUP_NOTICE" != *'already enabled'* ]]; then
+  echo "FAIL: repeated BepInEx activation did not preserve the running server state" >&2
   exit 1
 fi
 
 : > "$BEPINEX_TEST_CALLS"
 setup_calls=''
 export BEPINEX_FAIL_INSTALL=1
+TEST_SERVER_ACTIVE=1
+TEST_PIPE_ACTIVE=0
+TEST_PIPE_ENABLED=0
+VSSBEPINEXENABLED=0
+VSSPIPEPREEXISTING=''
 if enable_bepinex_profile; then
   echo "FAIL: BepInEx activation ignored a failed profile install" >&2
   exit 1
 fi
-if [[ "$setup_calls" != "VSSBEPINEXENABLED=1;VSSBEPINEXENABLED=0;" ]] ||
-   [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'install' ]]; then
-  echo "FAIL: failed BepInEx activation did not roll back its profile flag" >&2
+if [[ "$setup_calls" != "stop;VSSPIPEPREEXISTING=0;VSSBEPINEXENABLED=1;VSSBEPINEXENABLED=0;uninstall:vss.pipe.UiWorld.service;start;" ]] ||
+   [[ "$(cat "$BEPINEX_TEST_CALLS")" != $'install\nremove' ]] ||
+   [[ "$TEST_SERVER_ACTIVE" -ne 1 ]]; then
+  echo "FAIL: failed BepInEx activation did not restore the disabled running server" >&2
   exit 1
 fi
 unset BEPINEX_FAIL_INSTALL
@@ -118,13 +224,58 @@ unset BEPINEX_FAIL_INSTALL
 : > "$BEPINEX_TEST_CALLS"
 setup_calls=''
 VSSPIPESERVICENAME='vss.pipe.NotInstalled.service'
+TEST_SERVER_ACTIVE=0
 if ! disable_bepinex_profile > "$TMPDIR_UI/bepinex-disable.out"; then
   echo "FAIL: disabling BepInEx returned an error" >&2
   exit 1
 fi
-if [[ "$setup_calls" != 'VSSBEPINEXENABLED=0;' ]] ||
+if [[ "$setup_calls" != 'VSSBEPINEXENABLED=0;uninstall:vss.pipe.NotInstalled.service;VSSPIPEPREEXISTING=;' ]] ||
    [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'remove' ]]; then
   echo "FAIL: disabling BepInEx did not retain the profile data while cleaning legacy links" >&2
+  exit 1
+fi
+
+: > "$BEPINEX_TEST_CALLS"
+setup_calls=''
+VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
+VSSBEPINEXENABLED=0
+VSSPIPEPREEXISTING=''
+TEST_SERVER_ACTIVE=0
+TEST_PIPE_ACTIVE=1
+TEST_PIPE_ENABLED=1
+if ! enable_bepinex_profile > "$TMPDIR_UI/bepinex-enable-existing-pipe.out"; then
+  echo "FAIL: BepInEx activation failed with a pre-existing pipe service" >&2
+  exit 1
+fi
+if [[ "$setup_calls" != "VSSPIPEPREEXISTING=1;VSSBEPINEXENABLED=1;set:vss.pipe.UiWorld.service;restart:vss.pipe.UiWorld.service;" ]] ||
+   [[ "$VSSPIPEPREEXISTING" != 1 ]]; then
+  echo "FAIL: BepInEx activation did not record the pre-existing pipe service" >&2
+  exit 1
+fi
+
+: > "$BEPINEX_TEST_CALLS"
+setup_calls=''
+TEST_SERVER_ACTIVE=1
+if ! disable_bepinex_profile > "$TMPDIR_UI/bepinex-disable-running.out"; then
+  echo "FAIL: disabling BepInEx for a running server failed" >&2
+  exit 1
+fi
+if [[ "$setup_calls" != "stop;VSSBEPINEXENABLED=0;set:vss.pipe.UiWorld.service;VSSPIPEPREEXISTING=;start;" ]] ||
+   [[ "$TEST_SERVER_ACTIVE" -ne 1 ]] ||
+   [[ "$TEST_PIPE_ACTIVE" -ne 1 ]] ||
+   [[ "$VSS_SETUP_NOTICE" != *'pre-existing log pipe was kept'* ]] ||
+   [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'remove' ]]; then
+  echo "FAIL: disabling BepInEx did not preserve the pre-existing pipe and restart the server in vanilla mode" >&2
+  exit 1
+fi
+
+WEBHOOKURL='https://discord.example/secret-url'
+setup_calls=''
+secret_prompt_output="$(setup_value_prompt 'webhook URL' WEBHOOKURL <<< 'https://discord.example/new-secret')"
+if [[ "$secret_prompt_output" != *'configured (hidden)'* ]] ||
+   [[ "$secret_prompt_output" == *'secret-url'* ]] ||
+   [[ "$secret_prompt_output" == *'new-secret'* ]]; then
+  echo "FAIL: webhook credentials were displayed by setup_value_prompt" >&2
   exit 1
 fi
 
@@ -150,5 +301,88 @@ if [[ "$picker_output" != *'Invalid world name.'* ]]; then
   echo "FAIL: profile picker did not show an invalid-name message" >&2
   exit 1
 fi
+
+VSS_SERVER_NAME='CurrentWorld'
+VHSERVERWORLD='CurrentWorld'
+load_server_profile_unchecked() {
+  VSS_SERVER_NAME="$1"
+  VHSERVERWORLD="$1"
+  [[ "$1" != 'BrokenWorld' ]]
+}
+if load_server_profile BrokenWorld >/dev/null 2>&1; then
+  echo "FAIL: invalid profile load unexpectedly succeeded" >&2
+  exit 1
+fi
+if [[ "$VSS_SERVER_NAME" != 'CurrentWorld' || "$VHSERVERWORLD" != 'CurrentWorld' ]]; then
+  echo "FAIL: failed profile load did not restore the previous active profile" >&2
+  exit 1
+fi
+
+PROFILE_CREATE_DIR="$TMPDIR_UI/profile-create"
+mkdir -p "$PROFILE_CREATE_DIR/examples" "$PROFILE_CREATE_DIR/launcher"
+cp "$ROOT/.env.server.dist" "$PROFILE_CREATE_DIR/.env.server.dist"
+cp "$ROOT/examples/launcher-args" "$PROFILE_CREATE_DIR/examples/launcher-args"
+CWD="$PROFILE_CREATE_DIR"
+validate_server_profile_ports() { return 0; }
+write_env_value() {
+  [[ "$2" != 'STATUSPORT' ]] || return 1
+  printf '%s=%s\n' "$2" "$3" >> "$1"
+}
+if create_server_profile IncompleteWorld > "$TMPDIR_UI/profile-create.out" 2>&1; then
+  echo "FAIL: profile creation ignored a failed configuration write" >&2
+  exit 1
+fi
+if [[ -e "$PROFILE_CREATE_DIR/.env.IncompleteWorld" ||
+      -e "$PROFILE_CREATE_DIR/launcher/launcher-args.IncompleteWorld" ]]; then
+  echo "FAIL: failed profile creation left partial profile files behind" >&2
+  exit 1
+fi
+
+VSS_SERVER_NAME='UiWorld'
+VHSERVERWORLD='UiWorld'
+VHSERVERSERVICENAME='valheim-server.UiWorld.service'
+VHSERVERSAVEDIR="$TMPDIR_UI/world-saves"
+mkdir -p "$VHSERVERSAVEDIR/worlds_local"
+touch "$VHSERVERSAVEDIR/worlds_local/UiWorld.fwl" \
+  "$VHSERVERSAVEDIR/worlds_local/UiWorld.db" \
+  "$VHSERVERSAVEDIR/worlds_local/UiWorld_backup.fwl" \
+  "$VHSERVERSAVEDIR/worlds_local/OtherWorld.db"
+TEST_SERVER_ACTIVE=0
+if ! reset_profile_world <<< 'no' >/dev/null; then
+  echo "FAIL: cancelling a world reset returned an error" >&2
+  exit 1
+fi
+if [[ ! -f "$VHSERVERSAVEDIR/worlds_local/UiWorld.fwl" ]]; then
+  echo "FAIL: cancelling a world reset changed save files" >&2
+  exit 1
+fi
+
+TEST_SERVER_ACTIVE=1
+if ! reset_profile_world <<< 'DELETE WORLD' >/dev/null; then
+  echo "FAIL: confirmed world reset failed" >&2
+  exit 1
+fi
+if [[ -e "$VHSERVERSAVEDIR/worlds_local/UiWorld.fwl" ||
+      -e "$VHSERVERSAVEDIR/worlds_local/UiWorld.db" ||
+      -e "$VHSERVERSAVEDIR/worlds_local/UiWorld_backup.fwl" ||
+      ! -f "$VHSERVERSAVEDIR/worlds_local/OtherWorld.db" ||
+      "$TEST_SERVER_ACTIVE" -ne 1 ||
+      "$VSS_SETUP_NOTICE" != *'server was restarted'* ]]; then
+  echo "FAIL: world reset did not safely delete only the selected world and restore service state" >&2
+  exit 1
+fi
+
+touch "$VHSERVERSAVEDIR/worlds_local/UiWorld.fwl"
+TEST_SERVER_ACTIVE=1
+export BEPINEX_FAIL_STOP=1
+if reset_profile_world <<< 'DELETE WORLD' >/dev/null 2>&1; then
+  echo "FAIL: world reset ignored a server stop failure" >&2
+  exit 1
+fi
+if [[ ! -f "$VHSERVERSAVEDIR/worlds_local/UiWorld.fwl" ]]; then
+  echo "FAIL: world reset deleted save files after a stop failure" >&2
+  exit 1
+fi
+unset BEPINEX_FAIL_STOP
 
 echo "interactive setup UI OK"
