@@ -3,8 +3,10 @@ set -u
 
 cd "$(dirname "$0")/.."
 
-cd "$(dirname "$0")/.."
 export DEBUGMODE=1
+export VSS_ENV_FILE="$PWD/.env.test"
+source ./lib/config.sh
+vss_load_config "$PWD"
 
 printf '%s\n' \
 "09/09/2026 21:16:21: Got connection SteamID 76561198000000001" \

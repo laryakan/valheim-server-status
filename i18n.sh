@@ -31,7 +31,7 @@ case "${VSS_LANG:-en}" in
     T_PASSWORD="Mot de passe"
     T_LAST_LOGS="Derniers journaux"
     T_NO_LOG_TO_SEND="aucun journal à envoyer"
-    T_STATUS_MESSAGE_DELETED="Le message de statut a été supprimé du serveur, un nouveau message sera envoyé, veuillez remplir le fichier .env"
+    T_STATUS_MESSAGE_DELETED="Le message de statut a été supprimé du serveur, un nouveau message sera envoyé, veuillez vérifier le profil .env.$VSS_SERVER_NAME"
     T_PATCH_FAILED="Échec de la requête PATCH Discord avec HTTP %s ; le message existant est conservé sans en créer un nouveau."
     T_USAGE="usage:\njson_to_send | ./script <--status|message_id>"
     T_EVENT_LINES_CONNECT=(
@@ -89,7 +89,7 @@ case "${VSS_LANG:-en}" in
     T_PASSWORD="Password"
     T_LAST_LOGS="Last Logs"
     T_NO_LOG_TO_SEND="no log to send"
-    T_STATUS_MESSAGE_DELETED="Status message has been deleted from the server, a new message will be sent, please fill the .env file"
+    T_STATUS_MESSAGE_DELETED="Status message has been deleted from the server, a new message will be sent, please check .env.$VSS_SERVER_NAME"
     T_PATCH_FAILED="Discord PATCH failed with HTTP %s; keeping existing message without creating a new one."
     T_USAGE="usage:\njson_to_send | ./script <--status|message_id>"
     T_EVENT_LINES_CONNECT=(

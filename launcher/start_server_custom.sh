@@ -1,14 +1,8 @@
 #!/bin/bash
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-
-# Test by-pass
-if [ "${DEBUGMODE:-0}" -eq 0 ];
-then
-  source "$CWD/../.env"
-else
-  source "$CWD/../.env.test"
-fi
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
 
 export templdpath=$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=./linux64:$LD_LIBRARY_PATH
@@ -33,8 +27,8 @@ TODAY=`date +%Y-%m-%d`
 echo "Server running through VSS custom launcher, you can find logs in $VALHEIMSERVERLOGPATH"
 echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)"
 
-if [ ! -f "$CWD/launcher-args" ]; then
-  cp "$CWD/../examples/launcher-args" "$CWD/launcher-args"
+if [ ! -f "$VHSERVERLAUNCHERARGS" ]; then
+  cp "$CWD/../examples/launcher-args" "$VHSERVERLAUNCHERARGS"
 fi
 
 # Tip: Make a local copy of this script to avoid it being overwritten by steam.
@@ -52,7 +46,7 @@ LAUNCH_ARGS=(
   # -world_seed "$VHSERVERSEED"
   -savedir "$VHSERVERSAVEDIR"
   -password "$VHSERVERPASSWD"
-  $( cat $CWD/launcher-args)
+  $( cat "$VHSERVERLAUNCHERARGS")
   # Do not use -logfile "$VALHEIMSERVERLOGDIR/$TODAY.log" because it will break the log filter
   #-logFile "$VALHEIMSERVERLOGDIR/$TODAY.log"
 )

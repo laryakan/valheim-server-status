@@ -1,6 +1,8 @@
 .idea
 test
 .env
+.env.*
+!.env.dist
 systemd
 valheim-logs.d
 valheim-logs.d/*
@@ -9,4 +11,5 @@ crash.log
 savedir
 last-world-save
 launcher/launcher-args
+launcher/launcher-args.*
 fake-server

@@ -1,14 +1,8 @@
 #!/bin/bash
 
-# Checking .env init
-if [ -z "$VSSDIR" ]
-then
-   # Basic env init
-   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-   source "$CWD/.env"
-else
-   CWD="$VSSDIR"
-fi
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/lib/config.sh"
+vss_load_config "$CWD" || exit 1
 
 # Bash file dedicated to planned maintenance (can be called through a crontab to make a Valheim server service restart/update)
 # But first, check if there is any connected player

@@ -1,4 +1,4 @@
-# ln -s </path/to/this/vss.http.service> /etc/systemd/system/vss.http.service
+# ln -s </path/to/this/vss.http.service> /etc/systemd/system/vss.http.<world>.service
 # sudo systemctl daemon-reload
 # sudo service vss.http start
 # systemctl enable vss.http.service -> this to auto-start at system reboot
@@ -16,6 +16,7 @@ StartLimitInterval=60s
 StartLimitBurst=3
 User=###EXECUSER###
 Group=###EXECUSER###
+Environment=VSS_SERVER_NAME=###VSSSERVERNAME###
 ExecStart=###VSSHTTP###
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID

@@ -2,7 +2,13 @@
 set -u
 
 cd "$(dirname "$0")/.."
+TEST_ENV="$(mktemp)"
+trap 'rm -f "$TEST_ENV"' EXIT
+cp .env.test "$TEST_ENV"
+export VSS_ENV_FILE="$TEST_ENV"
 source .env.test
+source ./lib/config.sh
+vss_load_config "$PWD"
 export DEBUGMODE=1
 
 # Idempotence

@@ -6,12 +6,8 @@
 
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-if [ "${DEBUGMODE:-0}" -eq 1 ];
-then
-   source "$CWD/../.env.test"
-else
-   source "$CWD/../.env"
-fi
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
 
 BEPINEXFILES=$( ls -1tr "$VSSBEPINEXDIR/" 2>/dev/null )
 
@@ -28,4 +24,4 @@ for file in $BEPINEXFILES; do
     rm "$VHSERVERDIR/$file"
 done
 
-echo "Remember to set VSSBEPINEXENABLED=0 in your .env file to disable BepInEx_Valheim for VSS : Can be done through ./setup"
+echo "Remember to set VSSBEPINEXENABLED=0 in .env.$VSS_SERVER_NAME to disable BepInEx_Valheim for VSS : Can be done through ./setup"

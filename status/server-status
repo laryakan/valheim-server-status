@@ -3,20 +3,15 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-source "$CWD/../.env"
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
 
 # Stats
 TOTALCPU=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
 TOTALCPU=$(( TOTALCPU > 0 ? TOTALCPU : 1 ))
 TOTALRAM=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | cut -d' ' -f9 || echo 0) / 1024 ))
 
-VALHEIM_PID="${VALSERVERPID:-}"
-if [ -n "$VALHEIM_PID" ] && ps -p "$VALHEIM_PID" >/dev/null 2>&1
-then
-	:
-else
-	VALHEIM_PID=$(pgrep -f 'valheim_server' 2>/dev/null | head -n 1)
-fi
+VALHEIM_PID="$(vss_find_server_pid || true)"
 
 if [ -n "$VALHEIM_PID" ]
 then
@@ -89,7 +84,7 @@ then
 		LIGHTOFFLINELIST=$(touch "$OFFLINEPLAYERSFILE" && awk -F';' 'NF >= 3 && $2 != "" { print $2 }' "$OFFLINEPLAYERSFILE" | paste -sd, - | sed 's/,/, /g')
 		LIGHTONLINELIST=${LIGHTONLINELIST:-nobody}
 		LIGHTOFFLINELIST=${LIGHTOFFLINELIST:-nobody}
-		VSSCURRENTMODIFIER=$(cat $CWD/../launcher/launcher-args)
+		VSSCURRENTMODIFIER=$(cat "$VHSERVERLAUNCHERARGS")
 		echo -n "{\"title\":\"$(T server_status_title)\",
 		\"embeds\":[{\"title\":\"$(T online)\",\"color\":3066993,
 		\"fields\":[

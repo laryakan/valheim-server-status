@@ -3,17 +3,9 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/crash.log"
-if [ ! -f "$CWD/.env" ]
-then
-  cp "$CWD/.env.dist" "$CWD/.env"
-fi
-
-if [ ! -f "$CWD/launcher/launcher-args" ]; then
-  cp "$CWD/examples/launcher-args" "$CWD/launcher/launcher-args"
-fi
 
 function ensure_env_sync() {
-  local env_file="${1:-$CWD/.env}"
+  local env_file="${1:-${VSS_ENV_FILE:-}}"
   local template_file="${2:-$CWD/.env.dist}"
   local tmp_file
   local line
@@ -21,6 +13,10 @@ function ensure_env_sync() {
 
   if [ ! -f "$template_file" ]; then
     return
+  fi
+  if [ -z "$env_file" ] || [ ! -f "$env_file" ]; then
+    echo "Cannot synchronize a missing server configuration: ${env_file:-unset}" >&2
+    return 1
   fi
 
   tmp_file="$(mktemp)"
@@ -58,8 +54,246 @@ function ensure_env_sync() {
   rm -f "$tmp_file"
 }
 
-ensure_env_sync "$CWD/.env" "$CWD/.env.dist"
-source "$CWD/.env"
+function write_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local value="$3"
+  local replacement
+  local tmp_file
+
+  printf -v replacement '%s=%q' "$key" "$value"
+  tmp_file="$(mktemp)"
+  awk -v key="$key" -v replacement="$replacement" '
+    BEGIN { updated = 0 }
+    index($0, key "=") == 1 && !updated {
+      print replacement
+      updated = 1
+      next
+    }
+    { print }
+    END {
+      if (!updated) {
+        print replacement
+      }
+    }
+  ' "$env_file" > "$tmp_file" && mv "$tmp_file" "$env_file"
+}
+
+function list_server_profiles() {
+  local profile
+  for profile in "$CWD"/.env.*; do
+    [ -f "$profile" ] || continue
+    case "${profile##*/}" in
+      .env.dist|.env.test) continue ;;
+    esac
+    printf '%s\n' "${profile##*.env.}"
+  done
+}
+
+function read_profile_setting() (
+  local name="$1"
+  local key="$2"
+  VSS_SERVER_NAME="$name"
+  export VSS_SERVER_NAME
+  unset VSS_ENV_FILE VSS_CONFIG_LOADED
+  source "$CWD/lib/config.sh"
+  vss_load_config "$CWD" || exit 1
+  printf '%s' "${!key}"
+)
+
+function valheim_port_in_use() {
+  local candidate="$1"
+  local profile
+  local configured_port
+  while IFS= read -r profile; do
+    [ -n "$profile" ] || continue
+    configured_port="$(read_profile_setting "$profile" VHSERVERPORT 2>/dev/null)" || continue
+    [[ "$configured_port" =~ ^[0-9]+$ ]] || continue
+    if (( candidate <= configured_port + 2 && configured_port <= candidate + 2 )); then
+      return 0
+    fi
+  done < <(list_server_profiles)
+  return 1
+}
+
+function status_port_in_use() {
+  local candidate="$1"
+  local profile
+  local configured_port
+  while IFS= read -r profile; do
+    [ -n "$profile" ] || continue
+    configured_port="$(read_profile_setting "$profile" STATUSPORT 2>/dev/null)" || continue
+    [ "$configured_port" = "$candidate" ] && return 0
+  done < <(list_server_profiles)
+  return 1
+}
+
+function create_server_profile() {
+  local name="$1"
+  local env_file="$CWD/.env.$name"
+  local args_file="$CWD/launcher/launcher-args.$name"
+  local valheim_port=2456
+  local status_port=8181
+
+  if ! vss_validate_server_name "$name"; then
+    echo "Invalid world name for a server profile: '$name'" >&2
+    return 1
+  fi
+  if [ -e "$env_file" ]; then
+    echo "Server profile already exists: $name" >&2
+    return 1
+  fi
+
+  while valheim_port_in_use "$valheim_port"; do
+    valheim_port=$((valheim_port + 10))
+  done
+  while status_port_in_use "$status_port"; do
+    status_port=$((status_port + 1))
+  done
+
+  cp "$CWD/.env.dist" "$env_file" || return 1
+  write_env_value "$env_file" VHSERVERWORLD "$name"
+  write_env_value "$env_file" VHSERVERPORT "$valheim_port"
+  write_env_value "$env_file" STATUSPORT "$status_port"
+  cp "$CWD/examples/launcher-args" "$args_file" || return 1
+  VSS_SERVER_NAME="$name"
+  VSS_ENV_FILE="$env_file"
+  export VSS_SERVER_NAME VSS_ENV_FILE
+  echo "Created server profile '$name' in $env_file" >&2
+}
+
+function migrate_legacy_config() {
+  local legacy_file="$CWD/.env"
+  local profile_name
+  local target_file
+  local target_args
+  local old_connected
+  local old_offline
+  local old_map
+  local old_save
+  local new_connected
+  local new_offline
+  local new_map
+  local new_save
+
+  MIGRATED_PROFILE_NAME=""
+  [ -f "$legacy_file" ] || return 0
+
+  source "$legacy_file"
+  profile_name="${VHSERVERWORLD:-}"
+  if ! vss_validate_server_name "$profile_name"; then
+    echo "Cannot migrate .env: VHSERVERWORLD is missing or is not a valid profile name." >&2
+    return 1
+  fi
+
+  target_file="$CWD/.env.$profile_name"
+  target_args="$CWD/launcher/launcher-args.$profile_name"
+  if [ -e "$target_file" ]; then
+    echo "Keeping legacy .env because $target_file already exists." >&2
+    return 0
+  fi
+  if [ -f "$CWD/launcher/launcher-args" ] && [ -e "$target_args" ]; then
+    echo "Cannot migrate .env: $target_args already exists; the legacy launcher arguments were left untouched." >&2
+    return 1
+  fi
+
+  old_connected="${CONNECTEDPLAYERSFILE:-$CWD/data/online-players}"
+  old_offline="${OFFLINEPLAYERSFILE:-$CWD/data/offline-players}"
+  old_map="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
+  old_save="${LASTWORLDSAVEFILE:-$CWD/data/last-world-save}"
+  new_connected="$CWD/data/online-players.$profile_name"
+  new_offline="$CWD/data/offline-players.$profile_name"
+  new_map="$CWD/data/steamid-player-map.$profile_name"
+  new_save="$CWD/data/last-world-save.$profile_name"
+
+  if { [ -e "$new_connected" ] && [ "$old_connected" != "$new_connected" ]; } ||
+     { [ -e "$new_offline" ] && [ "$old_offline" != "$new_offline" ]; } ||
+     { [ -e "$new_map" ] && [ "$old_map" != "$new_map" ]; } ||
+     { [ -e "$new_save" ] && [ "$old_save" != "$new_save" ]; }; then
+    echo "Cannot migrate .env: a suffixed state file already exists for '$profile_name'." >&2
+    return 1
+  fi
+
+  mv "$legacy_file" "$target_file" || return 1
+  if [ -f "$CWD/launcher/launcher-args" ] && [ ! -e "$target_args" ]; then
+    mv "$CWD/launcher/launcher-args" "$target_args" || return 1
+  elif [ ! -e "$target_args" ]; then
+    cp "$CWD/examples/launcher-args" "$target_args" || return 1
+  fi
+
+  mkdir -p "$CWD/data" "$CWD/valheim-logs.d"
+  [ ! -e "$old_connected" ] || [ "$old_connected" = "$new_connected" ] || mv "$old_connected" "$new_connected" || return 1
+  [ ! -e "$old_offline" ] || [ "$old_offline" = "$new_offline" ] || mv "$old_offline" "$new_offline" || return 1
+  [ ! -e "$old_map" ] || [ "$old_map" = "$new_map" ] || mv "$old_map" "$new_map" || return 1
+  [ ! -e "$old_save" ] || [ "$old_save" = "$new_save" ] || mv "$old_save" "$new_save" || return 1
+
+  write_env_value "$target_file" CONNECTEDPLAYERSFILE "$new_connected" || return 1
+  write_env_value "$target_file" OFFLINEPLAYERSFILE "$new_offline" || return 1
+  write_env_value "$target_file" STEAMIDMAPFILE "$new_map" || return 1
+  write_env_value "$target_file" LASTWORLDSAVEFILE "$new_save" || return 1
+  write_env_value "$target_file" VALHEIMSERVERLOGDIR "$CWD/valheim-logs.d" || return 1
+  write_env_value "$target_file" VALHEIMSERVERLOGPATH "$CWD/valheim-logs.d/*.$profile_name.*.log" || return 1
+  write_env_value "$target_file" VHSERVERLAUNCHERARGS "$CWD/launcher/launcher-args.$profile_name" || return 1
+  write_env_value "$target_file" VHSERVERSERVICENAME "valheim-server.$profile_name.service" || return 1
+  write_env_value "$target_file" VSSHTTPSERVICENAME "vss.http.$profile_name.service" || return 1
+  write_env_value "$target_file" VSSPIPESERVICENAME "vss.pipe.$profile_name.service" || return 1
+  MIGRATED_PROFILE_NAME="$profile_name"
+  echo "Migrated .env to .env.$profile_name and renamed the launcher arguments."
+}
+
+function load_server_profile() {
+  local name="$1"
+  if ! vss_validate_server_name "$name"; then
+    echo "Invalid server profile name: '$name'" >&2
+    return 1
+  fi
+  VSS_SERVER_NAME="$name"
+  VSS_ENV_FILE="$CWD/.env.$name"
+  VSS_CONFIG_LOADED=0
+  export VSS_SERVER_NAME VSS_ENV_FILE VSS_CONFIG_LOADED
+  source "$CWD/lib/config.sh"
+  vss_load_config "$CWD" || return 1
+  ensure_env_sync "$VSS_ENV_FILE" "$CWD/.env.dist" || return 1
+  VSS_CONFIG_LOADED=0
+  vss_load_config "$CWD" || return 1
+  if [ ! -f "$VHSERVERLAUNCHERARGS" ]; then
+    cp "$CWD/examples/launcher-args" "$VHSERVERLAUNCHERARGS" || return 1
+  fi
+}
+
+function select_server_profile() {
+  local profile
+  local choice
+  while true; do
+    echo
+    echo "=== Valheim Server Status — Select a server ==="
+    while IFS= read -r profile; do
+      [ -n "$profile" ] && printf '  %s\n' "$profile"
+    done < <(list_server_profiles)
+    echo "  n) Create a server profile"
+    echo "  q) Quit"
+    read -r -p "Server name or choice: " choice
+    case "$choice" in
+      n|N)
+        read -r -p "World name: " profile
+        if create_server_profile "$profile"; then
+          SELECTED_SERVER_PROFILE="$profile"
+          return 0
+        fi
+        ;;
+      q|Q) return 1 ;;
+      *)
+        if [ -f "$CWD/.env.$choice" ]; then
+          SELECTED_SERVER_PROFILE="$choice"
+          return 0
+        fi
+        echo "No profile named '$choice'." >&2
+        ;;
+    esac
+  done
+}
+
+source "$CWD/lib/config.sh"
 
 # VSS Setup menu
 # Colors
@@ -94,21 +328,18 @@ ColorMagenta(){
 function setup_status(){
 	echo -ne "
 ======== VSS setup completion =========
+Active server profile: $VSS_SERVER_NAME
 "
-if [ -n "${VALSERVERPID:-}" ] && ps -p "$VALSERVERPID" >/dev/null 2>&1; then
-  LIVE_VALHEIM_PID="$VALSERVERPID"
-else
-  LIVE_VALHEIM_PID="$(pgrep -f 'valheim_server' 2>/dev/null | head -n 1)"
-fi
+LIVE_VALHEIM_PID="$(vss_find_server_pid || true)"
 if [ -n "$LIVE_VALHEIM_PID" ] && ps -p "$LIVE_VALHEIM_PID" >/dev/null 2>&1; then echo -e "Valheim Server $(ColorGreen online)"; else echo -e "Valheim Server $(ColorRed offline)"; fi
 if [ ! -z $(pgrep $(basename $VSSLOGFILTER)) ];then echo -e "VSS log filter $(ColorGreen running)";else echo -e "VSS log filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
 if [ "$VHSERVERWORLD" != 'server.world' ];then echo -e "Custom launcher world $(ColorGreen 'is set')";else echo -e "Custom launcher world $(ColorRed 'has default value')";fi
-if [ -e '/etc/logrotate.d/valheim' ];then echo -e "logrotate $(ColorGreen set)";else echo -e "logrotate $(ColorRed 'not set')";fi
+if [ -e '/etc/logrotate.d/valheim-vss' ];then echo -e "shared logrotate $(ColorGreen set)";else echo -e "shared logrotate $(ColorRed 'not set')";fi
 if [ "$WEBHOOKTOKEN" != 'webhookToken' ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen ready)";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'not ready')";fi
 if [ ! -z "$STATUSMESSAGEID" ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'can update status')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'cannot update status')";fi
 if [ "$SENDLASTLOGS" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send logs')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send log')";fi
 if [ "$SENDSERVERCONNECTIONINFO" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send connection info')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send connection info')";fi
-if [ ! -z $(crontab -l 2>/dev/null | grep "$WEBHOOKUPDATE" | head -1|cut -d' ' -f6) ];then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
+if crontab -l 2>/dev/null | grep -Fq "# vss-profile:$VSS_SERVER_NAME";then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME (valheim server) is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME (valheim server) is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME (vss over http) is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME (vss over http) is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME is $(ColorGreen 'present') in system (needed to catch outside logs e.g BepInEx or not VSS server)";else echo -e  "$VSSPIPESERVICENAME is $(ColorRed 'missing') in system (needed to catch outside logs e.g BepInEx or not VSS server)";fi
@@ -140,14 +371,21 @@ function replace_env_value() {
   local key="$1"
   local value="${2:-}"
 
+  if [ "$key" = "VHSERVERWORLD" ]; then
+    echo "The world name identifies this profile. Use the profile rename operation instead." >&2
+    return 1
+  fi
+
   case "$key" in
     STATUSMESSAGEID|LASTLOGMESSAGEID|SERVERCONNECTIONINFOMESSAGEID)
       if [ -n "$value" ]; then
-        sed -i "s|^${key}=.*|${key}=${value}|" "$CWD/.env"
+        sed -i "s|^${key}=.*|${key}=${value}|" "$VSS_ENV_FILE"
       else
-        sed -i "s|^${key}=.*|${key}=''|" "$CWD/.env"
+        sed -i "s|^${key}=.*|${key}=''|" "$VSS_ENV_FILE"
       fi
-      source "$CWD/.env"
+      VSS_CONFIG_LOADED=0
+      source "$VSS_ENV_FILE"
+      VSS_CONFIG_LOADED=1
       return
       ;;
   esac
@@ -160,12 +398,14 @@ function replace_env_value() {
   fi
 
   if [[ "$value" == *[!0-9]* ]] && [[ "$value" != "" ]]; then
-    sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$CWD/.env"
+    sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$VSS_ENV_FILE"
   else
-    sed -i "s|^${key}=.*|${key}=${value}|" "$CWD/.env"
+    sed -i "s|^${key}=.*|${key}=${value}|" "$VSS_ENV_FILE"
   fi
 
-  source "$CWD/.env"
+  VSS_CONFIG_LOADED=0
+  source "$VSS_ENV_FILE"
+  VSS_CONFIG_LOADED=1
 }
 
 # param1=value_label, param2=value_variable_in_.env
@@ -179,7 +419,10 @@ function setup_value_prompt() {
 	  echo "value unchanged"
 	  return
 	fi
-	replace_env_value "$2" "$NEWVALUE"
+	if ! replace_env_value "$2" "$NEWVALUE"; then
+	  echo "value unchanged" >&2
+	  return 1
+	fi
 	echo "new value set : ${!2}"
 	echo ""
 }
@@ -192,6 +435,11 @@ function auto_conf(){
 	# if process found
 	if [ ! -z "$VHSERVERPROCESS" ]
 	then
+		FVHSERVERWORLD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-world //p'|cut -d' ' -f1)
+		if [ "$FVHSERVERWORLD" != "$VSS_SERVER_NAME" ]; then
+			echo "Running server world '$FVHSERVERWORLD' does not match selected profile '$VSS_SERVER_NAME'; no settings were changed." >&2
+			return 1
+		fi
 		# get the user who will execute services
 		FUSERSERVICE=$(echo $VHSERVERPROCESS|cut -d' ' -f1)
 		replace_env_value 'USERSERVICE' "$FUSERSERVICE"
@@ -205,8 +453,6 @@ function auto_conf(){
 		FVHSERVERNAME=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-name //p'|cut -d' ' -f1)
 		replace_env_value 'VHSERVERNAME' "$FVHSERVERNAME"
 		# get you server world name
-		FVHSERVERWORLD=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-world //p'|cut -d' ' -f1)
-		replace_env_value 'VHSERVERWORLD' "$FVHSERVERWORLD"
 		# get world seed if present
 		FVHSERVERSEED=$(echo $VHSERVERPROCESS|sed -n -e 's/^.*-world_seed //p'|cut -d' ' -f1)
 		if [ ! -z "$FVHSERVERSEED" ]; then
@@ -237,28 +483,35 @@ function auto_conf(){
 
 # Setup cron
 function set_cron() {
-	# Check a and old cron exists
-	OLDLINE="$( crontab -l 2>/dev/null | grep $WEBHOOKUPDATE )"
-	if [ ! -z "$OLDLINE" ]
-	then
-		# remove line
-		crontab -l 2>/dev/null | grep -v "$WEBHOOKUPDATE" | crontab -
+	local marker="# vss-profile:$VSS_SERVER_NAME"
+	local current_cron
+	local updated_cron
+	current_cron="$(crontab -l 2>/dev/null || true)"
+	updated_cron="$(printf '%s\n' "$current_cron" | grep -Fv "$marker" || true)"
+	if [ "${CRONTABWEBHOOKFREQ:-0}" -gt 0 ]; then
+		updated_cron="$(printf '%s\n%s\n' "$updated_cron" "*/$CRONTABWEBHOOKFREQ * * * * VSS_SERVER_NAME=$VSS_SERVER_NAME $WEBHOOKUPDATE $marker")"
 	fi
-	if [ $CRONTABWEBHOOKFREQ -gt 0 ]
-	then
-		# add new one
-		(crontab -l 2>/dev/null ; echo "*/$CRONTABWEBHOOKFREQ * * * * $WEBHOOKUPDATE") | crontab -
-	fi
+	printf '%s\n' "$updated_cron" | crontab -
 	echo "$(ColorGreen 'crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
 }
 
-# Setup service with conf values
-function set_service(){
-	SERVICENAME="$1"
-	cp "$CWD/examples/$SERVICENAME" "$CWD/systemd/$SERVICENAME"
+# Render a profile-specific unit from the shared service examples.
+function render_service() {
+	local SERVICENAME="$1"
+	local TEMPLATE
+	case "$SERVICENAME" in
+	  valheim-server.*.service) TEMPLATE="valheim-server.service" ;;
+	  vss.http.*.service) TEMPLATE="vss.http.service" ;;
+	  vss.pipe.*.service) TEMPLATE="vss.pipe.service" ;;
+	  *) echo "Unsupported service template: $SERVICENAME" >&2; return 1 ;;
+	esac
+	mkdir -p "$CWD/systemd"
+	rm -f "$CWD/systemd/$SERVICENAME"
+	cp "$CWD/examples/$TEMPLATE" "$CWD/systemd/$SERVICENAME" || return 1
 
 	# steam real exec user
 	sed -i "s[###EXECUSER###[$USERSERVICE[g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###VSSSERVERNAME###[$VSS_SERVER_NAME[g" "$CWD/systemd/$SERVICENAME"
 
 	if [ "$SERVICENAME" = "$VHSERVERSERVICENAME" ]
 	then
@@ -287,16 +540,25 @@ function set_service(){
 	# set valheim server dir for server update
 	sed -i "s[###VSSPIPEDIR###[$VSSPIPEDIR[g" "$CWD/systemd/$SERVICENAME"
 	fi
+	if grep -q '###.*###' "$CWD/systemd/$SERVICENAME"; then
+		echo "Unresolved placeholder in generated service $SERVICENAME" >&2
+		return 1
+	fi
+	return 0
+}
+
+# Setup service with profile-specific conf values.
+function set_service(){
+	local SERVICENAME="$1"
+	render_service "$SERVICENAME" || return 1
 	# copying to system
-	sudo mv "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
-	# binding with systemd
-	ln -s "/etc/systemd/system/$SERVICENAME" "$CWD/systemd/$SERVICENAME"
+	sudo ln -sfn "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
 	NOSUDO=$?
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
 		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')" >&2
-		echo -e "sudo ln -s \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\"" >&2
+		echo -e "sudo ln -sfn \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\"" >&2
 		echo -e "sudo systemctl daemon-reload" >&2
 		echo -e "sudo systemctl enable $SERVICENAME" >&2
 		echo -e "sudo systemctl start $SERVICENAME" >&2
@@ -319,7 +581,7 @@ function uninstall_service(){
 	sudo rm "/etc/systemd/system/$SERVICENAME"
 	sudo systemctl daemon-reload
 	sudo systemctl reset-failed
-	rm "$CWD/systemd/$SERVICENAME"
+	rm -f "$CWD/systemd/$SERVICENAME"
 }
 
 function stop_valheim_service(){
@@ -360,31 +622,43 @@ function restart_vsspipe_service(){
 
 # Setup service with conf values, setup is $1=1; setdown is $1=2
 function set_logrotate(){
-	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/valheim.logrotate"
+	local logrotate_name="valheim-vss.logrotate"
+	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/$logrotate_name"
 
-	# set real path
-	sed -i "s[###VALHEIMSERVERLOGPATH###[${VALHEIMSERVERLOGPATH}[g" "$CWD/systemd/valheim.logrotate"
-
-	# Delete old file if exist
-	sudo rm -f '/etc/logrotate.d/valheim'
+	sed -i "s[###VALHEIMSERVERLOGDIR###[$VALHEIMSERVERLOGDIR[g" "$CWD/systemd/$logrotate_name"
+	if grep -q '###.*###' "$CWD/systemd/$logrotate_name"; then
+		echo "Unresolved placeholder in shared logrotate configuration" >&2
+		return 1
+	fi
 
 	# Copy new file
-	sudo cp "$CWD/systemd/valheim.logrotate" "/etc/logrotate.d/valheim"
+	sudo cp "$CWD/systemd/$logrotate_name" "/etc/logrotate.d/valheim-vss"
 
 	# Change chown and chmod
-	sudo chown root:root /etc/logrotate.d/valheim
-	sudo chmod 0644 /etc/logrotate.d/valheim
+	sudo chown root:root /etc/logrotate.d/valheim-vss
+	sudo chmod 0644 /etc/logrotate.d/valheim-vss
 	NOSUDO=$?
 	# missing sudo fallback
 	if [ $NOSUDO -gt 0 ]
 	then 
 		echo -e "$(ColorRed 'Since sudo has failed, here is the commands we tried : ')" >&2
-		echo -e "sudo cp \"$CWD/systemd/valheim.logrotate\" \"/etc/logrotate.d/valheim\"" >&2
-		echo -e "sudo chown root:root /etc/logrotate.d/valheim" >&2
-		echo -e "sudo chmod 0644 /etc/logrotate.d/valheim" >&2
+		echo -e "sudo cp \"$CWD/systemd/$logrotate_name\" \"/etc/logrotate.d/valheim-vss\"" >&2
+		echo -e "sudo chown root:root /etc/logrotate.d/valheim-vss" >&2
+		echo -e "sudo chmod 0644 /etc/logrotate.d/valheim-vss" >&2
 	else 
 		echo -e "$(ColorGreen 'logrotate set')"
 	fi
+}
+
+function remove_shared_logrotate() {
+  local confirmation
+  read -r -p "Remove the shared logrotate configuration for every server? Type REMOVE to confirm: " confirmation
+  if [ "$confirmation" != "REMOVE" ]; then
+    echo "Shared logrotate configuration was kept."
+    return 0
+  fi
+  sudo rm -f /etc/logrotate.d/valheim-vss || return 1
+  rm -f "$CWD/systemd/valheim-vss.logrotate"
 }
 
 # Install / Active BepInEx_Valheim packaged version
@@ -576,11 +850,11 @@ mkdir -p "$CWD/systemd"
 			7) setup_value_prompt "what is your current $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
 			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
 			9) setup_value_prompt 'set crossplay on/off: 1 = crossplay active, 0 = crossplay inactive' 'VHSERVERCROSSPLAY' ; clear ; launcher_menu ;;
-			10) set_service "$VHSERVERSERVICENAME"; sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
-			11) uninstall_service "$VHSERVERSERVICENAME"; sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
-			12) stop_valheim_service ; sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
-			13) start_valheim_service ; sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
-			14) restart_valheim_service ; sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			10) set_service "$VHSERVERSERVICENAME"; sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			11) uninstall_service "$VHSERVERSERVICENAME"; sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			12) stop_valheim_service ; sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			13) start_valheim_service ; sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			14) restart_valheim_service ; sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
 			15) 
 				if [ -n "$VHSERVERWORLD" ]; then
 					stop_valheim_service
@@ -591,7 +865,7 @@ mkdir -p "$CWD/systemd"
 				else
 					echo -e "$(ColorRed 'VHSERVERWORLD is empty; cannot delete the current world.')" >&2
 				fi
-				sleep 2 ; source "$CWD/.env" ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+				sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
 
 		0) clear ; new_menu ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
@@ -678,17 +952,18 @@ $(ColorGreen '7)') $(ColorRed 'sudo required') restart vss.pipe.service
 $(ColorGreen '8)') $(ColorRed 'sudo required') remove vss.pipe.service
 * logrotate *
 $(ColorGreen '9)') $(ColorRed 'sudo required') activate logrotate on Valheim server logs
-$(ColorGreen '10)') $(ColorRed 'sudo required') remove logrotate on server logs
+$(ColorGreen '10)') $(ColorRed 'sudo required') remove shared logrotate configuration
 
 ** Service user **
 $(ColorGreen '11)') setup the user who will execute service $(ColorRed 'prior') to services install, default is $USER
 
 ** Uninstall all **
-$(ColorGreen '12)') $(ColorRed 'sudo required') remove all components (crontab, logrotate, valheim-server.service, vss.http.service)
+$(ColorGreen '12)') $(ColorRed 'sudo required') remove this profile's services and cron job
 
 ** BepInEx **
 $(ColorGreen '13)') activate BepInEx packaged version
 $(ColorGreen '14)') deactivate BepInEx packaged version
+$(ColorGreen '15)') switch server profile
 
 $(ColorGreen '0)') quit
 $(ColorGreen 'CTRL+C)') quit
@@ -706,18 +981,60 @@ $(ColorBlue 'choose an option:') "
 			7) restart_vsspipe_service ; clear ; new_menu ;;
 			8) uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
 			9) set_logrotate ; sleep 5 ; clear ;  new_menu ;;
-			10) sudo rm '/etc/logrotate.d/valheim' ; clear ; new_menu ;;
+			10) remove_shared_logrotate ; clear ; new_menu ;;
 			11) setup_value_prompt 'whats the user you want to execute services ?' 'USERSERVICE' ; clear ; new_menu ;;
-	     	12) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; sudo rm '/etc/logrotate.d/valheim' ; rm "$CWD/systemd/valheim.logrotate" ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; clear ; new_menu ;;
+			12) replace_env_value 'CRONTABWEBHOOKFREQ' 0 ; set_cron ; uninstall_service "$VHSERVERSERVICENAME" ; uninstall_service "$VSSHTTPSERVICENAME" ; uninstall_service "$VSSPIPESERVICENAME" ; clear ; new_menu ;;
 			13) replace_env_value 'VSSBEPINEXENABLED' 1 ; $VSSDIR/bepinex/install_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
 			14) replace_env_value 'VSSBEPINEXENABLED' 0 ; $VSSDIR/bepinex/remove_bepinex.sh ; sleep 1 ; clear ; new_menu ;;
+			15) if select_server_profile; then load_server_profile "$SELECTED_SERVER_PROFILE" && clear && new_menu; else clear; new_menu; fi ;;
 		
 		0) exit 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
 }
 
-# init new menu
+function setup_main() {
+  local selected_profile="${VSS_SERVER_NAME:-}"
+
+  case "${1:-}" in
+    --help|-h)
+      echo "Usage: ./setup [SERVER_NAME|--list|--create SERVER_NAME]"
+      return 0
+      ;;
+    --list)
+      list_server_profiles
+      return 0
+      ;;
+  esac
+
+  migrate_legacy_config || return 1
+
+  case "${1:-}" in
+    --create)
+      if [ -z "${2:-}" ]; then
+        return 1
+      fi
+      if [ "$2" != "$MIGRATED_PROFILE_NAME" ] && ! create_server_profile "$2"; then
+        return 1
+      fi
+      selected_profile="$2"
+      ;;
+    "")
+      if [ -z "$selected_profile" ]; then
+        select_server_profile || return 0
+        selected_profile="$SELECTED_SERVER_PROFILE"
+      fi
+      ;;
+    *)
+      selected_profile="$1"
+      ;;
+  esac
+
+  load_server_profile "$selected_profile" || return 1
+  clear
+  new_menu
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  clear ; new_menu
+  setup_main "$@"
 fi
