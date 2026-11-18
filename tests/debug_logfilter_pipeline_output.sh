@@ -3,12 +3,24 @@ set -u
 
 cd "$(dirname "$0")/.."
 TEST_ENV="$(mktemp)"
-trap 'rm -f "$TEST_ENV"' EXIT
+TEST_STATE_DIR="$(mktemp -d)"
+trap 'rm -f "$TEST_ENV"; rm -rf "$TEST_STATE_DIR"' EXIT
 cp .env.test "$TEST_ENV"
 export VSS_ENV_FILE="$TEST_ENV"
 source .env.test
+sed -i \
+  -e "s|^CONNECTEDPLAYERSFILE=.*|CONNECTEDPLAYERSFILE=\"$TEST_STATE_DIR/online-players.$VSS_SERVER_NAME\"|" \
+  -e "s|^OFFLINEPLAYERSFILE=.*|OFFLINEPLAYERSFILE=\"$TEST_STATE_DIR/offline-players.$VSS_SERVER_NAME\"|" \
+  -e "s|^STEAMIDMAPFILE=.*|STEAMIDMAPFILE=\"$TEST_STATE_DIR/steamid-player-map.$VSS_SERVER_NAME\"|" \
+  -e "s|^LASTWORLDSAVEFILE=.*|LASTWORLDSAVEFILE=\"$TEST_STATE_DIR/last-world-save.$VSS_SERVER_NAME\"|" \
+  "$TEST_ENV"
 source ./lib/config.sh
 vss_load_config "$PWD"
+CONNECTEDPLAYERSFILE="$TEST_STATE_DIR/online-players.$VSS_SERVER_NAME"
+OFFLINEPLAYERSFILE="$TEST_STATE_DIR/offline-players.$VSS_SERVER_NAME"
+STEAMIDMAPFILE="$TEST_STATE_DIR/steamid-player-map.$VSS_SERVER_NAME"
+LASTWORLDSAVEFILE="$TEST_STATE_DIR/last-world-save.$VSS_SERVER_NAME"
+export CONNECTEDPLAYERSFILE OFFLINEPLAYERSFILE STEAMIDMAPFILE LASTWORLDSAVEFILE
 export DEBUGMODE=1
 
 # Idempotence

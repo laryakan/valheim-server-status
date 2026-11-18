@@ -5,6 +5,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMPDIR_PROFILE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_PROFILE"' EXIT
 
+mkdir -p "$TMPDIR_PROFILE/bin"
+printf '#!/bin/sh\nexit 0\n' > "$TMPDIR_PROFILE/bin/dig"
+chmod +x "$TMPDIR_PROFILE/bin/dig"
+PATH="$TMPDIR_PROFILE/bin:$PATH"
+
 source "$ROOT/setup" >/dev/null
 CWD="$TMPDIR_PROFILE"
 mkdir -p "$CWD/data" "$CWD/launcher" "$CWD/examples" "$CWD/systemd"

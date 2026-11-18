@@ -16,7 +16,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - The root script `./setup` is an interactive installer/UI, not a generic library.
 - Any script that is loaded with `source` must not execute the interactive menu automatically.
 - Shell scripts should keep failure modes non-fatal when possible; invalid numeric config values should degrade to sane defaults instead of aborting the whole workflow.
-- Errors that are not user-facing should be directed to `crash.log` at the repository root via `exec 2>>"$CWD/crash.log"` when appropriate.
+- Background VSS processes may append non-user-facing errors to `crash.log` at the repository root. The interactive `setup` CLI must keep its diagnostics visible and must not redirect its stderr to `crash.log`.
 
 ## Directory map
 
@@ -57,7 +57,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 
 ### Logging / crash handling
 
-- If a script writes to stderr and must keep running, append the output to the repository-root `crash.log`.
+- If a background/runtime script writes to stderr and must keep running, append the output to the repository-root `crash.log`. Interactive setup diagnostics should remain visible to the user and must not be redirected there.
 - Name generated logs `<date>.<world-name>.stdout.log` or `<date>.<world-name>.stderr.log`; all profiles use the shared logrotate configuration.
 - All warnings, errors, invalid values, debug traces, and recovery messages must go to `stderr`, not `stdout`.
 - Keep crash log entries concise and timestamped when possible.

@@ -55,6 +55,36 @@ for action in start stop status; do
   fi
 done
 
+CONFLICT_DIR="$TMPDIR_CLI/conflict"
+mkdir -p "$CONFLICT_DIR/data" "$CONFLICT_DIR/examples"
+cp "$ROOT/examples/launcher-args" "$CONFLICT_DIR/examples/launcher-args"
+cat > "$CONFLICT_DIR/.env" <<EOF
+VSSDIR="$CONFLICT_DIR"
+VHSERVERWORLD='ConflictWorld'
+CONNECTEDPLAYERSFILE="$CONFLICT_DIR/data/online-players"
+OFFLINEPLAYERSFILE="$CONFLICT_DIR/data/offline-players"
+STEAMIDMAPFILE="$CONFLICT_DIR/data/steamid-player-map"
+LASTWORLDSAVEFILE="$CONFLICT_DIR/data/last-world-save"
+EOF
+printf '%s\n' 'existing profile state' > "$CONFLICT_DIR/data/online-players.ConflictWorld"
+CWD="$CONFLICT_DIR"
+called_action='not called'
+if setup_main --restart-server ConflictWorld > "$TMPDIR_CLI/migration-conflict.out" 2>&1; then
+  echo "FAIL: direct action ignored a migration state-file conflict" >&2
+  exit 1
+fi
+if ! grep -Fq "Cannot migrate .env: a suffixed state file already exists for 'ConflictWorld'." \
+  "$TMPDIR_CLI/migration-conflict.out"; then
+  echo "FAIL: setup did not display the migration conflict" >&2
+  exit 1
+fi
+if [ "$called_action" != 'not called' ] ||
+   [ -e "$CWD/.env.ConflictWorld" ] ||
+   ! grep -Fxq 'existing profile state' "$CWD/data/online-players.ConflictWorld"; then
+  echo "FAIL: migration conflict changed profile or state data" >&2
+  exit 1
+fi
+
 if setup_main --restart-server > "$TMPDIR_CLI/missing-profile.out"; then
   echo "FAIL: restart command accepted a missing profile name" >&2
   exit 1
@@ -67,6 +97,31 @@ else
 fi
 if ! grep -Fq 'requires exactly one server name' "$TMPDIR_CLI/missing-profile.out"; then
   echo "FAIL: missing profile error was not shown" >&2
+  exit 1
+fi
+
+if [ -f "$ROOT/crash.log" ]; then
+  crash_log_before="$(sha256sum "$ROOT/crash.log" | awk '{print $1}')"
+else
+  crash_log_before='missing'
+fi
+if "$ROOT/setup" --restart-server > "$TMPDIR_CLI/direct-error.out" 2>&1; then
+  echo "FAIL: direct setup command accepted a missing profile" >&2
+  exit 1
+else
+  result=$?
+  if [ "$result" -ne 2 ]; then
+    echo "FAIL: direct setup command returned the wrong argument error status" >&2
+    exit 1
+  fi
+fi
+if [ "$crash_log_before" = 'missing' ]; then
+  [ ! -e "$ROOT/crash.log" ] || {
+    echo "FAIL: setup created crash.log" >&2
+    exit 1
+  }
+elif [ "$crash_log_before" != "$(sha256sum "$ROOT/crash.log" | awk '{print $1}')" ]; then
+  echo "FAIL: setup wrote to crash.log" >&2
   exit 1
 fi
 

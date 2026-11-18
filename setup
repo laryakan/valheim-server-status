@@ -2,7 +2,6 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/crash.log"
 
 function ensure_env_sync() {
   local env_file="${1:-${VSS_ENV_FILE:-}}"
@@ -176,13 +175,15 @@ function migrate_legacy_config() {
   local new_map
   local new_save
 
+  MIGRATION_ERROR=""
   MIGRATED_PROFILE_NAME=""
   [ -f "$legacy_file" ] || return 0
 
   source "$legacy_file"
   profile_name="${VHSERVERWORLD:-}"
   if ! vss_validate_server_name "$profile_name"; then
-    echo "Cannot migrate .env: VHSERVERWORLD is missing or is not a valid profile name." >&2
+    MIGRATION_ERROR="Cannot migrate .env: VHSERVERWORLD is missing or is not a valid profile name."
+    echo "$MIGRATION_ERROR" >&2
     return 1
   fi
 
@@ -193,7 +194,8 @@ function migrate_legacy_config() {
     return 0
   fi
   if [ -f "$CWD/launcher/launcher-args" ] && [ -e "$target_args" ]; then
-    echo "Cannot migrate .env: $target_args already exists; the legacy launcher arguments were left untouched." >&2
+    MIGRATION_ERROR="Cannot migrate .env: $target_args already exists; the legacy launcher arguments were left untouched."
+    echo "$MIGRATION_ERROR" >&2
     return 1
   fi
 
@@ -210,7 +212,8 @@ function migrate_legacy_config() {
      { [ -e "$new_offline" ] && [ "$old_offline" != "$new_offline" ]; } ||
      { [ -e "$new_map" ] && [ "$old_map" != "$new_map" ]; } ||
      { [ -e "$new_save" ] && [ "$old_save" != "$new_save" ]; }; then
-    echo "Cannot migrate .env: a suffixed state file already exists for '$profile_name'." >&2
+    MIGRATION_ERROR="Cannot migrate .env: a suffixed state file already exists for '$profile_name'."
+    echo "$MIGRATION_ERROR" >&2
     return 1
   fi
 
@@ -306,7 +309,7 @@ function select_server_profile() {
           SELECTED_SERVER_PROFILE="$profile"
           return 0
         else
-          notice="Could not create '$profile'. Check crash.log for details."
+          notice="Could not create '$profile'. Review the error above and check directory permissions."
         fi
         ;;
       q|Q) return 1 ;;
@@ -1165,8 +1168,11 @@ function setup_main() {
   esac
 
   if [ -n "$direct_action" ]; then
-    migrate_legacy_config 2>&1 || return 1
-    load_server_profile "$2" 2>&1 || return 1
+    migrate_legacy_config || return 1
+    if ! load_server_profile "$2"; then
+      printf "Setup could not load profile '%s'. Review the error above and check its configuration.\n" "$2" >&2
+      return 1
+    fi
     run_server_cli_action "$direct_action"
     return $?
   fi
@@ -1194,7 +1200,10 @@ function setup_main() {
       ;;
   esac
 
-  load_server_profile "$selected_profile" || return 1
+  if ! load_server_profile "$selected_profile"; then
+    printf "Setup could not load profile '%s'. Review the error above and check its configuration.\n" "$selected_profile" >&2
+    return 1
+  fi
   setup_ui_clear
   new_menu
 }
