@@ -38,10 +38,14 @@ Server actions can run without opening the interactive menu. Lifecycle actions u
 ./setup --stop-server MyWorld
 ./setup --restart-server MyWorld
 ./setup --status-server MyWorld
+./setup --check-firewall MyWorld
 ./setup --discord-update MyWorld
 ```
 
 `--status-server` reports the systemd unit status and returns its status code. These commands require the profile name explicitly; they do not infer it from another profile or from the current directory.
+`--check-firewall` checks whether active UFW has ALLOW rules for the profile's Valheim port range (`VHSERVERPORT` through `VHSERVERPORT+2`, TCP and UDP) and HTTP status port (TCP). It is informational only: it never adds or changes firewall rules, and reports when UFW is inactive, unavailable, or missing rules.
+
+Setup also rejects overlapping Valheim port ranges and HTTP ports across profiles. HTTP ports must not overlap any profile's Valheim range.
 
 The interactive setup dashboard shows the selected world, Valheim process state, ports, and installed service units. Menus are grouped by configuration, monitoring, and maintenance; the profile picker accepts a profile name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
 
@@ -64,9 +68,23 @@ The setup interface also accepts a world name as its argument and passes the sel
 
 ## Migrating an existing installation
 
-When `./setup` finds a legacy `.env` and no matching `.env.<VHSERVERWORLD>`, it renames the configuration to the new profile name, renames `launcher/launcher-args` to `launcher/launcher-args.<world-name>`, and suffixes the VSS state files in `data/`. If the target profile already exists, the legacy configuration is left untouched. If a target launcher-args or state file would be overwritten, migration stops and reports the conflict; inspect and back up both copies before resolving it. Migration does not automatically migrate or remove existing systemd units.
+Run the dedicated migration command from the VSS checkout; `./setup` no longer performs V2 migration implicitly:
 
-After migration, select the profile in `./setup` and install its server, pipe, and HTTP services so the new profile-specific systemd units are installed. Review and remove any legacy units separately when you have verified the new units. Back up the legacy `.env`, launcher arguments, and VSS state before upgrading.
+```bash
+./migrate-v2-to-v3
+```
+
+The script requires the legacy `.env`, a valid `VHSERVERWORLD`, and an existing `VHSERVERDIR`. It asks for confirmation, creates a permission-restricted backup under `migration-backups/`, then:
+
+1. Stops and disables the V2 systemd units it finds (`valheim-server.service`, `vss.pipe.service`, and `vss.http.service`).
+2. Renames `.env`, launcher arguments, and VSS state files to the profile-specific names. It aborts rather than overwriting existing profile/state targets.
+3. Removes cron lines containing the legacy `WEBHOOKUPDATE` path, preserves unrelated cron entries, and installs the profile-tagged V3 Discord update if its configured frequency is positive.
+4. Installs the shared V3 logrotate configuration and removes the old `/etc/logrotate.d/valheim` rule after backing it up.
+5. Installs the V3 server unit and corresponding pipe/HTTP units when those V2 units existed. Legacy unit files are retained but left stopped and disabled.
+6. Checks UFW rules for the migrated profile without changing them; missing rules or an unavailable/inactive UFW are warnings and do not stop migration.
+7. Asks for `START` before enabling and starting the V3 units. If declined, the new units remain installed but stopped and disabled.
+
+Review the retained backup and verify systemd status, server logs, Discord updates, cron, and logrotate after migration. Remove the stopped V2 unit files only after successful verification. Existing log files are not moved or renamed. If migration fails partway through, it prints the backup location; restoration is manual, so do not delete the backup until the V3 installation is confirmed.
 
 ## Logs
 
@@ -109,6 +127,10 @@ Cron updates are managed per profile. Webhook URLs and message IDs are stored in
 
 The update order is connection information, server status, then recent logs. To enable automatic updates, set `CRONTABWEBHOOKFREQ` in the selected profile to a positive number of minutes; set it to `0` to disable that profile's scheduled update.
 
+For modded servers, set `VSSBEPINEXENABLED=1` and put the profile's R2Modman/Thunderstore UUID share code (for example `01a1eaf3-9be3-9083-b9b4-26768368368e`) in `R2MODMANCODE` in that world's `.env`. The code is shown in Discord and the server status output (including the HTTP status endpoint), including while the server is offline. It is omitted when BepInEx is disabled or no code is configured. VSS does not generate or synchronize the mod profile; maintain the share code from the mod manager.
+
+`VHSERVERSEED` is informational: VSS displays it in status/Discord but does not pass it to Valheim to set or change world generation.
+
 ## Initial Discord setup
 
 1. Create a webhook in the desired Discord channel and copy its URL.
@@ -126,7 +148,7 @@ If a message is deleted, VSS can create a replacement and reports the event in `
 - `vss.pipe.<world-name>.service`
 - `vss.http.<world-name>.service`
 
-Generated unit files are kept in `systemd/` and linked into `/etc/systemd/system/`. Use `./setup <world-name>` to manage a specific profile's services. Each HTTP profile must use a distinct port.
+Generated unit files are kept in `systemd/` and linked into `/etc/systemd/system/`. Use `./setup <world-name>` to manage a specific profile's services. Profiles must use distinct Valheim port ranges and HTTP ports, with no HTTP/game port overlap.
 
 ## Required tools
 
@@ -137,6 +159,7 @@ sudo apt install coreutils grep procps psmisc sed gawk util-linux curl dnsutils 
 ```
 
 Valheim dedicated server files and SteamCMD must be installed separately. The optional HTTP status endpoint requires `ncat`; Discord webhooks require `curl`.
+The optional `--check-firewall` command uses `ufw` when available; it only reads rules and never opens ports.
 
 ## Data isolation
 

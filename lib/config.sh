@@ -6,14 +6,19 @@ vss_validate_server_name() {
 }
 
 vss_find_server_pid() {
+  local server_pid
+
   if [ -n "${VALSERVERPID:-}" ] && ps -p "$VALSERVERPID" >/dev/null 2>&1; then
     printf '%s\n' "$VALSERVERPID"
     return 0
   fi
 
   [ -n "${VHSERVERWORLD:-}" ] || return 1
-  ps -eo pid=,args= 2>/dev/null |
+  server_pid="$(ps -eo pid=,args= 2>/dev/null |
     awk -v needle="-world ${VHSERVERWORLD}" '$0 !~ /awk/ && index($0, needle) { print $1; exit }'
+  )"
+  [ -n "$server_pid" ] || return 1
+  printf '%s\n' "$server_pid"
 }
 
 vss_load_config() {

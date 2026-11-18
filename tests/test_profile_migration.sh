@@ -11,6 +11,7 @@ chmod +x "$TMPDIR_PROFILE/bin/dig"
 PATH="$TMPDIR_PROFILE/bin:$PATH"
 
 source "$ROOT/setup" >/dev/null
+source "$ROOT/migrate-v2-to-v3"
 CWD="$TMPDIR_PROFILE"
 mkdir -p "$CWD/data" "$CWD/launcher" "$CWD/examples" "$CWD/systemd"
 cp "$ROOT/.env.dist" "$CWD/.env.dist"
@@ -25,6 +26,7 @@ OFFLINEPLAYERSFILE="$CWD/data/offline-players"
 STEAMIDMAPFILE="$CWD/data/steamid-player-map"
 LASTWORLDSAVEFILE="$CWD/data/last-world-save"
 EOF
+source "$CWD/.env"
 printf '%s\n' 'online data' > "$CWD/data/online-players"
 printf '%s\n' 'offline data' > "$CWD/data/offline-players"
 printf '%s\n' 'steam map' > "$CWD/data/steamid-player-map"
@@ -79,12 +81,13 @@ EOF
 CWD="$CREATE_DIR"
 new_menu() { :; }
 clear() { :; }
-if ! setup_main --create CreateWorld; then
-  echo "FAIL: --create did not continue after migrating the matching legacy profile" >&2
+if setup_main --create CreateWorld > "$TMPDIR_PROFILE/setup-legacy.out" 2>&1; then
+  echo "FAIL: setup automatically migrated a legacy profile" >&2
   exit 1
 fi
-if [ -e "$CWD/.env" ] || [ ! -f "$CWD/.env.CreateWorld" ]; then
-  echo "FAIL: --create did not preserve the migrated profile" >&2
+if ! grep -Fq 'Run ./migrate-v2-to-v3' "$TMPDIR_PROFILE/setup-legacy.out" ||
+   [ ! -f "$CWD/.env" ] || [ -e "$CWD/.env.CreateWorld" ]; then
+  echo "FAIL: setup did not leave V2 migration to the standalone command" >&2
   exit 1
 fi
 

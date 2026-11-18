@@ -1,0 +1,393 @@
+#!/bin/bash
+
+CWD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYSTEMD_DIR="${VSS_MIGRATION_SYSTEMD_DIR:-/etc/systemd/system}"
+LOGROTATE_DIR="${VSS_MIGRATION_LOGROTATE_DIR:-/etc/logrotate.d}"
+LEGACY_UNITS=(valheim-server.service vss.pipe.service vss.http.service)
+
+source "$CWD/setup"
+
+function migrate_legacy_config() {
+  local legacy_file="$CWD/.env"
+  local profile_name="${VHSERVERWORLD:-}"
+  local target_file
+  local target_args
+  local old_connected
+  local old_offline
+  local old_map
+  local old_save
+  local new_connected
+  local new_offline
+  local new_map
+  local new_save
+
+  MIGRATION_ERROR=""
+  if ! vss_validate_server_name "$profile_name"; then
+    MIGRATION_ERROR="Cannot migrate .env: VHSERVERWORLD is missing or is not a valid profile name."
+    echo "$MIGRATION_ERROR" >&2
+    return 1
+  fi
+
+  target_file="$CWD/.env.$profile_name"
+  target_args="$CWD/launcher/launcher-args.$profile_name"
+  if [ -e "$target_file" ]; then
+    MIGRATION_ERROR="Cannot migrate .env: $target_file already exists."
+    echo "$MIGRATION_ERROR" >&2
+    return 1
+  fi
+  if [ -f "$CWD/launcher/launcher-args" ] && [ -e "$target_args" ]; then
+    MIGRATION_ERROR="Cannot migrate .env: $target_args already exists; the legacy launcher arguments were left untouched."
+    echo "$MIGRATION_ERROR" >&2
+    return 1
+  fi
+
+  old_connected="${CONNECTEDPLAYERSFILE:-$CWD/data/online-players}"
+  old_offline="${OFFLINEPLAYERSFILE:-$CWD/data/offline-players}"
+  old_map="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
+  old_save="${LASTWORLDSAVEFILE:-$CWD/data/last-world-save}"
+  new_connected="$CWD/data/online-players.$profile_name"
+  new_offline="$CWD/data/offline-players.$profile_name"
+  new_map="$CWD/data/steamid-player-map.$profile_name"
+  new_save="$CWD/data/last-world-save.$profile_name"
+
+  if { [ -e "$new_connected" ] && [ "$old_connected" != "$new_connected" ]; } ||
+     { [ -e "$new_offline" ] && [ "$old_offline" != "$new_offline" ]; } ||
+     { [ -e "$new_map" ] && [ "$old_map" != "$new_map" ]; } ||
+     { [ -e "$new_save" ] && [ "$old_save" != "$new_save" ]; }; then
+    MIGRATION_ERROR="Cannot migrate .env: a suffixed state file already exists for '$profile_name'."
+    echo "$MIGRATION_ERROR" >&2
+    return 1
+  fi
+
+  mv "$legacy_file" "$target_file" || return 1
+  if [ -f "$CWD/launcher/launcher-args" ] && [ ! -e "$target_args" ]; then
+    mv "$CWD/launcher/launcher-args" "$target_args" || return 1
+  elif [ ! -e "$target_args" ]; then
+    cp "$CWD/examples/launcher-args" "$target_args" || return 1
+  fi
+
+  mkdir -p "$CWD/data" "$CWD/valheim-logs.d"
+  [ ! -e "$old_connected" ] || [ "$old_connected" = "$new_connected" ] || mv "$old_connected" "$new_connected" || return 1
+  [ ! -e "$old_offline" ] || [ "$old_offline" = "$new_offline" ] || mv "$old_offline" "$new_offline" || return 1
+  [ ! -e "$old_map" ] || [ "$old_map" = "$new_map" ] || mv "$old_map" "$new_map" || return 1
+  [ ! -e "$old_save" ] || [ "$old_save" = "$new_save" ] || mv "$old_save" "$new_save" || return 1
+
+  write_env_value "$target_file" CONNECTEDPLAYERSFILE "$new_connected" || return 1
+  write_env_value "$target_file" OFFLINEPLAYERSFILE "$new_offline" || return 1
+  write_env_value "$target_file" STEAMIDMAPFILE "$new_map" || return 1
+  write_env_value "$target_file" LASTWORLDSAVEFILE "$new_save" || return 1
+  write_env_value "$target_file" VALHEIMSERVERLOGDIR "$CWD/valheim-logs.d" || return 1
+  write_env_value "$target_file" VALHEIMSERVERLOGPATH "$CWD/valheim-logs.d/*.$profile_name.*.log" || return 1
+  write_env_value "$target_file" VHSERVERLAUNCHERARGS "$CWD/launcher/launcher-args.$profile_name" || return 1
+  write_env_value "$target_file" VHSERVERSERVICENAME "valheim-server.$profile_name.service" || return 1
+  write_env_value "$target_file" VSSHTTPSERVICENAME "vss.http.$profile_name.service" || return 1
+  write_env_value "$target_file" VSSPIPESERVICENAME "vss.pipe.$profile_name.service" || return 1
+  printf 'Migrated .env to .env.%s and renamed the launcher arguments.\n' "$profile_name"
+}
+
+function migration_error() {
+  printf 'Migration failed: %s\n' "$1" >&2
+  if [ -n "${MIGRATION_BACKUP_DIR:-}" ]; then
+    printf 'Backup retained at: %s\n' "$MIGRATION_BACKUP_DIR" >&2
+  fi
+}
+
+function migration_backup() {
+  local unit
+  local config
+
+  mkdir -p "$CWD/migration-backups" || return 1
+  chmod 700 "$CWD/migration-backups" || return 1
+  MIGRATION_BACKUP_DIR="$(mktemp -d "$CWD/migration-backups/v2-to-v3-$(date +%Y%m%d-%H%M%S)-XXXXXX")" || return 1
+  chmod 700 "$MIGRATION_BACKUP_DIR" || return 1
+  mkdir -p "$MIGRATION_BACKUP_DIR/data" "$MIGRATION_BACKUP_DIR/systemd" \
+    "$MIGRATION_BACKUP_DIR/logrotate" || return 1
+
+  cp -a "$CWD/.env" "$MIGRATION_BACKUP_DIR/.env" || return 1
+  if [ -e "$CWD/launcher/launcher-args" ]; then
+    cp -a "$CWD/launcher/launcher-args" "$MIGRATION_BACKUP_DIR/launcher-args" || return 1
+  fi
+  if [ -d "$CWD/data" ]; then
+    cp -a "$CWD/data/." "$MIGRATION_BACKUP_DIR/data/" || return 1
+  fi
+
+  if crontab -l > "$MIGRATION_BACKUP_DIR/crontab" 2>/dev/null; then
+    :
+  else
+    : > "$MIGRATION_BACKUP_DIR/crontab"
+  fi
+
+  for unit in "${LEGACY_UNITS[@]}"; do
+    if [ -e "$SYSTEMD_DIR/$unit" ] || [ -L "$SYSTEMD_DIR/$unit" ]; then
+      cp -a "$SYSTEMD_DIR/$unit" "$MIGRATION_BACKUP_DIR/systemd/$unit" || return 1
+    fi
+    if [ -e "$CWD/systemd/$unit" ] || [ -L "$CWD/systemd/$unit" ]; then
+      cp -a "$CWD/systemd/$unit" "$MIGRATION_BACKUP_DIR/systemd/local-$unit" || return 1
+    fi
+  done
+
+  for config in valheim valheim-vss; do
+    if [ -e "$LOGROTATE_DIR/$config" ] || [ -L "$LOGROTATE_DIR/$config" ]; then
+      cp -a "$LOGROTATE_DIR/$config" "$MIGRATION_BACKUP_DIR/logrotate/$config" || return 1
+    fi
+  done
+  if [ -e "$CWD/systemd/valheim.logrotate" ]; then
+    cp -a "$CWD/systemd/valheim.logrotate" "$MIGRATION_BACKUP_DIR/systemd/local-valheim.logrotate" || return 1
+  fi
+  printf 'V2-to-V3 backup created at %s\n' "$MIGRATION_BACKUP_DIR"
+}
+
+function migrate_legacy_cron() {
+  local legacy_update="$1"
+  local current_cron
+  local filtered_cron
+
+  if [ -z "$legacy_update" ]; then
+    echo "The legacy WEBHOOKUPDATE path is empty; refusing to alter the crontab." >&2
+    return 1
+  fi
+
+  current_cron="$(crontab -l 2>/dev/null || true)"
+  filtered_cron="$(printf '%s\n' "$current_cron" |
+    awk -v command="$legacy_update" 'index($0, command) == 0')"
+  printf '%s\n' "$filtered_cron" | crontab - || return 1
+  set_cron || return 1
+}
+
+function stop_legacy_units() {
+  local unit
+  for unit in "${LEGACY_UNITS[@]}"; do
+    if [ -e "$SYSTEMD_DIR/$unit" ] || [ -L "$SYSTEMD_DIR/$unit" ]; then
+      printf 'Stopping and disabling legacy unit %s\n' "$unit"
+      sudo systemctl stop "$unit" || return 1
+      sudo systemctl disable "$unit" || return 1
+    fi
+  done
+  sudo systemctl daemon-reload || return 1
+}
+
+function install_profile_units() {
+  local legacy_unit
+  local profile_unit
+  local unit
+  local -a units=("$VHSERVERSERVICENAME")
+
+  if [ -e "$SYSTEMD_DIR/vss.pipe.service" ] || [ -L "$SYSTEMD_DIR/vss.pipe.service" ]; then
+    units+=("$VSSPIPESERVICENAME")
+  fi
+  if [ -e "$SYSTEMD_DIR/vss.http.service" ] || [ -L "$SYSTEMD_DIR/vss.http.service" ]; then
+    units+=("$VSSHTTPSERVICENAME")
+  fi
+
+  for unit in "${units[@]}"; do
+    if [ -e "$SYSTEMD_DIR/$unit" ] || [ -L "$SYSTEMD_DIR/$unit" ]; then
+      echo "Profile unit already exists: $SYSTEMD_DIR/$unit" >&2
+      return 1
+    fi
+    if [ -e "$CWD/systemd/$unit" ] || [ -L "$CWD/systemd/$unit" ]; then
+      echo "Generated profile unit already exists: $CWD/systemd/$unit" >&2
+      return 1
+    fi
+    render_service "$unit" || return 1
+    sudo ln -sfn "$CWD/systemd/$unit" "$SYSTEMD_DIR/$unit" || return 1
+    [ -L "$SYSTEMD_DIR/$unit" ] || [ -f "$SYSTEMD_DIR/$unit" ] || return 1
+  done
+
+  sudo systemctl daemon-reload || return 1
+
+  # The legacy units remain installed but disabled until the new setup is verified.
+  for legacy_unit in "${LEGACY_UNITS[@]}"; do
+    case "$legacy_unit" in
+      valheim-server.service) profile_unit="$VHSERVERSERVICENAME" ;;
+      vss.pipe.service) profile_unit="$VSSPIPESERVICENAME" ;;
+      vss.http.service) profile_unit="$VSSHTTPSERVICENAME" ;;
+    esac
+    if [[ " ${units[*]} " == *" $profile_unit "* ]] &&
+       { [ -e "$SYSTEMD_DIR/$legacy_unit" ] || [ -L "$SYSTEMD_DIR/$legacy_unit" ]; }; then
+      printf 'Installed %s (legacy %s is stopped and disabled)\n' "$profile_unit" "$legacy_unit"
+    fi
+  done
+  MIGRATED_UNITS=("${units[@]}")
+}
+
+function check_profile_unit_targets() {
+  local unit
+  local -a units=("valheim-server.$1.service")
+
+  if [ -e "$SYSTEMD_DIR/vss.pipe.service" ] || [ -L "$SYSTEMD_DIR/vss.pipe.service" ]; then
+    units+=("vss.pipe.$1.service")
+  fi
+  if [ -e "$SYSTEMD_DIR/vss.http.service" ] || [ -L "$SYSTEMD_DIR/vss.http.service" ]; then
+    units+=("vss.http.$1.service")
+  fi
+  for unit in "${units[@]}"; do
+    if [ -e "$SYSTEMD_DIR/$unit" ] || [ -L "$SYSTEMD_DIR/$unit" ] ||
+       [ -e "$CWD/systemd/$unit" ] || [ -L "$CWD/systemd/$unit" ]; then
+      printf 'Profile unit target already exists: %s\n' "$unit" >&2
+      return 1
+    fi
+  done
+}
+
+function check_state_targets() {
+  local profile_name="$1"
+  local old_connected="${CONNECTEDPLAYERSFILE:-$CWD/data/online-players}"
+  local old_offline="${OFFLINEPLAYERSFILE:-$CWD/data/offline-players}"
+  local old_map="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
+  local old_save="${LASTWORLDSAVEFILE:-$CWD/data/last-world-save}"
+  local new_path
+  local old_path
+  local -a old_paths=("$old_connected" "$old_offline" "$old_map" "$old_save")
+  local -a suffixes=("online-players" "offline-players" "steamid-player-map" "last-world-save")
+  local index
+
+  if [ -e "$CWD/.env.$profile_name" ] ||
+     { [ -f "$CWD/launcher/launcher-args" ] && [ -e "$CWD/launcher/launcher-args.$profile_name" ]; }; then
+    printf 'A V3 profile or launcher-args file already exists for %s.\n' "$profile_name" >&2
+    return 1
+  fi
+  if ! validate_env_integer CRONTABWEBHOOKFREQ "${CRONTABWEBHOOKFREQ:-}"; then
+    echo "CRONTABWEBHOOKFREQ in the legacy .env must be an integer." >&2
+    return 1
+  fi
+  if ! validate_env_integer VHSERVERPORT "${VHSERVERPORT:-}" ||
+     ! validate_env_integer STATUSPORT "${STATUSPORT:-}"; then
+    echo "VHSERVERPORT and STATUSPORT in the legacy .env must be integers." >&2
+    return 1
+  fi
+  validate_server_profile_ports "$profile_name" "$VHSERVERPORT" "$STATUSPORT" || return 1
+
+  for index in "${!suffixes[@]}"; do
+    old_path="${old_paths[$index]}"
+    new_path="$CWD/data/${suffixes[$index]}.$profile_name"
+    if [ -e "$new_path" ] && [ "$old_path" != "$new_path" ]; then
+      printf 'Migration target already exists: %s\n' "$new_path" >&2
+      return 1
+    fi
+  done
+  check_profile_unit_targets "$profile_name"
+}
+
+function start_profile_units() {
+  local unit
+  local started=()
+
+  for unit in "${MIGRATED_UNITS[@]}"; do
+    sudo systemctl enable "$unit" || return 1
+  done
+  for unit in "${MIGRATED_UNITS[@]}"; do
+    if ! sudo systemctl start "$unit"; then
+      printf 'Failed to start %s; stopping V3 units started in this run.\n' "$unit" >&2
+      for unit in "${started[@]}"; do
+        sudo systemctl stop "$unit" || true
+      done
+      return 1
+    fi
+    started+=("$unit")
+  done
+}
+
+function migrate_v2_to_v3() {
+  local profile_name
+  local legacy_update
+  local confirmation
+
+  if [ ! -f "$CWD/.env" ]; then
+    echo "No legacy .env found; this installation does not need V2-to-V3 migration." >&2
+    return 1
+  fi
+
+  source "$CWD/.env" || {
+    echo "Could not read the legacy .env." >&2
+    return 1
+  }
+  profile_name="${VHSERVERWORLD:-}"
+  legacy_update="${WEBHOOKUPDATE:-$CWD/discord/update}"
+  if ! vss_validate_server_name "$profile_name"; then
+    echo "Invalid or missing VHSERVERWORLD in the legacy .env." >&2
+    return 1
+  fi
+  if [ -z "${VHSERVERDIR:-}" ] || [ ! -d "$VHSERVERDIR" ]; then
+    echo "VHSERVERDIR in .env must refer to an existing server directory." >&2
+    return 1
+  fi
+  check_state_targets "$profile_name" || return 1
+
+  printf 'V2-to-V3 migration for world: %s\n' "$profile_name"
+  printf 'The script will back up configuration, VSS state, crontab, legacy systemd units, and logrotate rules.\n'
+  printf 'It will stop/disable V2 units, migrate files and the Discord cron job, install V3 units/logrotate, and ask before starting V3 units.\n'
+  printf 'Legacy systemd unit files will be retained, stopped and disabled until you verify V3.\n\n'
+  printf 'Type MIGRATE to continue: '
+  read -r confirmation || return 1
+  if [ "$confirmation" != "MIGRATE" ]; then
+    echo "Migration cancelled; no changes made."
+    return 0
+  fi
+
+  migration_backup || {
+    migration_error "could not create a complete backup; no services were stopped."
+    return 1
+  }
+  stop_legacy_units || {
+    migration_error "could not stop/disable all legacy units."
+    return 1
+  }
+
+  if vss_find_server_pid >/dev/null 2>&1; then
+    migration_error "a Valheim process is still running; stop it manually before migrating."
+    return 1
+  fi
+
+  migrate_legacy_config || {
+    migration_error "${MIGRATION_ERROR:-could not migrate the legacy files.}"
+    return 1
+  }
+  load_server_profile "$profile_name" || {
+    migration_error "the migrated profile could not be loaded."
+    return 1
+  }
+
+  migrate_legacy_cron "$legacy_update" || {
+    migration_error "could not replace the legacy Discord cron job."
+    return 1
+  }
+  set_logrotate "$LOGROTATE_DIR" || {
+    migration_error "could not install the shared logrotate configuration."
+    return 1
+  }
+  sudo rm -f "$LOGROTATE_DIR/valheim" || {
+    migration_error "could not remove the backed-up V2 logrotate rule."
+    return 1
+  }
+  rm -f "$CWD/systemd/valheim.logrotate"
+  install_profile_units || {
+    migration_error "could not install all profile-specific systemd units."
+    return 1
+  }
+
+  if ! check_ufw_profile_rules; then
+    printf 'Firewall check did not pass; migration continues without changing UFW rules.\n' >&2
+  fi
+
+  printf '\nV3 configuration, cron, logrotate, and service units are installed for %s.\n' "$profile_name"
+  printf 'Type START to enable and start the V3 services (server%s%s): ' \
+    "$(if [[ " ${MIGRATED_UNITS[*]} " == *" $VSSPIPESERVICENAME "* ]]; then printf ', pipe'; fi)" \
+    "$(if [[ " ${MIGRATED_UNITS[*]} " == *" $VSSHTTPSERVICENAME "* ]]; then printf ', HTTP'; fi)"
+  read -r confirmation || return 1
+  if [ "$confirmation" != "START" ]; then
+    printf 'V3 units are installed but remain stopped and disabled. Backup retained at %s\n' "$MIGRATION_BACKUP_DIR"
+    return 0
+  fi
+  start_profile_units || {
+    migration_error "could not start all V3 units; inspect systemctl status and the retained backup."
+    return 1
+  }
+
+  printf 'V3 services started. Verify server, pipe/HTTP status, Discord, cron, and log rotation.\n'
+  printf 'After verification, remove the stopped legacy units manually if they are no longer needed.\n'
+  printf 'Backup retained at %s\n' "$MIGRATION_BACKUP_DIR"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  migrate_v2_to_v3
+fi

@@ -100,31 +100,142 @@ function read_profile_setting() (
   printf '%s' "${!key}"
 )
 
-function valheim_port_in_use() {
-  local candidate="$1"
+function validate_server_profile_ports() {
+  local name="$1"
+  local game_port="$2"
+  local http_port="$3"
   local profile
-  local configured_port
+  local configured_game
+  local configured_http
+  local game_start
+  local http_value
+
+  if ! [[ "$game_port" =~ ^[0-9]+$ ]] || ! [[ "$http_port" =~ ^[0-9]+$ ]]; then
+    printf 'Server profile %s must use numeric game and HTTP ports.\n' "$name" >&2
+    return 1
+  fi
+  game_start=$((10#$game_port))
+  http_value=$((10#$http_port))
+  if (( game_start < 1 || game_start > 65533 || http_value < 1 || http_value > 65535 )); then
+    printf 'Server profile %s has a port outside the valid range.\n' "$name" >&2
+    return 1
+  fi
+  if (( http_value >= game_start && http_value <= game_start + 2 )); then
+    printf 'HTTP port %s overlaps the game port range %s-%s for %s.\n' \
+      "$http_value" "$game_start" "$((game_start + 2))" "$name" >&2
+    return 1
+  fi
+
   while IFS= read -r profile; do
-    [ -n "$profile" ] || continue
-    configured_port="$(read_profile_setting "$profile" VHSERVERPORT 2>/dev/null)" || continue
-    [[ "$configured_port" =~ ^[0-9]+$ ]] || continue
-    if (( candidate <= configured_port + 2 && configured_port <= candidate + 2 )); then
-      return 0
+    [ -n "$profile" ] && [ "$profile" != "$name" ] || continue
+    configured_game="$(read_profile_setting "$profile" VHSERVERPORT 2>/dev/null)" || continue
+    configured_http="$(read_profile_setting "$profile" STATUSPORT 2>/dev/null)" || continue
+    [[ "$configured_game" =~ ^[0-9]+$ && "$configured_http" =~ ^[0-9]+$ ]] || continue
+    configured_game=$((10#$configured_game))
+    configured_http=$((10#$configured_http))
+
+    if (( game_start <= configured_game + 2 && configured_game <= game_start + 2 )); then
+      printf 'Game port range %s-%s overlaps profile %s (%s-%s).\n' \
+        "$game_start" "$((game_start + 2))" "$profile" \
+        "$configured_game" "$((configured_game + 2))" >&2
+      return 1
+    fi
+    if (( http_value == configured_http )); then
+      printf 'HTTP port %s is already used by profile %s.\n' "$http_value" "$profile" >&2
+      return 1
+    fi
+    if (( http_value >= configured_game && http_value <= configured_game + 2 )); then
+      printf 'HTTP port %s overlaps the game port range for profile %s.\n' "$http_value" "$profile" >&2
+      return 1
+    fi
+    if (( configured_http >= game_start && configured_http <= game_start + 2 )); then
+      printf 'Game port range %s-%s overlaps the HTTP port for profile %s (%s).\n' \
+        "$game_start" "$((game_start + 2))" "$profile" "$configured_http" >&2
+      return 1
     fi
   done < <(list_server_profiles)
-  return 1
+  return 0
 }
 
-function status_port_in_use() {
-  local candidate="$1"
-  local profile
-  local configured_port
-  while IFS= read -r profile; do
-    [ -n "$profile" ] || continue
-    configured_port="$(read_profile_setting "$profile" STATUSPORT 2>/dev/null)" || continue
-    [ "$configured_port" = "$candidate" ] && return 0
-  done < <(list_server_profiles)
-  return 1
+function ufw_rule_covers_port() {
+  local rules="$1"
+  local port="$2"
+  local protocol="$3"
+
+  printf '%s\n' "$rules" | awk -v port="$port" -v protocol="$protocol" '
+    $1 == "To" && $2 == "Action" { in_rules = 1; next }
+    !in_rules || $2 != "ALLOW" || $3 == "OUT" { next }
+    {
+      count = split($1, destination, "/")
+      rule_protocol = (count > 1 ? destination[2] : "tcp")
+      if (rule_protocol != protocol) {
+        next
+      }
+      range_count = split(destination[1], range, ":")
+      first = range[1] + 0
+      last = (range_count > 1 ? range[2] + 0 : first)
+      if (port >= first && port <= last) {
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
+function check_ufw_profile_rules() {
+  local rules
+  local port
+  local protocol
+  local missing=()
+  local game_port
+  local http_port
+
+  if ! [[ "${VHSERVERPORT:-}" =~ ^[0-9]+$ ]] ||
+     ! [[ "${STATUSPORT:-}" =~ ^[0-9]+$ ]]; then
+    echo "Game and HTTP ports must be numeric; UFW rule check skipped." >&2
+    return 2
+  fi
+  game_port=$((10#$VHSERVERPORT))
+  http_port=$((10#$STATUSPORT))
+  if (( game_port < 1 || game_port > 65533 || http_port < 1 || http_port > 65535 )); then
+    echo "Game or HTTP port is outside the valid range; UFW rule check skipped." >&2
+    return 2
+  fi
+
+  if ! command -v ufw >/dev/null 2>&1; then
+    echo "UFW is not installed; firewall rule check skipped." >&2
+    return 2
+  fi
+  if ! rules="$(sudo ufw status 2>&1)"; then
+    echo "Could not read UFW status; firewall rule check skipped." >&2
+    return 2
+  fi
+  if [[ "$rules" == *"Status: inactive"* ]]; then
+    echo "UFW is inactive; configured ports are not being checked against rules." >&2
+    return 1
+  fi
+  if [[ "$rules" != *"Status: active"* ]]; then
+    echo "Could not determine whether UFW is active; firewall rule check skipped." >&2
+    return 2
+  fi
+
+  for ((port = game_port; port <= game_port + 2; port++)); do
+    for protocol in tcp udp; do
+      if ! ufw_rule_covers_port "$rules" "$port" "$protocol"; then
+        missing+=("$port/$protocol")
+      fi
+    done
+  done
+  if ! ufw_rule_covers_port "$rules" "$http_port" tcp; then
+    missing+=("$http_port/tcp")
+  fi
+  if [ "${#missing[@]}" -gt 0 ]; then
+    printf 'Missing UFW ALLOW rules for %s: %s\n' "$VSS_SERVER_NAME" "${missing[*]}" >&2
+    return 1
+  fi
+
+  printf 'UFW ALLOW rules found for %s game ports %s-%s (TCP/UDP) and HTTP port %s/TCP.\n' \
+    "$VSS_SERVER_NAME" "$game_port" "$((game_port + 2))" "$http_port"
 }
 
 function create_server_profile() {
@@ -143,10 +254,12 @@ function create_server_profile() {
     return 1
   fi
 
-  while valheim_port_in_use "$valheim_port"; do
+  while ! validate_server_profile_ports "$name" "$valheim_port" "$status_port" >/dev/null 2>&1; do
+    if (( valheim_port > 65523 || status_port >= 65535 )); then
+      echo "No non-overlapping ports remain for server profile '$name'." >&2
+      return 1
+    fi
     valheim_port=$((valheim_port + 10))
-  done
-  while status_port_in_use "$status_port"; do
     status_port=$((status_port + 1))
   done
 
@@ -159,89 +272,6 @@ function create_server_profile() {
   VSS_ENV_FILE="$env_file"
   export VSS_SERVER_NAME VSS_ENV_FILE
   echo "Created server profile '$name' in $env_file" >&2
-}
-
-function migrate_legacy_config() {
-  local legacy_file="$CWD/.env"
-  local profile_name
-  local target_file
-  local target_args
-  local old_connected
-  local old_offline
-  local old_map
-  local old_save
-  local new_connected
-  local new_offline
-  local new_map
-  local new_save
-
-  MIGRATION_ERROR=""
-  MIGRATED_PROFILE_NAME=""
-  [ -f "$legacy_file" ] || return 0
-
-  source "$legacy_file"
-  profile_name="${VHSERVERWORLD:-}"
-  if ! vss_validate_server_name "$profile_name"; then
-    MIGRATION_ERROR="Cannot migrate .env: VHSERVERWORLD is missing or is not a valid profile name."
-    echo "$MIGRATION_ERROR" >&2
-    return 1
-  fi
-
-  target_file="$CWD/.env.$profile_name"
-  target_args="$CWD/launcher/launcher-args.$profile_name"
-  if [ -e "$target_file" ]; then
-    echo "Keeping legacy .env because $target_file already exists." >&2
-    return 0
-  fi
-  if [ -f "$CWD/launcher/launcher-args" ] && [ -e "$target_args" ]; then
-    MIGRATION_ERROR="Cannot migrate .env: $target_args already exists; the legacy launcher arguments were left untouched."
-    echo "$MIGRATION_ERROR" >&2
-    return 1
-  fi
-
-  old_connected="${CONNECTEDPLAYERSFILE:-$CWD/data/online-players}"
-  old_offline="${OFFLINEPLAYERSFILE:-$CWD/data/offline-players}"
-  old_map="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
-  old_save="${LASTWORLDSAVEFILE:-$CWD/data/last-world-save}"
-  new_connected="$CWD/data/online-players.$profile_name"
-  new_offline="$CWD/data/offline-players.$profile_name"
-  new_map="$CWD/data/steamid-player-map.$profile_name"
-  new_save="$CWD/data/last-world-save.$profile_name"
-
-  if { [ -e "$new_connected" ] && [ "$old_connected" != "$new_connected" ]; } ||
-     { [ -e "$new_offline" ] && [ "$old_offline" != "$new_offline" ]; } ||
-     { [ -e "$new_map" ] && [ "$old_map" != "$new_map" ]; } ||
-     { [ -e "$new_save" ] && [ "$old_save" != "$new_save" ]; }; then
-    MIGRATION_ERROR="Cannot migrate .env: a suffixed state file already exists for '$profile_name'."
-    echo "$MIGRATION_ERROR" >&2
-    return 1
-  fi
-
-  mv "$legacy_file" "$target_file" || return 1
-  if [ -f "$CWD/launcher/launcher-args" ] && [ ! -e "$target_args" ]; then
-    mv "$CWD/launcher/launcher-args" "$target_args" || return 1
-  elif [ ! -e "$target_args" ]; then
-    cp "$CWD/examples/launcher-args" "$target_args" || return 1
-  fi
-
-  mkdir -p "$CWD/data" "$CWD/valheim-logs.d"
-  [ ! -e "$old_connected" ] || [ "$old_connected" = "$new_connected" ] || mv "$old_connected" "$new_connected" || return 1
-  [ ! -e "$old_offline" ] || [ "$old_offline" = "$new_offline" ] || mv "$old_offline" "$new_offline" || return 1
-  [ ! -e "$old_map" ] || [ "$old_map" = "$new_map" ] || mv "$old_map" "$new_map" || return 1
-  [ ! -e "$old_save" ] || [ "$old_save" = "$new_save" ] || mv "$old_save" "$new_save" || return 1
-
-  write_env_value "$target_file" CONNECTEDPLAYERSFILE "$new_connected" || return 1
-  write_env_value "$target_file" OFFLINEPLAYERSFILE "$new_offline" || return 1
-  write_env_value "$target_file" STEAMIDMAPFILE "$new_map" || return 1
-  write_env_value "$target_file" LASTWORLDSAVEFILE "$new_save" || return 1
-  write_env_value "$target_file" VALHEIMSERVERLOGDIR "$CWD/valheim-logs.d" || return 1
-  write_env_value "$target_file" VALHEIMSERVERLOGPATH "$CWD/valheim-logs.d/*.$profile_name.*.log" || return 1
-  write_env_value "$target_file" VHSERVERLAUNCHERARGS "$CWD/launcher/launcher-args.$profile_name" || return 1
-  write_env_value "$target_file" VHSERVERSERVICENAME "valheim-server.$profile_name.service" || return 1
-  write_env_value "$target_file" VSSHTTPSERVICENAME "vss.http.$profile_name.service" || return 1
-  write_env_value "$target_file" VSSPIPESERVICENAME "vss.pipe.$profile_name.service" || return 1
-  MIGRATED_PROFILE_NAME="$profile_name"
-  echo "Migrated .env to .env.$profile_name and renamed the launcher arguments."
 }
 
 function load_server_profile() {
@@ -259,6 +289,7 @@ function load_server_profile() {
   ensure_env_sync "$VSS_ENV_FILE" "$CWD/.env.dist" || return 1
   VSS_CONFIG_LOADED=0
   vss_load_config "$CWD" || return 1
+  validate_server_profile_ports "$name" "$VHSERVERPORT" "$STATUSPORT" || return 1
   if [ ! -f "$VHSERVERLAUNCHERARGS" ]; then
     cp "$CWD/examples/launcher-args" "$VHSERVERLAUNCHERARGS" || return 1
   fi
@@ -462,9 +493,16 @@ function default_integer_value() {
 function replace_env_value() {
   local key="$1"
   local value="${2:-}"
+  local candidate_game_port="${VHSERVERPORT:-}"
+  local candidate_http_port="${STATUSPORT:-}"
 
   if [ "$key" = "VHSERVERWORLD" ]; then
     echo "The world name identifies this profile. Use the profile rename operation instead." >&2
+    return 1
+  fi
+
+  if [ "$key" = "R2MODMANCODE" ] && [ -n "$value" ] && ! validate_r2modman_code "$value"; then
+    echo "R2MODMANCODE must be a UUID such as 01a1eaf3-9be3-9083-b9b4-26768368368e." >&2
     return 1
   fi
 
@@ -487,6 +525,14 @@ function replace_env_value() {
     fallback="$(default_integer_value "$key")"
     echo "Invalid integer value for $key: '$value'; using default $fallback" >&2
     value="$fallback"
+  fi
+
+  case "$key" in
+    VHSERVERPORT) candidate_game_port="$value" ;;
+    STATUSPORT) candidate_http_port="$value" ;;
+  esac
+  if [[ "$key" = VHSERVERPORT || "$key" = STATUSPORT ]]; then
+    validate_server_profile_ports "$VSS_SERVER_NAME" "$candidate_game_port" "$candidate_http_port" || return 1
   fi
 
   if [[ "$value" == *[!0-9]* ]] && [[ "$value" != "" ]]; then
@@ -736,6 +782,7 @@ function restart_vsspipe_service(){
 # Setup service with conf values, setup is $1=1; setdown is $1=2
 function set_logrotate(){
 	local logrotate_name="valheim-vss.logrotate"
+	local logrotate_dir="${1:-/etc/logrotate.d}"
 	cp "$CWD/examples/valheim.logrotate" "$CWD/systemd/$logrotate_name"
 
 	sed -i "s[###VALHEIMSERVERLOGDIR###[$VALHEIMSERVERLOGDIR[g" "$CWD/systemd/$logrotate_name"
@@ -744,23 +791,14 @@ function set_logrotate(){
 		return 1
 	fi
 
-	# Copy new file
-	sudo cp "$CWD/systemd/$logrotate_name" "/etc/logrotate.d/valheim-vss"
-
-	# Change chown and chmod
-	sudo chown root:root /etc/logrotate.d/valheim-vss
-	sudo chmod 0644 /etc/logrotate.d/valheim-vss
-	NOSUDO=$?
-	# missing sudo fallback
-	if [ $NOSUDO -gt 0 ]
-	then 
+	if ! sudo cp "$CWD/systemd/$logrotate_name" "$logrotate_dir/valheim-vss"; then
 		echo -e "$(ColorRed 'Since sudo has failed, here is the commands we tried : ')" >&2
-		echo -e "sudo cp \"$CWD/systemd/$logrotate_name\" \"/etc/logrotate.d/valheim-vss\"" >&2
-		echo -e "sudo chown root:root /etc/logrotate.d/valheim-vss" >&2
-		echo -e "sudo chmod 0644 /etc/logrotate.d/valheim-vss" >&2
-	else 
-		echo -e "$(ColorGreen 'logrotate set')"
+		echo -e "sudo cp \"$CWD/systemd/$logrotate_name\" \"$logrotate_dir/valheim-vss\"" >&2
+		return 1
 	fi
+	sudo chown root:root "$logrotate_dir/valheim-vss" || return 1
+	sudo chmod 0644 "$logrotate_dir/valheim-vss" || return 1
+	echo -e "$(ColorGreen 'logrotate set')"
 }
 
 function remove_shared_logrotate() {
@@ -930,14 +968,14 @@ vss_header
 echo -ne "
 *** Valheim Server Launcher menu ***
 $(ColorRed 'Warning: most launcher options only work when VSS starts the Valheim server itself. Setup options need a server restart.')
-$(ColorRed 'PLEASE AVOID TO USE SPECIAL CHARACTERS IN YOUR SERVER NAME, WORLD NAME or SEED. VALHEIM SERVER WILL NOT LAUNCH.')
+$(ColorRed 'PLEASE AVOID SPECIAL CHARACTERS IN YOUR SERVER NAME OR WORLD NAME.')
 $(ColorGreen '1)') $(ColorYellow 'auto-conf custom launcher') if your server is running! this will set 2),3),4),5),6),7),8)
 $(ColorGreen '2)') setup current Valheim server directory
 $(ColorGreen '3)') setup wanted Valheim server listening port
 $(ColorGreen '4)') setup wanted Valheim server name
 $(ColorGreen '5)') setup wanted Valheim server world name
 $(ColorGreen '6)') setup wanted Valheim server password
-$(ColorGreen '7)') setup current Valheim server $(ColorYellow 'seed') value $(ColorYellow '(The server can`t impose a seed, informative purpose only for DISCORD)')
+$(ColorGreen '7)') set the informational Valheim world seed shown in Discord
 $(ColorGreen '8)') setup wanted Valheim server savedir value
 $(ColorGreen '9)') setup crossplay
 $(ColorGreen '10)') $(ColorRed 'sudo required') create or reinstall valheim-server.service in /etc/systemd/system
@@ -946,6 +984,7 @@ $(ColorGreen '12)') $(ColorRed 'sudo required') stop the existing service and sh
 $(ColorGreen '13)') $(ColorRed 'sudo required') start the existing service and run the server
 $(ColorGreen '14)') $(ColorRed 'sudo required') restart the existing service and the server
 $(ColorGreen '15)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
+$(ColorGreen '16)') set the optional R2Modman profile code shared with players via Discord
 
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
@@ -960,7 +999,7 @@ mkdir -p "$CWD/systemd"
 	        4) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server name ?" 'VHSERVERNAME' ; clear ; launcher_menu ;;
 	        5) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim World name ? $(ColorRed 'If you already have a server, put its World name here')" 'VHSERVERWORLD' ; clear ; launcher_menu ;;
 	        6) setup_value_prompt "what is your $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server password ?" 'VHSERVERPASSWD' ; clear ; launcher_menu ;;
-			7) setup_value_prompt "what is your current $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server seed ?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
+			7) setup_value_prompt "what is the current Valheim world seed to display in Discord?" 'VHSERVERSEED' ; clear ; launcher_menu ;;
 			8) setup_value_prompt "what is your wanted $(ColorYellow 'current') or $(ColorCyan 'wanted') Valheim server savedir ?" 'VHSERVERSAVEDIR' ; clear ; launcher_menu ;;
 			9) setup_value_prompt 'set crossplay on/off: 1 = crossplay active, 0 = crossplay inactive' 'VHSERVERCROSSPLAY' ; clear ; launcher_menu ;;
 			10) set_service "$VHSERVERSERVICENAME"; sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
@@ -979,6 +1018,7 @@ mkdir -p "$CWD/systemd"
 					echo -e "$(ColorRed 'VHSERVERWORLD is empty; cannot delete the current world.')" >&2
 				fi
 				sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
+			16) setup_value_prompt 'set the optional R2Modman profile code (shown in Discord when BepInEx is enabled)' 'R2MODMANCODE' ; clear ; launcher_menu ;;
 
 		0) setup_ui_clear; return 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
@@ -1119,7 +1159,9 @@ Usage:
   ./setup --stop-server SERVER_NAME
   ./setup --restart-server SERVER_NAME
   ./setup --status-server SERVER_NAME
+  ./setup --check-firewall SERVER_NAME
   ./setup --discord-update SERVER_NAME
+  ./migrate-v2-to-v3
 EOF
 }
 
@@ -1139,6 +1181,7 @@ function run_server_cli_action() {
     --stop-server) stop_valheim_service 2>&1 ;;
     --restart-server) restart_valheim_service 2>&1 ;;
     --status-server) status_valheim_service 2>&1 ;;
+    --check-firewall) check_ufw_profile_rules 2>&1 ;;
     --discord-update) run_discord_update 2>&1 ;;
     *) printf 'Unsupported direct action: %s\n' "$action"; return 2 ;;
   esac
@@ -1157,7 +1200,7 @@ function setup_main() {
       list_server_profiles
       return 0
       ;;
-    --start-server|--stop-server|--restart-server|--status-server|--discord-update)
+    --start-server|--stop-server|--restart-server|--status-server|--check-firewall|--discord-update)
       if [ -z "${2:-}" ] || [ -n "${3:-}" ]; then
         printf 'Option %s requires exactly one server name.\n' "$1"
         setup_usage
@@ -1167,8 +1210,12 @@ function setup_main() {
       ;;
   esac
 
+  if [ -f "$CWD/.env" ]; then
+    printf 'A legacy .env was found. Run ./migrate-v2-to-v3 before using setup.\n' >&2
+    return 1
+  fi
+
   if [ -n "$direct_action" ]; then
-    migrate_legacy_config || return 1
     if ! load_server_profile "$2"; then
       printf "Setup could not load profile '%s'. Review the error above and check its configuration.\n" "$2" >&2
       return 1
@@ -1177,14 +1224,12 @@ function setup_main() {
     return $?
   fi
 
-  migrate_legacy_config || return 1
-
   case "${1:-}" in
     --create)
       if [ -z "${2:-}" ]; then
         return 1
       fi
-      if [ "$2" != "$MIGRATED_PROFILE_NAME" ] && ! create_server_profile "$2"; then
+      if ! create_server_profile "$2"; then
         return 1
       fi
       selected_profile="$2"

@@ -4,6 +4,7 @@ test
 .env.*
 !.env.dist
 systemd
+migration-backups/
 valheim-logs.d
 valheim-logs.d/*
 data

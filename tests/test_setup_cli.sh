@@ -6,6 +6,10 @@ TMPDIR_CLI="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_CLI"' EXIT
 
 source "$ROOT/setup" >/dev/null
+if declare -F migrate_legacy_config >/dev/null; then
+  echo "FAIL: V2 migration code is still loaded into setup" >&2
+  exit 1
+fi
 
 CWD="$TMPDIR_CLI"
 mkdir -p "$CWD/bin" "$CWD/lib" "$CWD/launcher" "$CWD/examples" "$CWD/data"
@@ -23,6 +27,7 @@ start_valheim_service() { called_action='start'; }
 stop_valheim_service() { called_action='stop'; }
 restart_valheim_service() { called_action='restart'; }
 status_valheim_service() { called_action='status'; }
+check_ufw_profile_rules() { called_action='firewall'; }
 run_discord_update() { called_action='discord'; }
 new_menu() { called_action='menu'; return 91; }
 
@@ -55,6 +60,25 @@ for action in start stop status; do
   fi
 done
 
+if ! setup_main --check-firewall CliWorld; then
+  echo "FAIL: direct firewall check command failed" >&2
+  exit 1
+fi
+if [ "$called_action" != 'firewall' ]; then
+  echo "FAIL: firewall check command did not dispatch to the profile action" >&2
+  exit 1
+fi
+
+if replace_env_value R2MODMANCODE not-a-uuid; then
+  echo "FAIL: setup accepted an invalid R2Modman code" >&2
+  exit 1
+fi
+if ! replace_env_value R2MODMANCODE 01a1eaf3-9be3-9083-b9b4-26768368368e ||
+   ! grep -Fq 'R2MODMANCODE="01a1eaf3-9be3-9083-b9b4-26768368368e"' "$CWD/.env.CliWorld"; then
+  echo "FAIL: setup did not save a valid R2Modman code" >&2
+  exit 1
+fi
+
 CONFLICT_DIR="$TMPDIR_CLI/conflict"
 mkdir -p "$CONFLICT_DIR/data" "$CONFLICT_DIR/examples"
 cp "$ROOT/examples/launcher-args" "$CONFLICT_DIR/examples/launcher-args"
@@ -73,15 +97,16 @@ if setup_main --restart-server ConflictWorld > "$TMPDIR_CLI/migration-conflict.o
   echo "FAIL: direct action ignored a migration state-file conflict" >&2
   exit 1
 fi
-if ! grep -Fq "Cannot migrate .env: a suffixed state file already exists for 'ConflictWorld'." \
+if ! grep -Fq 'Run ./migrate-v2-to-v3' \
   "$TMPDIR_CLI/migration-conflict.out"; then
-  echo "FAIL: setup did not display the migration conflict" >&2
+  echo "FAIL: setup did not direct legacy installations to the migration command" >&2
   exit 1
 fi
 if [ "$called_action" != 'not called' ] ||
    [ -e "$CWD/.env.ConflictWorld" ] ||
+   [ ! -e "$CWD/.env" ] ||
    ! grep -Fxq 'existing profile state' "$CWD/data/online-players.ConflictWorld"; then
-  echo "FAIL: migration conflict changed profile or state data" >&2
+  echo "FAIL: setup changed profile or state data while reporting a legacy installation" >&2
   exit 1
 fi
 

@@ -21,6 +21,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 ## Directory map
 
 - `setup` : interactive setup and service configuration tool
+- `migrate-v2-to-v3` : explicit, backed-up V2-to-V3 migration command
 - `vss.log-filter` : log parser for Valheim events
 - `status/` : HTTP and CLI status scripts
 - `discord/` : Discord webhook sender and updates
@@ -29,6 +30,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - `lib/` : reusable shell helpers, if present
 - `.env.dist` / `.env.<world-name>` : configuration template and per-world configuration
 - `launcher/launcher-args.<world-name>` : per-world optional launcher arguments
+- `migration-backups/` : permission-restricted migration backups; ignored by git
 
 ## Execution rules for AI work
 
@@ -45,6 +47,9 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - Pass the selected profile explicitly with `VSS_SERVER_NAME` to scripts, services, cron jobs, and child processes.
 - Keep profile names equal to `VHSERVERWORLD`; validate names before using them in filenames or systemd unit names.
 - Keep VSS state files isolated with world-name suffixes. The Valheim `savedir` and its admin, banned, and permitted lists are intentionally shared.
+- `VHSERVERSEED` is informational only and is displayed in status/Discord; VSS cannot use it to set or change the Valheim world seed.
+- `R2MODMANCODE` is an optional per-profile mod-manager share code. Display it in Discord and server status only when BepInEx is enabled; VSS does not generate or synchronize the mod profile.
+- Setup validates port collisions between profiles and may report UFW rules for the Valheim range and HTTP status port. The check is informational and must never modify or open firewall rules.
 - Preserve migration from a legacy `.env` and `launcher/launcher-args` into profile-specific names; never overwrite an existing profile or state file.
 - When adding numeric config variables, validate them as integers and fall back to a safe default on parse failure.
 - Do not silently remove required configuration; show fallback and validation diagnostics on `stderr`. Background/runtime processes may additionally append operational errors to `crash.log`; the interactive `setup` CLI must not redirect there.

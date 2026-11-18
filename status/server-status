@@ -5,6 +5,7 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
 source "$CWD/../lib/config.sh"
 vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/validation.sh"
 
 # Stats
 TOTALCPU=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
@@ -60,6 +61,15 @@ if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
 then
 	BEPINEXVERSION_LABEL="${BEPINEXVERSION} ${BEPINEXLASTUPDATE:-not_installed}"
 fi
+R2MODMANCODE_FIELD=""
+if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ] && [ -n "${R2MODMANCODE:-}" ];
+then
+	if validate_r2modman_code "$R2MODMANCODE"; then
+		R2MODMANCODE_FIELD="{\"name\":\"R2Modman code\",\"value\":\"\`${R2MODMANCODE}\`\",\"inline\":false},"
+	else
+		printf 'R2MODMANCODE must be a UUID; omitting invalid code from status output.\n' >&2
+	fi
+fi
 
 CURRENT_SEED="${VHSERVERSEED:-unknown}"
 CURRENT_WORLD="${VHSERVERWORLD:-unknown}"
@@ -75,6 +85,7 @@ then
 		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},
 		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
 		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},
+		${R2MODMANCODE_FIELD}
 		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}
 		]}
 		]}"
@@ -95,6 +106,7 @@ then
 		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":false},
 		{\"name\":\"seed\",\"value\": \"||${CURRENT_SEED}||\",\"inline\":true},
 		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
+		${R2MODMANCODE_FIELD}
 		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},
 		{\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST}\",\"inline\":true},
 		{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST}\",\"inline\":true}
@@ -116,6 +128,10 @@ then
        echo -e "${LAST_WORLD_SAVE_TS}"
        echo -e "\n**Server seed**"
        echo -e "${CURRENT_SEED}"
+       if [ -n "$R2MODMANCODE_FIELD" ]; then
+	       echo -e "\n**R2Modman profile code**"
+	       echo -e "${R2MODMANCODE}"
+       fi
        exit 1
 else
        echo -e "SERVER ONLINE !"
@@ -132,6 +148,10 @@ echo -e "\n**$(T last_save)**"
 echo -e "${LAST_WORLD_SAVE_TS}"
 echo -e "\n**Server seed**"
 echo -e "${CURRENT_SEED}"
+if [ -n "$R2MODMANCODE_FIELD" ]; then
+	echo -e "\n**R2Modman profile code**"
+	echo -e "${R2MODMANCODE}"
+fi
 
 echo -e "\n**Server consumption**"
 echo -e "CPU ($TOTALCPU cores) : $CPUUSAGE%"

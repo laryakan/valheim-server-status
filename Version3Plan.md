@@ -8,8 +8,8 @@ Allow multiple Valheim servers to be managed from a single VSS installation with
 
 The current implementation is an initial multi-server release, not completion of every item in this plan.
 
-- **Implemented:** per-world `.env.<world-name>` profiles, profile-specific launcher arguments and VSS state, shared saves/admin lists, world-qualified logs with shared logrotate, profile-specific service templates, Discord settings, profile-tagged cron updates, automatic legacy profile/launcher/state migration with overwrite checks, a Bash setup dashboard/profile picker, and direct start/stop/restart/status/Discord-update commands.
-- **Still outstanding:** a controlled profile/world rename, confirmations for destructive operations, migration/cleanup of existing systemd units as part of the upgrade flow, and a complete interactive backup/rollback procedure. Existing service units are not automatically migrated or removed.
+- **Implemented:** per-world `.env.<world-name>` profiles, profile-specific launcher arguments and VSS state, shared saves/admin lists, world-qualified logs with shared logrotate, profile-specific service templates, Discord settings, profile-tagged cron updates, optional R2Modman code display in Discord and server status for BepInEx profiles, a separate backed-up V2-to-V3 migration command, a Bash setup dashboard/profile picker, direct start/stop/restart/status/Discord-update/firewall-check commands, cross-profile port collision checks, and an informational UFW rules check.
+- **Still outstanding:** a controlled profile/world rename, consistent confirmations for destructive operations, automated post-migration health verification before offering legacy-unit cleanup, and a complete interactive rollback procedure. The migrator stops/disables V2 units and retains their files; it does not verify service health or remove legacy units automatically.
 
 ## Agreed conventions
 
@@ -19,6 +19,7 @@ The current implementation is an initial multi-server release, not completion of
 - Scripts and libraries are shared by all servers.
 - The contents of `savedir` remain shared. Valheim distinguishes world saves by world name; `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` will also be shared across servers.
 - World names must be unique. Setup must validate or escape names used in paths and systemd unit names without silently changing them.
+- `VHSERVERSEED` is informational only; VSS displays it but cannot set or change the world's seed.
 
 ## 1. Configuration and server selection
 
@@ -67,36 +68,53 @@ Setup must replace every required placeholder in the templates, including those 
 2. Pass the selected profile to Discord scripts called by the log filter, services, and setup.
 3. Manage cron jobs per profile so each update uses the correct webhook and state files.
 4. Ensure that operating on one profile does not remove or modify other profiles' cron jobs.
+5. When BepInEx is enabled, optionally display the profile's manually configured `R2MODMANCODE` in Discord and server status. VSS does not generate or synchronize the mod manager profile.
 
 ## 6. `./setup` terminal interface
 
-Continue modernizing the terminal interface in `./setup` to present profiles and available operations clearly, without turning the project into a web interface or duplicating business logic. The first-pass implementation provides a Bash dashboard and profile picker without adding a TUI dependency.
+Modernize the terminal interface in `./setup` to present profiles and available operations clearly, without turning the project into a web interface or duplicating business logic.
 
-The current interface displays the selected profile, world, Valheim process state, ports, and service-unit presence; groups configuration, monitoring, and maintenance menus; and lets a user select or create a profile. Direct one-line actions are also available:
+The target interface must allow users to:
+
+- list and select a server, showing the status of its services;
+- create a profile from `.env.dist` and create its `launcher-args.<world-name>` file;
+- edit its configuration, logs, and webhook;
+- install, reinstall, start, stop, and remove its services;
+- manage its cron jobs and profile-specific maintenance tasks;
+- clearly identify global operations, especially management of shared log rotation;
+- confirm destructive operations.
+
+The current first-pass implementation provides a Bash dashboard and profile picker, displays the selected profile, world, Valheim process state, ports, and service-unit presence, and groups operations in menus. Direct one-line actions currently available are:
 
 - `./setup --start-server <world-name>`
 - `./setup --stop-server <world-name>`
 - `./setup --restart-server <world-name>`
 - `./setup --status-server <world-name>`
+- `./setup --check-firewall <world-name>`
 - `./setup --discord-update <world-name>`
 
-Continue improving discoverability and error handling. Direct actions currently cover Valheim lifecycle/status and Discord updates; most other setup operations still require the interactive menus. Destructive operations do not yet have a consistent confirmation flow.
+Setup rejects overlapping game port ranges and HTTP ports across profiles. The firewall check reports whether UFW has ALLOW rules for the profile's Valheim port range (TCP/UDP) and HTTP status port (TCP); it does not change firewall rules. Missing, inactive, or unavailable UFW is reported without automatically opening ports.
 
-## 7. Renaming a world/profile — outstanding
+The interface does not yet consistently confirm destructive operations; compare the implementation against the full target list above when continuing the UI work.
+
+## 7. Renaming a world/profile
 
 Since the world name is also the profile identifier, changing it requires renaming or regenerating the associated `.env.<name>`, `launcher-args.<name>`, files in `data/`, systemd units, and cron jobs. Add a controlled rename operation to `./setup` that checks for conflicts, updates references, and does not remove the old profile until the operation has been verified as successful.
 
-No controlled rename operation is implemented yet. The ordinary setup prompt prevents changing `VHSERVERWORLD`; users must not rename profile files manually while services or cron jobs are active.
+**Implementation status:** No controlled rename operation exists yet. The ordinary setup prompt prevents changing `VHSERVERWORLD`; users must not rename profile files manually while services or cron jobs are active.
 
 ## 8. Migration from the previous version
 
-The current automatic migration runs when `./setup` starts and:
+Provide an explicit, safe migration procedure to version 3:
 
-- Reads the legacy `.env` and uses `VHSERVERWORLD` as the profile name.
-- Renames it to `.env.<world-name>`, renames or creates `launcher/launcher-args.<world-name>`, and suffixes existing VSS state files.
-- Leaves the legacy `.env` untouched if the target profile already exists. It refuses to overwrite an existing launcher-args or suffixed state file and stops migration for manual review.
+1. Read the old `.env` and use `VHSERVERWORLD` as the initial profile name.
+2. Create `.env.<world-name>` and `launcher/launcher-args.<world-name>` without overwriting an existing profile.
+3. Rename or copy existing VSS state files to their suffixed names while preserving their contents.
+4. Generate the profile-specific services from templates and install the shared logrotate configuration.
+5. Verify generated files and server status before offering to remove the old units.
+6. Document backups, conflicts, and rollback steps.
 
-Migration does **not** install new units, remove old units, or provide an automated rollback. Users are instructed to back up configuration/state and manually install and verify profile-specific units after migration. Complete this section with an explicit backup, conflict-resolution, unit replacement, verification, and rollback procedure before treating the release migration as finished.
+**Implementation status:** V2 migration is a separate `./migrate-v2-to-v3` command; `./setup` refuses to proceed while a legacy `.env` is present and points the user to the migrator. The migrator creates a restricted backup, stops/disables existing V2 units, migrates the profile/launcher/state files, replaces legacy webhook cron entries, installs shared logrotate and profile-specific units, checks UFW rules without changing them, and asks before enabling/starting V3 units. It does not check V3 service health before asking to start them, nor does it remove legacy units; users must verify the V3 services and remove the stopped V2 units manually. Old logs are not moved. On a partial failure, recovery from the retained backup is manual.
 
 After migration, no script must depend on `.env` as an active configuration.
 
@@ -109,5 +127,7 @@ After migration, no script must depend on `.env` as an active configuration.
 - Generated systemd files use the world-name suffix, contain the selected profile's values, and have no unresolved placeholders.
 - Managing or removing a profile does not affect other profiles' resources or shared log rotation that is still in use.
 - Migration preserves existing data and does not implicitly reactivate the old `.env`.
+- Profile validation detects overlapping Valheim ranges and HTTP port collisions. The optional UFW check reports missing required ALLOW rules and never edits firewall configuration.
+- An enabled BepInEx profile can publish its configured R2Modman code in Discord and server status; with BepInEx disabled, the code is omitted.
 - Tests use temporary configuration/state/log locations, clean up via traps, leave active server files and `crash.log` unchanged, and pass repeatedly without residue.
 - Existing tests are updated for explicit profile loading, and regression tests cover isolation between two servers.
