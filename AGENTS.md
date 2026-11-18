@@ -22,6 +22,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 
 - `setup` : interactive setup and service configuration tool
 - `migrate-v2-to-v3` : explicit, backed-up V2-to-V3 migration command
+- `bepinex_upgrade.sh` : downloads the latest official Linux x64 BepInEx image and updates `bepinex/current`
 - `vss.log-filter` : log parser for Valheim events
 - `status/` : HTTP and CLI status scripts
 - `discord/` : Discord webhook sender and updates
@@ -51,6 +52,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - `R2MODMANCODE` is an optional per-profile mod-manager share code. Display it in Discord and server status only when BepInEx is enabled; VSS does not generate or synchronize the mod profile.
 - Setup validates port collisions between profiles and may report UFW rules for the Valheim range and HTTP status port. The check is informational and must never modify or open firewall rules.
 - Preserve migration from a legacy `.env` and `launcher/launcher-args` into profile-specific names; never overwrite an existing profile or state file.
+- `./bepinex_upgrade.sh` requires `wget`, `unzip`, and `awk`. It enforces VSS-owned logging keys in the image's `BepInEx.cfg`, preserves other upstream config entries and old image directories, and does not migrate or modify plugins. The `BEPINEX_RELEASES_LATEST_URL` override is for a fixture-compatible release metadata endpoint.
 - When adding numeric config variables, validate them as integers and fall back to a safe default on parse failure.
 - Do not silently remove required configuration; show fallback and validation diagnostics on `stderr`. Background/runtime processes may additionally append operational errors to `crash.log`; the interactive `setup` CLI must not redirect there.
 
@@ -79,6 +81,7 @@ Examples:
 - Direct script execution or sourcing tests for changed scripts.
 - Minimal regression checks for integer parsing/default behavior.
 - Profile-isolation and migration tests for changes to config loading or setup.
+- Run `./tests/test_bepinex_upgrade.sh` for BepInEx image-upgrade changes; the test uses `wget`, `unzip`, `ncat`, and `base64` to exercise local HTTP/ZIP fixtures.
 - Tests must put generated configuration, state, and log files in temporary directories, and remove them with an `EXIT` trap. Do not let tests touch active `.env.<world-name>` files, `data/`, production logs, or `crash.log`.
 - After running tests, check for leftovers and verify that active profile files, state, logs, and `crash.log` are unchanged. Re-run the suite when practical to check idempotence.
 

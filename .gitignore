@@ -14,3 +14,4 @@ last-world-save
 launcher/launcher-args
 launcher/launcher-args.*
 fake-server
+bepinex/BepInEx_linux_x64_*/
