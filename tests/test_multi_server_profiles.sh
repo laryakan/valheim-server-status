@@ -141,4 +141,38 @@ esac
     { echo "FAIL: default status URL was not recalculated from shared PUBLICIP" >&2; exit 1; }
 )
 
+load_bepinex_profile() (
+  VSS_SERVER_NAME="$1"
+  export VSS_SERVER_NAME
+  unset VSS_ENV_FILE VSS_CONFIG_LOADED
+  source "$ROOT/lib/config.sh"
+  vss_load_config "$TMPDIR_PROFILE"
+  printf '%s|%s\n' "$VSSBEPINEXDIR" "$VSSBEPINEXLOGOUTPUT"
+)
+
+ALPHA_BEPINEX="$(load_bepinex_profile Alpha)"
+BETA_BEPINEX="$(load_bepinex_profile Beta)"
+if [ "$ALPHA_BEPINEX" = "$BETA_BEPINEX" ]; then
+  echo "FAIL: BepInEx profile roots and logs were shared" >&2
+  exit 1
+fi
+case "$ALPHA_BEPINEX" in
+  "$TMPDIR_PROFILE/bepinex/profiles/Alpha|$TMPDIR_PROFILE/bepinex/profiles/Alpha/BepInEx/LogOutput.log") ;;
+  *) echo "FAIL: Alpha BepInEx paths do not use its profile root" >&2; exit 1 ;;
+esac
+case "$BETA_BEPINEX" in
+  "$TMPDIR_PROFILE/bepinex/profiles/Beta|$TMPDIR_PROFILE/bepinex/profiles/Beta/BepInEx/LogOutput.log") ;;
+  *) echo "FAIL: Beta BepInEx paths do not use its profile root" >&2; exit 1 ;;
+esac
+
+cat >> "$TMPDIR_PROFILE/.env.Alpha" <<'EOF'
+VSSBEPINEXDIR="$VSSDIR/bepinex/current/"
+VSSBEPINEXLOGOUTPUT="$VSSBEPINEXDIR/BepInEx/LogOutput.log"
+EOF
+LEGACY_BEPINEX="$(load_bepinex_profile Alpha)"
+case "$LEGACY_BEPINEX" in
+  "$TMPDIR_PROFILE/bepinex/profiles/Alpha|$TMPDIR_PROFILE/bepinex/profiles/Alpha/BepInEx/LogOutput.log") ;;
+  *) echo "FAIL: legacy shared BepInEx paths were not mapped to the profile" >&2; exit 1 ;;
+esac
+
 echo "multi-server profile isolation OK"

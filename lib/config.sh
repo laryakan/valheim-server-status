@@ -180,6 +180,20 @@ vss_load_config() {
     export "$state_key"
   done
 
+  local default_bepinex_dir="$root/bepinex/profiles/$VSS_SERVER_NAME"
+  local default_bepinex_log="$default_bepinex_dir/BepInEx/LogOutput.log"
+  case "${VSSBEPINEXDIR:-}" in
+    ''|"$root/bepinex/current"|"$root/bepinex/current/")
+      VSSBEPINEXDIR="$default_bepinex_dir"
+      ;;
+  esac
+  case "${VSSBEPINEXLOGOUTPUT:-}" in
+    ''|"$root/bepinex/current/BepInEx/LogOutput.log"|"$root/bepinex/current//BepInEx/LogOutput.log")
+      VSSBEPINEXLOGOUTPUT="$default_bepinex_log"
+      ;;
+  esac
+  export VSSBEPINEXDIR VSSBEPINEXLOGOUTPUT
+
   export VSS_SERVER_NAME
   VSS_CONFIG_LOADED=1
   export VSS_CONFIG_LOADED

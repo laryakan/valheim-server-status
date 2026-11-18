@@ -3,22 +3,13 @@
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$CWD/../lib/config.sh"
 vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/bepinex.sh"
 
-export templdpath=$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=./linux64:$LD_LIBRARY_PATH
+export templdpath="${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="./linux64${templdpath:+:$templdpath}"
 export SteamAppId=892970
 
-if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
-then
-  # BepInEx-specific settings
-  ####
-  export DOORSTOP_ENABLED=1
-  export DOORSTOP_TARGET_ASSEMBLY="$VHSERVERDIR/BepInEx/core/BepInEx.Preloader.dll"
-
-  export LD_LIBRARY_PATH="$VHSERVERDIR/doorstop_libs:$LD_LIBRARY_PATH"
-  export LD_PRELOAD="libdoorstop.so:$LD_PRELOAD"
-  ####
-fi
+vss_bepinex_configure_runtime || exit 1
 
 
 

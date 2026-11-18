@@ -936,25 +936,19 @@ function set_service(){
 	local SERVICENAME="$1"
 	render_service "$SERVICENAME" || return 1
 	# copying to system
-	sudo ln -sfn "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"
-	NOSUDO=$?
-	# missing sudo fallback
-	if [ $NOSUDO -gt 0 ]
-	then 
+	if ! sudo ln -sfn "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"; then
 		echo -e "$(ColorRed 'Since sudo has failed, here s the command we tried : ')" >&2
 		echo -e "sudo ln -sfn \"$CWD/systemd/$SERVICENAME\" \"/etc/systemd/system/$SERVICENAME\"" >&2
 		echo -e "sudo systemctl daemon-reload" >&2
 		echo -e "sudo systemctl enable $SERVICENAME" >&2
 		echo -e "sudo systemctl start $SERVICENAME" >&2
-	else 
-		# service relaod
-		sudo systemctl daemon-reload
-		# start at reboot
-		sudo systemctl enable $SERVICENAME
-		# start now
-		sudo systemctl start $SERVICENAME
-		echo -e "$(ColorGreen 'service set and started')"
+		return 1
 	fi
+
+	sudo systemctl daemon-reload || return 1
+	sudo systemctl enable "$SERVICENAME" || return 1
+	sudo systemctl start "$SERVICENAME" || return 1
+	echo -e "$(ColorGreen 'service set and started')"
 	echo -e "if the service is set, you can auto-start after reboot using \"systemctl enable $SERVICENAME\""
 }
 
@@ -1018,10 +1012,11 @@ function status_valheim_service(){
 
 function restart_vsspipe_service(){
   if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ]; then
-    sudo systemctl restart "$VSSPIPESERVICENAME"
+    sudo systemctl restart "$VSSPIPESERVICENAME" || return 1
     echo -e "$(ColorGreen 'VSS pipe service restarted')"
   else
     echo -e "$(ColorRed 'VSS pipe service does not exist')" >&2
+    return 1
   fi
 }
 
@@ -1075,6 +1070,40 @@ function remove_profile_services() {
 # Install / Active BepInEx_Valheim packaged version
 function bepinex(){
 	replace_env_value "$2" "VSSBEPINEXENABLED"
+}
+
+function enable_bepinex_profile() {
+  if ! replace_env_value 'VSSBEPINEXENABLED' 1; then
+    return 1
+  fi
+  if ! "$VSSDIR/bepinex/install_bepinex.sh"; then
+    if ! replace_env_value 'VSSBEPINEXENABLED' 0; then
+      printf 'Failed to reset VSSBEPINEXENABLED for profile %s after installation failed.\n' "$VSS_SERVER_NAME" >&2
+    fi
+    return 1
+  fi
+  if ! set_service "$VSSPIPESERVICENAME" || ! restart_vsspipe_service; then
+    if ! replace_env_value 'VSSBEPINEXENABLED' 0; then
+      printf 'Failed to reset VSSBEPINEXENABLED for profile %s after pipe setup failed.\n' "$VSS_SERVER_NAME" >&2
+    fi
+    if ! "$VSSDIR/bepinex/remove_bepinex.sh"; then
+      printf 'Failed to remove legacy BepInEx server links for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    fi
+    if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ] && ! restart_vsspipe_service; then
+      printf 'Failed to restore the standard log pipe for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    fi
+    return 1
+  fi
+  return 0
+}
+
+function disable_bepinex_profile() {
+  replace_env_value 'VSSBEPINEXENABLED' 0 || return 1
+  "$VSSDIR/bepinex/remove_bepinex.sh" || return 1
+  if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ]; then
+    restart_vsspipe_service || return 1
+  fi
+  printf 'Restart the Valheim server to ensure Doorstop is unloaded for profile %s.\n' "$VSS_SERVER_NAME"
 }
 
 # new menus
@@ -1395,8 +1424,8 @@ new_menu(){
       10) remove_shared_logrotate ;;
       11) setup_value_prompt 'Which user should run the services?' 'USERSERVICE' ;;
       12) remove_profile_services ;;
-      13) replace_env_value 'VSSBEPINEXENABLED' 1; "$VSSDIR/bepinex/install_bepinex.sh"; sleep 1 ;;
-      14) replace_env_value 'VSSBEPINEXENABLED' 0; "$VSSDIR/bepinex/remove_bepinex.sh"; sleep 1 ;;
+      13) enable_bepinex_profile || notice="Could not enable BepInEx and its log pipe; the profile was left disabled." ;;
+      14) disable_bepinex_profile || notice="Could not disable BepInEx cleanly; review the service status." ;;
       15)
         if select_server_profile; then
           load_server_profile "$SELECTED_SERVER_PROFILE" || continue

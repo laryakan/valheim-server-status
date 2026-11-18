@@ -13,7 +13,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for command_name in wget unzip ncat base64; do
+for command_name in wget unzip ncat base64 find; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         printf 'FAIL: test_bepinex_upgrade.sh requires %s\n' "$command_name" >&2
         exit 1
@@ -88,9 +88,37 @@ printf 'old preloader\n' > "$OLD_VERSION/BepInEx/core/BepInEx.Preloader.dll"
 printf 'old doorstop\n' > "$OLD_VERSION/doorstop_libs/libdoorstop.so"
 mkdir -p "$OLD_VERSION/BepInEx/plugins"
 printf 'keep plugin\n' > "$OLD_VERSION/BepInEx/plugins/example.dll"
+mkdir -p "$OLD_VERSION/BepInEx/config"
+printf 'plugin option = old\n' > "$OLD_VERSION/BepInEx/config/Example.cfg"
+mkdir -p "$OLD_VERSION/BepInEx/cache"
+printf 'rebuildable cache\n' > "$OLD_VERSION/BepInEx/cache/cache.dat"
+mkdir -p "$OLD_VERSION/BepInEx/patchers"
+printf 'rebuildable patcher\n' > "$OLD_VERSION/BepInEx/patchers/patcher.dll"
+printf 'old shared log\n' > "$OLD_VERSION/BepInEx/LogOutput.log"
 ln -s "BepInEx_linux_x64_5.4.23.5/" "$BEPINEX_DIR/current"
 cp "$ROOT/bepinex_upgrade.sh" "$TEST_ROOT/bepinex_upgrade.sh"
+mkdir -p "$TEST_ROOT/lib"
+cp "$ROOT/lib/config.sh" "$ROOT/lib/bepinex.sh" "$TEST_ROOT/lib/"
 touch "$TEST_ROOT/crash.log"
+cat > "$TEST_ROOT/.env" <<EOF
+VSS_COMMON_CONFIG_VERSION=3
+VSSDIR="$TEST_ROOT"
+VALHEIMSERVERLOGDIR="$TEST_ROOT/valheim-logs.d"
+EOF
+
+create_profile() {
+    local name="$1"
+    local enabled="$2"
+    cat > "$TEST_ROOT/.env.$name" <<EOF
+VHSERVERWORLD="$name"
+VSSBEPINEXENABLED=$enabled
+VSSBEPINEXDIR="\$VSSDIR/bepinex/current/"
+VSSBEPINEXLOGOUTPUT="\$VSSBEPINEXDIR/BepInEx/LogOutput.log"
+EOF
+}
+create_profile Alpha 1
+create_profile Beta 1
+create_profile Disabled 0
 
 make_fixture() {
     local version="$1"
@@ -112,8 +140,54 @@ if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]]; 
     echo "FAIL: current symlink was not switched to the downloaded image" >&2
     exit 1
 fi
-if [[ ! -f "$OLD_VERSION/BepInEx/plugins/example.dll" ]] || [[ "$(cat "$OLD_VERSION/BepInEx/plugins/example.dll")" != 'keep plugin' ]]; then
-    echo "FAIL: existing plugin files were changed or removed" >&2
+if [[ -e "$OLD_VERSION" ]]; then
+    echo "FAIL: the previous active BepInEx image was not removed" >&2
+    exit 1
+fi
+for profile in Alpha Beta; do
+    PROFILE_ROOT="$BEPINEX_DIR/profiles/$profile"
+    if [[ ! -f "$PROFILE_ROOT/BepInEx/plugins/example.dll" ]] ||
+       [[ "$(cat "$PROFILE_ROOT/BepInEx/plugins/example.dll")" != 'keep plugin' ]]; then
+        printf 'FAIL: legacy plugin was not migrated to profile %s\n' "$profile" >&2
+        exit 1
+    fi
+    if [[ ! -f "$PROFILE_ROOT/BepInEx/config/Example.cfg" ]] ||
+       [[ "$(cat "$PROFILE_ROOT/BepInEx/config/Example.cfg")" != 'plugin option = old' ]]; then
+        printf 'FAIL: plugin configuration was not migrated to profile %s\n' "$profile" >&2
+        exit 1
+    fi
+    if [[ ! -L "$PROFILE_ROOT/BepInEx/core/BepInEx.Preloader.dll" ]] ||
+       [[ "$(readlink "$PROFILE_ROOT/BepInEx/core/BepInEx.Preloader.dll")" != \
+          "$BEPINEX_DIR/current/BepInEx/core/BepInEx.Preloader.dll" ]]; then
+        printf 'FAIL: profile %s does not link the shared preloader file through current\n' "$profile" >&2
+        exit 1
+    fi
+    if [[ -L "$PROFILE_ROOT/BepInEx/core" || -L "$PROFILE_ROOT/BepInEx/plugins" ||
+          -L "$PROFILE_ROOT/BepInEx/config" || ! -L "$PROFILE_ROOT/BepInEx/config/BepInEx.cfg" ||
+          ! -L "$PROFILE_ROOT/doorstop_libs/libdoorstop.so" ]]; then
+        printf 'FAIL: profile %s has a shared directory or missing shared-file links\n' "$profile" >&2
+        exit 1
+    fi
+    if [[ -e "$PROFILE_ROOT/BepInEx/LogOutput.log" ]]; then
+        printf 'FAIL: shared BepInEx logs were copied into profile %s\n' "$profile" >&2
+        exit 1
+    fi
+    if [[ -e "$PROFILE_ROOT/BepInEx/cache/cache.dat" ]]; then
+        printf 'FAIL: shared BepInEx cache was copied into profile %s\n' "$profile" >&2
+        exit 1
+    fi
+    if [[ -e "$PROFILE_ROOT/BepInEx/patchers/patcher.dll" ]]; then
+        printf 'FAIL: shared BepInEx patcher was copied into profile %s\n' "$profile" >&2
+        exit 1
+    fi
+done
+if [[ -e "$BEPINEX_DIR/profiles/Disabled" ]]; then
+    echo "FAIL: a disabled profile was prepared for BepInEx" >&2
+    exit 1
+fi
+printf 'profile-specific change\n' >> "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/Example.cfg"
+if [[ "$(cat "$BEPINEX_DIR/profiles/Beta/BepInEx/config/Example.cfg")" != 'plugin option = old' ]]; then
+    echo "FAIL: changing one profile's plugin config changed another profile" >&2
     exit 1
 fi
 CONFIG="$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg"
@@ -147,6 +221,23 @@ if BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.7.json" \
 fi
 if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]]; then
     echo "FAIL: current symlink changed after invalid configuration" >&2
+    exit 1
+fi
+
+for profile in Alpha Beta Disabled; do
+    sed -i 's/^VSSBEPINEXENABLED=.*/VSSBEPINEXENABLED=0/' "$TEST_ROOT/.env.$profile"
+done
+mkdir -p "$BEPINEX_DIR/current/BepInEx/plugins"
+printf 'shared plugin\n' > "$BEPINEX_DIR/current/BepInEx/plugins/shared.dll"
+make_fixture 5.4.23.8
+if BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.8.json" \
+    "$TEST_ROOT/bepinex_upgrade.sh" > "$TMPDIR_UPGRADE/no-profile.out" 2> "$TMPDIR_UPGRADE/no-profile.err"; then
+    echo "FAIL: upgrade discarded shared plugins when no profile was enabled" >&2
+    exit 1
+fi
+if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]] ||
+   [[ ! -f "$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.6/BepInEx/plugins/shared.dll" ]]; then
+    echo "FAIL: upgrade changed or removed the active image without a migration target" >&2
     exit 1
 fi
 

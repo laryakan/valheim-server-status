@@ -71,6 +71,63 @@ if [ "$removal_calls" != "$expected_removal_calls" ]; then
   exit 1
 fi
 
+mkdir -p "$TMPDIR_UI/bepinex"
+cat > "$TMPDIR_UI/bepinex/install_bepinex.sh" <<'EOF'
+#!/bin/bash
+printf 'install\n' >> "$BEPINEX_TEST_CALLS"
+[[ "${BEPINEX_FAIL_INSTALL:-0}" != 1 ]]
+EOF
+cat > "$TMPDIR_UI/bepinex/remove_bepinex.sh" <<'EOF'
+#!/bin/bash
+printf 'remove\n' >> "$BEPINEX_TEST_CALLS"
+EOF
+chmod +x "$TMPDIR_UI/bepinex/install_bepinex.sh" "$TMPDIR_UI/bepinex/remove_bepinex.sh"
+export BEPINEX_TEST_CALLS="$TMPDIR_UI/bepinex.calls"
+VSSDIR="$TMPDIR_UI"
+VSS_SERVER_NAME='UiWorld'
+VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
+setup_calls=''
+replace_env_value() { setup_calls="${setup_calls}${1}=${2};"; }
+set_service() { setup_calls="${setup_calls}set:$1;"; }
+restart_vsspipe_service() { setup_calls="${setup_calls}restart:$VSSPIPESERVICENAME;"; }
+
+if ! enable_bepinex_profile; then
+  echo "FAIL: enabling BepInEx did not prepare the profile and pipe service" >&2
+  exit 1
+fi
+if [[ "$setup_calls" != "VSSBEPINEXENABLED=1;set:vss.pipe.UiWorld.service;restart:vss.pipe.UiWorld.service;" ]] ||
+   [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'install' ]]; then
+  echo "FAIL: enabling BepInEx did not install and restart the profile pipe service" >&2
+  exit 1
+fi
+
+: > "$BEPINEX_TEST_CALLS"
+setup_calls=''
+export BEPINEX_FAIL_INSTALL=1
+if enable_bepinex_profile; then
+  echo "FAIL: BepInEx activation ignored a failed profile install" >&2
+  exit 1
+fi
+if [[ "$setup_calls" != "VSSBEPINEXENABLED=1;VSSBEPINEXENABLED=0;" ]] ||
+   [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'install' ]]; then
+  echo "FAIL: failed BepInEx activation did not roll back its profile flag" >&2
+  exit 1
+fi
+unset BEPINEX_FAIL_INSTALL
+
+: > "$BEPINEX_TEST_CALLS"
+setup_calls=''
+VSSPIPESERVICENAME='vss.pipe.NotInstalled.service'
+if ! disable_bepinex_profile > "$TMPDIR_UI/bepinex-disable.out"; then
+  echo "FAIL: disabling BepInEx returned an error" >&2
+  exit 1
+fi
+if [[ "$setup_calls" != 'VSSBEPINEXENABLED=0;' ]] ||
+   [[ "$(cat "$BEPINEX_TEST_CALLS")" != 'remove' ]]; then
+  echo "FAIL: disabling BepInEx did not retain the profile data while cleaning legacy links" >&2
+  exit 1
+fi
+
 CWD="$TMPDIR_UI"
 touch "$CWD/.env.UiWorld"
 touch "$CWD/.env.OtherWorld"

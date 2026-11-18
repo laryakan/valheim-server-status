@@ -50,24 +50,22 @@ This document tracks the current branch implementation and the work that remains
 ### BepInEx features currently present
 
 - A profile can enable/disable the packaged BepInEx integration through setup. The launcher enables Doorstop for that process and VSS can tail BepInEx logs through the profile's pipe.
+- Each profile has a distinct BepInEx root at `bepinex/profiles/<world-name>/`. The preloader target, Doorstop library path, plugin directory, plugin configuration, cache, and `LogOutput.log` use that profile's paths.
+- Shared core and Doorstop files are linked file-by-file into real per-profile directories. `BepInEx/config/BepInEx.cfg` is the only shared configuration file and links to `bepinex/current/BepInEx/config/BepInEx.cfg`.
+- BepInEx 5.4.23.5 derives its root from `Path.GetFullPath(DOORSTOP_INVOKE_DLL_PATH)` and then resolves config, plugins, cache, and disk logs from that root. The launcher uses the profile's `DOORSTOP_TARGET_ASSEMBLY`; file-level links keep the target path profile-specific.
+- Setup prepares the profile and installs/starts its `vss.pipe.<world-name>.service` when BepInEx is enabled. Disabling BepInEx removes Doorstop injection and BepInEx library search paths on the next launch, retains that profile's data, and restarts an installed pipe to read standard server logs.
 - `R2MODMANCODE` is validated and can be displayed in Discord and server status while BepInEx is enabled.
-- `./bepinex_upgrade.sh` downloads the latest official Linux x64 package, validates and extracts it into a versioned directory, enforces VSS logging values in `BepInEx.cfg` while retaining other upstream settings, and atomically switches `bepinex/current`. Previous package directories are retained; plugins are not migrated or modified.
-- The current packaged BepInEx directory and writable plugin/log paths are shared. **Per-profile BepInEx isolation is not implemented.**
+- `./bepinex_upgrade.sh` downloads the latest official Linux x64 package, validates and extracts it into a versioned directory, enforces VSS logging values in `BepInEx.cfg` while retaining other upstream settings, and atomically switches `bepinex/current`. On the first isolated upgrade, it copies only the active image's plugins and plugin configs to all enabled profiles, keeps `BepInEx.cfg` shared, does not migrate logs, cache, or patchers, and removes the previously active image after success.
 
 ## Remaining work
 
-### 1. Isolate BepInEx per profile — major outstanding item
+### 1. Validate isolated BepInEx in production
 
-The Valheim installation may remain shared, but every profile needs a distinct writable BepInEx root. The current `.env`/launcher layout targets the shared `VHSERVERDIR/BepInEx` and shared `bepinex/current`; concurrent profiles can therefore share plugins, configuration, cache, or `LogOutput.log`.
-
-Implement and verify:
-
-- Give each profile a root such as `bepinex/profiles/<world-name>/BepInEx/`.
-- Set that profile's `DOORSTOP_TARGET_ASSEMBLY` to its own `BepInEx.Preloader.dll` and its `VSSBEPINEXLOGOUTPUT` to its own log. BepInEx derives `BepInExRootPath` from the target assembly path; `DOORSTOP_MANAGED_FOLDER_DIR` identifies the game's `Managed` directory and is not a root-path override.
-- Keep plugins, plugin configuration, patchers, cache, and logs in the profile root. Share only immutable package files where safe.
-- Update install/remove scripts to manage only that profile's links and files. Track VSS-created links, including broken links, and never delete pre-existing files or another profile's setup.
-- Verify two concurrent profiles load only their own plugins/configuration, write separate logs, and update only their own player state through their respective log pipes.
-- Verify enable/disable and rollback for one profile do not alter another profile.
+- The runtime regression test launches two enabled profiles and one vanilla profile concurrently against a stub server to verify process environment isolation; it does not validate real plugin loading.
+- Start two enabled profiles concurrently and confirm each loads only its own plugins/configuration and writes its own `LogOutput.log`.
+- Confirm each profile's pipe updates only that profile's VSS state.
+- Verify upgrade and recovery procedures against a production-like copy before updating production; the active previous image is removed after a successful upgrade.
+- Confirm that disabling/re-enabling one profile preserves its data and does not alter another profile's BepInEx root.
 
 ### 2. Profile rename
 

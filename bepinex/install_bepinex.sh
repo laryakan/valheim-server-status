@@ -5,24 +5,24 @@
 # Manual installation here https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/
 
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/../crash.log"
 source "$CWD/../lib/config.sh"
 vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/bepinex.sh"
 
-BEPINEXFILES=$( ls -1tr "$VSSBEPINEXDIR/" 2>/dev/null )
+if [[ "${VSSBEPINEXENABLED:-0}" != "1" ]]; then
+    printf 'BepInEx is disabled for profile %s; enable it in .env.%s before installing.\n' \
+        "$VSS_SERVER_NAME" "$VSS_SERVER_NAME" >&2
+    exit 1
+fi
 
-echo "BepInEx_Valheim files found in $VSSBEPINEXDIR:"
-for file in $BEPINEXFILES; do
-    if [ "${DEBUGMODE:-0}" -eq 1 ];
-    then
-        echo "DEBUG: Linking $VSSBEPINEXDIR/$file to $VHSERVERDIR/$file"
-        continue
-    fi
-    if [ -e "$VHSERVERDIR/$file" ]; then
-        continue
-    fi
-    ln -s "$VSSBEPINEXDIR/$file" "$VHSERVERDIR/$file"
-done
+IMAGE_DIR="$VSSDIR/bepinex/current"
+LEGACY_IMAGE_DIR="${VSS_BEPINEX_LEGACY_IMAGE:-$IMAGE_DIR}"
+vss_bepinex_prepare_profile "$VSSBEPINEXDIR" "$IMAGE_DIR" "$LEGACY_IMAGE_DIR" || exit 1
+vss_bepinex_remove_legacy_server_links "$VHSERVERDIR" || {
+    printf 'Could not remove legacy VSS BepInEx links from %s\n' "$VHSERVERDIR" >&2
+    exit 1
+}
 
-echo "Remember to set VSSBEPINEXENABLED=1 in .env.$VSS_SERVER_NAME to enable BepInEx_Valheim for VSS : Can be done through ./setup"
-echo "Plugins/Mods can be installed in $VSSBEPINEXDIR/BepInEx/plugins"
+printf 'BepInEx is prepared for profile %s.\n' "$VSS_SERVER_NAME"
+printf 'Plugins/mods: %s/BepInEx/plugins\n' "$VSSBEPINEXDIR"
+printf 'Plugin configuration: %s/BepInEx/config (BepInEx.cfg is shared)\n' "$VSSBEPINEXDIR"

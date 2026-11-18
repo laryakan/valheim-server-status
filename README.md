@@ -153,13 +153,17 @@ The update order is connection information, server status, then recent logs. Set
 
 For modded servers, set `VSSBEPINEXENABLED=1` and put the profile's R2Modman/Thunderstore UUID share code (for example `01a1eaf3-9be3-9083-b9b4-26768368368e`) in `R2MODMANCODE` in that world's `.env`. The code is shown in Discord and the server status output (including the HTTP status endpoint), including while the server is offline. It is omitted when BepInEx is disabled or no code is configured. VSS does not generate or synchronize the mod profile; maintain the share code from the mod manager.
 
+Each profile has its own BepInEx root under `bepinex/profiles/<world-name>/`. Plugins, plugin configuration, patchers, cache, and `LogOutput.log` are profile-local. The `BepInEx/core` and `doorstop_libs` directories are real per-profile directories whose shared files are symlinked to `bepinex/current`; `BepInEx.cfg` is also a file symlink to the shared `bepinex/current/BepInEx/config/BepInEx.cfg`. The Valheim server files are not populated with shared BepInEx links.
+
+Choose **Enable packaged BepInEx** in the profile's setup menu to prepare that profile and install/start its `vss.pipe.<world-name>.service` from `examples/vss.pipe.service`. The pipe reads that profile's `LogOutput.log`. Disabling BepInEx removes Doorstop injection and BepInEx library search paths from the next server launch and restarts the pipe to use the standard server logs; the profile's plugins and configuration are retained. Restart the Valheim server after changing the enabled flag.
+
 Upgrade the shared BepInEx Linux x64 image to the latest official release with:
 
 ```bash
 ./bepinex_upgrade.sh
 ```
 
-The script requires `wget` and `unzip`. It downloads and extracts a versioned image under `bepinex/`, enforces VSS's BepInEx logging settings while preserving other upstream `BepInEx.cfg` options, then atomically switches `bepinex/current`. Previous image directories are retained for manual rollback; the script does not migrate or modify plugins. For an offline test fixture, set `BEPINEX_RELEASES_LATEST_URL` to a local HTTP JSON fixture whose Linux x64 asset URL points to a local ZIP fixture. The integration test uses `ncat` and the system `base64` utility to serve and decode committed fixtures; it does not require Python.
+The script requires `wget` and `unzip`. It downloads and extracts a versioned image under `bepinex/`, enforces VSS's BepInEx logging settings while preserving other upstream `BepInEx.cfg` options, and prepares each currently enabled profile before atomically switching `bepinex/current`. On the first isolated upgrade, legacy plugin files in the active image's `BepInEx/plugins` and plugin configuration files in `BepInEx/config` are copied into every enabled profile; `BepInEx.cfg` remains shared. Logs, cache, and patchers are not migrated. After a successful switch, the previously active image is removed. If profile preparation fails, the current link and previous image are left in place. If shared plugin/configuration files exist but no profile is enabled, the upgrade stops rather than discard them. For an offline test fixture, set `BEPINEX_RELEASES_LATEST_URL` to a local HTTP JSON fixture whose Linux x64 asset URL points to a local ZIP fixture. The integration test uses `ncat` and the system `base64` utility to serve and decode committed fixtures; it does not require Python.
 
 `VHSERVERSEED` is informational: VSS displays it in status/Discord but does not pass it to Valheim to set or change world generation.
 
@@ -207,7 +211,7 @@ for test in tests/test_*.sh tests/debug_logfilter_pipeline_output*.sh; do
 done
 ```
 
-Tests that exercise log parsing and profile state use temporary files and clean them up on exit. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
+Tests that exercise log parsing and profile state use temporary files and clean them up on exit. The BepInEx runtime test launches two modded profiles and one vanilla profile concurrently against a stub server to verify environment isolation. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
 
 ## Troubleshooting
 
