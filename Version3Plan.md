@@ -135,8 +135,29 @@ After migration, no script must depend on `.env` as an active configuration.
 
 ## 10. BepInEx runtime and upgrades
 
-1. Give each profile its own writable plugin configuration and log locations while sharing only immutable package files where safe. Each profile's `BepInEx.cfg` should link to the VSS-managed, versioned configuration.
-2. Verify per-profile injection and BepInEx path resolution when profiles share one Valheim installation. Doorstop is loaded into each server process, but the current installer links the same `VSSBEPINEXDIR` tree into the server directory by default, so processes can use the same plugins and runtime files. Changing `DOORSTOP_TARGET_ASSEMBLY` alone must not be assumed to isolate plugin/config paths.
-3. Resolve how separate `LogOutput.log` files will be produced when profiles share one Valheim installation. The current BepInEx configuration does not expose a configurable log path.
-4. Make `install_bepinex.sh` and `remove_bepinex.sh` track and manage only VSS-created links: rollback must remove those links, including broken ones, without deleting pre-existing server files.
-5. Add a root-level `./bepinex_upgrade.sh` workflow for upgrading a pinned official BepInEx package, applying VSS-required settings to each profile's `BepInEx.cfg` without discarding options introduced by newer versions, and retaining the previous package for rollback.
+### Confirmed runtime behavior
+
+These findings were checked against the BepInEx source tag `v5.4.23.5`, matching the version embedded by VSS.
+
+- The launcher enables Doorstop per server process with `DOORSTOP_ENABLED=1`, `LD_PRELOAD=libdoorstop.so`, and `DOORSTOP_TARGET_ASSEMBLY`. Disabling BepInEx means not setting the Doorstop preload variables for that process; this is not a single system-wide injector.
+- The preloader passes the target assembly path to BepInEx as `DOORSTOP_INVOKE_DLL_PATH`. BepInEx derives `BepInExRootPath` from that path (two parent directories above `BepInEx.Preloader.dll`) and derives `ConfigPath`, `PluginPath`, `PatcherPluginPath`, `CachePath`, the core assembly directory, and `LogOutput.log` from that root.
+- The running game's executable path is passed separately. Therefore, a profile-specific BepInEx root can be outside the shared Valheim installation; duplicating the Valheim server binaries is not inherently required.
+- `DOORSTOP_MANAGED_FOLDER_DIR` identifies the game's `Managed` directory; it is not the BepInEx root override.
+- `BepInEx.cfg` controls logging behavior such as enabling disk logging, append mode, and log levels, but does not choose the log path. The path is rooted at `BepInExRootPath`.
+
+### Target V3 architecture
+
+1. Keep the Valheim installation and server executable shared where desired, but give each profile a distinct writable BepInEx root, such as `bepinex/profiles/<world-name>/BepInEx/`.
+2. Set each profile's `VSSBEPINEXDIR` to its root. Set `DOORSTOP_TARGET_ASSEMBLY` to `<profile-root>/BepInEx/core/BepInEx.Preloader.dll`; point `VSSBEPINEXLOGOUTPUT` to `<profile-root>/BepInEx/LogOutput.log`. `LD_PRELOAD` can still load shared, immutable Doorstop native libraries into each separate server process.
+3. Keep plugin configuration, `plugins/`, `patchers/`, cache, and logs in the profile root. Each profile's `config/BepInEx.cfg` may link to the VSS-managed, versioned BepInEx configuration; plugin-specific config files remain profile-local.
+4. Share only immutable package files where safe (for example, versioned core assemblies and Doorstop libraries). Do not point all profiles at one writable `BepInEx` directory or one `LogOutput.log`. Validate that any links to shared files preserve the profile-specific target path used to derive `BepInExRootPath`.
+5. Update `install_bepinex.sh` and `remove_bepinex.sh` for this layout. Track links created by VSS; rollback must remove only those links, including broken ones, without deleting pre-existing files or another profile's setup.
+6. Add a root-level `./bepinex_upgrade.sh` workflow for upgrading a pinned official BepInEx package, applying VSS-required settings to each profile's `BepInEx.cfg` without discarding options introduced by newer versions, and retaining the previous package for rollback.
+
+### BepInEx acceptance tests
+
+- Start two server processes against the same Valheim installation with different BepInEx roots. Verify each loads only its profile's plugins/configuration and writes a separate `LogOutput.log`.
+- Verify that the VSS pipe for each profile reads only that profile's BepInEx log and that connect/disconnect events update only that profile's player state.
+- Verify enabling or removing BepInEx for one profile does not change another profile's target assembly, links, plugins, or logs.
+- Verify rollback removes VSS-created links (including broken ones) and preserves pre-existing files in the server directory.
+- Verify an upgrade preserves newly introduced upstream configuration options, applies VSS-required logging settings, and can restore the prior package and profile configuration.
