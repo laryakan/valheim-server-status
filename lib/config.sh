@@ -25,46 +25,54 @@ vss_load_config() {
   local root="${1:?VSS root directory is required}"
   local config_file="${VSS_ENV_FILE:-}"
   local config_name=""
-  local verify_world_name=0
+  local config_basename=""
+  local expected_server_name="${VSS_SERVER_NAME:-}"
+  local state_key
+  local state_path
+  local configured_state_path
+  local index
+  local -a state_keys=(CONNECTEDPLAYERSFILE OFFLINEPLAYERSFILE STEAMIDMAPFILE LASTWORLDSAVEFILE)
+  local -a state_names=(online-players offline-players steamid-player-map last-world-save)
+
+  root="$(cd "$root" 2>/dev/null && pwd)" || {
+    printf 'VSS root directory is not accessible: %s\n' "$1" >&2
+    return 1
+  }
 
   if [ "${VSS_CONFIG_LOADED:-0}" = "1" ] && [ -n "${VSS_SERVER_NAME:-}" ]; then
     return 0
   fi
 
   if [ -n "$config_file" ]; then
-    [ -z "${VSS_SERVER_NAME:-}" ] || verify_world_name=1
     case "$config_file" in
       /*) ;;
       *) config_file="$root/$config_file" ;;
     esac
-    case "$(basename "$config_file")" in
+    config_basename="$(basename "$config_file")"
+    case "$config_basename" in
       .env.*)
-        config_name="${config_file##*.env.}"
-        if [ "$config_name" != "test" ]; then
-          if [ -n "${VSS_SERVER_NAME:-}" ] && [ "$VSS_SERVER_NAME" != "$config_name" ]; then
-            printf 'VSS_ENV_FILE profile "%s" does not match VSS_SERVER_NAME "%s".\n' \
-              "$config_name" "$VSS_SERVER_NAME" >&2
-            return 1
-          fi
-          verify_world_name=1
-          VSS_SERVER_NAME="${VSS_SERVER_NAME:-$config_name}"
+        config_name="${config_basename#.env.}"
+        if ! vss_validate_server_name "$config_name"; then
+          printf 'Invalid server profile name in VSS_ENV_FILE: %s\n' "$config_name" >&2
+          return 1
         fi
+        if [ -n "$expected_server_name" ] && [ "$expected_server_name" != "$config_name" ]; then
+          printf 'VSS_ENV_FILE profile "%s" does not match VSS_SERVER_NAME "%s".\n' \
+            "$config_name" "$expected_server_name" >&2
+          return 1
+        fi
+        expected_server_name="$config_name"
+        VSS_SERVER_NAME="$config_name"
         ;;
     esac
   elif [ -n "${VSS_SERVER_NAME:-}" ]; then
-    if ! vss_validate_server_name "$VSS_SERVER_NAME"; then
-      printf 'Invalid VSS server name: %s\n' "$VSS_SERVER_NAME" >&2
+    if ! vss_validate_server_name "$expected_server_name"; then
+      printf 'Invalid VSS server name: %s\n' "$expected_server_name" >&2
       return 1
     fi
-    config_file="$root/.env.$VSS_SERVER_NAME"
-    verify_world_name=1
+    config_file="$root/.env.$expected_server_name"
   else
     printf 'Select a server with VSS_SERVER_NAME or provide VSS_ENV_FILE.\n' >&2
-    return 1
-  fi
-
-  if [ -n "${VSS_SERVER_NAME:-}" ] && ! vss_validate_server_name "$VSS_SERVER_NAME"; then
-    printf 'Invalid VSS server name: %s\n' "$VSS_SERVER_NAME" >&2
     return 1
   fi
 
@@ -75,11 +83,20 @@ vss_load_config() {
 
   VSS_ENV_FILE="$config_file"
   export VSS_ENV_FILE
+  unset CONNECTEDPLAYERSFILE OFFLINEPLAYERSFILE STEAMIDMAPFILE LASTWORLDSAVEFILE
   if ! source "$VSS_ENV_FILE"; then
     printf 'Failed to load VSS configuration: %s\n' "$VSS_ENV_FILE" >&2
     return 1
   fi
 
+  if [ -n "$expected_server_name" ]; then
+    if [ -n "${VSS_SERVER_NAME:-}" ] && [ "$VSS_SERVER_NAME" != "$expected_server_name" ]; then
+      printf 'Profile file "%s" sets VSS_SERVER_NAME to "%s", expected "%s".\n' \
+        "$VSS_ENV_FILE" "$VSS_SERVER_NAME" "$expected_server_name" >&2
+      return 1
+    fi
+    VSS_SERVER_NAME="$expected_server_name"
+  fi
   if [ -z "${VSS_SERVER_NAME:-}" ]; then
     VSS_SERVER_NAME="${VHSERVERWORLD:-}"
   fi
@@ -87,11 +104,25 @@ vss_load_config() {
     printf 'Invalid or missing VHSERVERWORLD in %s\n' "$VSS_ENV_FILE" >&2
     return 1
   fi
-  if [ "$verify_world_name" -eq 1 ] && [ "${VHSERVERWORLD:-}" != "$VSS_SERVER_NAME" ]; then
+  if [ "${VHSERVERWORLD:-}" != "$VSS_SERVER_NAME" ]; then
     printf 'Profile name "%s" does not match VHSERVERWORLD "%s" in %s\n' \
       "$VSS_SERVER_NAME" "${VHSERVERWORLD:-}" "$VSS_ENV_FILE" >&2
     return 1
   fi
+
+  for index in "${!state_keys[@]}"; do
+    state_key="${state_keys[$index]}"
+    state_path="$root/data/${state_names[$index]}.$VSS_SERVER_NAME"
+    configured_state_path="${!state_key:-}"
+    if [ -n "$configured_state_path" ] && [ "$configured_state_path" != "$state_path" ] &&
+       { [ -e "$configured_state_path" ] || [ -L "$configured_state_path" ]; }; then
+      printf '%s is fixed at %s; move the existing state file from %s before starting this profile.\n' \
+        "$state_key" "$state_path" "$configured_state_path" >&2
+      return 1
+    fi
+    printf -v "$state_key" '%s' "$state_path"
+    export "$state_key"
+  done
 
   export VSS_SERVER_NAME
   VSS_CONFIG_LOADED=1

@@ -6,7 +6,8 @@ cd "$(dirname "$0")/.."
 TEST_STATE_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_STATE_DIR"' EXIT
 export DEBUGMODE=1
-export VSS_ENV_FILE="$PWD/.env.test"
+cp .env.test "$TEST_STATE_DIR/config.env"
+export VSS_ENV_FILE="$TEST_STATE_DIR/config.env"
 source ./lib/config.sh
 vss_load_config "$PWD"
 CONNECTEDPLAYERSFILE="$TEST_STATE_DIR/online-players.$VSS_SERVER_NAME"

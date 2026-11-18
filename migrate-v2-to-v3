@@ -92,6 +92,23 @@ function migration_error() {
   fi
 }
 
+function backup_legacy_state_files() {
+  local key
+  local path
+  local -a state_keys=(CONNECTEDPLAYERSFILE OFFLINEPLAYERSFILE STEAMIDMAPFILE LASTWORLDSAVEFILE)
+
+  mkdir -p "$MIGRATION_BACKUP_DIR/state-files" || return 1
+  printf 'Working directory: %q\n' "$PWD" > "$MIGRATION_BACKUP_DIR/state-files/paths"
+  for key in "${state_keys[@]}"; do
+    path="${!key:-}"
+    [ -n "$path" ] || continue
+    if [ -e "$path" ] || [ -L "$path" ]; then
+      cp -a -- "$path" "$MIGRATION_BACKUP_DIR/state-files/$key" || return 1
+      printf '%s=%q\n' "$key" "$path" >> "$MIGRATION_BACKUP_DIR/state-files/paths" || return 1
+    fi
+  done
+}
+
 function migration_backup() {
   local unit
   local config
@@ -110,6 +127,7 @@ function migration_backup() {
   if [ -d "$CWD/data" ]; then
     cp -a "$CWD/data/." "$MIGRATION_BACKUP_DIR/data/" || return 1
   fi
+  backup_legacy_state_files || return 1
 
   if crontab -l > "$MIGRATION_BACKUP_DIR/crontab" 2>/dev/null; then
     :
@@ -297,6 +315,7 @@ function migrate_v2_to_v3() {
     return 1
   fi
 
+  unset CONNECTEDPLAYERSFILE OFFLINEPLAYERSFILE STEAMIDMAPFILE LASTWORLDSAVEFILE
   source "$CWD/.env" || {
     echo "Could not read the legacy .env." >&2
     return 1

@@ -77,7 +77,7 @@ Run the dedicated migration command from the VSS checkout; `./setup` no longer p
 The script requires the legacy `.env`, a valid `VHSERVERWORLD`, and an existing `VHSERVERDIR`. It asks for confirmation, creates a permission-restricted backup under `migration-backups/`, then:
 
 1. Stops and disables the V2 systemd units it finds (`valheim-server.service`, `vss.pipe.service`, and `vss.http.service`).
-2. Renames `.env`, launcher arguments, and VSS state files to the profile-specific names. It aborts rather than overwriting existing profile/state targets.
+2. Renames `.env`, launcher arguments, and VSS state files to the profile-specific names. It backs up all four configured legacy state files, including files outside `data/`, and aborts rather than overwriting existing profile/state targets.
 3. Removes cron lines containing the legacy `WEBHOOKUPDATE` path, preserves unrelated cron entries, and installs the profile-tagged V3 Discord update if its configured frequency is positive.
 4. Installs the shared V3 logrotate configuration and removes the old `/etc/logrotate.d/valheim` rule after backing it up.
 5. Installs the V3 server unit and corresponding pipe/HTTP units when those V2 units existed. Legacy unit files are retained but left stopped and disabled.
@@ -163,7 +163,7 @@ The optional `--check-firewall` command uses `ufw` when available; it only reads
 
 ## Data isolation
 
-VSS state files in `data/` are suffixed with the world name, including the online and offline player lists, SteamID map, and last-world-save timestamp. Webhook settings, launcher arguments, services, ports, cron jobs, and log file names are also profile-specific.
+VSS state files are fixed under the installation's `data/` directory and suffixed with the world name: online and offline player lists, SteamID map, and last-world-save timestamp. Their paths are derived by VSS and are not configurable in profile `.env` files. If an existing profile has a state file at a custom path, move it to the fixed `data/` path shown by the loader error before starting that profile. Webhook settings, launcher arguments, services, ports, cron jobs, and log file names are also profile-specific.
 
 ## Tests
 

@@ -20,9 +20,9 @@ BEPINEXLASTUPDATE=2026-01-01
 VALSERVERVERSION=0.221.0
 VALSERVERLASTUPDATE=2026-01-01
 VHSERVERSEED=InformationalSeed
-LASTWORLDSAVEFILE="$TMPDIR_STATUS/data/last-world-save"
-CONNECTEDPLAYERSFILE="$TMPDIR_STATUS/data/online-players"
-OFFLINEPLAYERSFILE="$TMPDIR_STATUS/data/offline-players"
+LASTWORLDSAVEFILE="$TMPDIR_STATUS/data/last-world-save.StatusTest"
+CONNECTEDPLAYERSFILE="$TMPDIR_STATUS/data/online-players.StatusTest"
+OFFLINEPLAYERSFILE="$TMPDIR_STATUS/data/offline-players.StatusTest"
 VHSERVERLAUNCHERARGS="$TMPDIR_STATUS/launcher/launcher-args.StatusTest"
 EOF
 printf '%s\n' 'unknown' > "$TMPDIR_STATUS/data/last-world-save"

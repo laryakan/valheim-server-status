@@ -9,7 +9,7 @@ Allow multiple Valheim servers to be managed from a single VSS installation with
 The current implementation is an initial multi-server release, not completion of every item in this plan.
 
 - **Implemented:** per-world `.env.<world-name>` profiles, profile-specific launcher arguments and VSS state, shared saves/admin lists, world-qualified logs with shared logrotate, profile-specific service templates, Discord settings, profile-tagged cron updates, optional R2Modman code display in Discord and server status for BepInEx profiles, a separate backed-up V2-to-V3 migration command, a Bash setup dashboard/profile picker, direct start/stop/restart/status/Discord-update/firewall-check commands, cross-profile port collision checks, and an informational UFW rules check.
-- **Still outstanding:** a controlled profile/world rename, consistent confirmations for destructive operations, automated post-migration health verification before offering legacy-unit cleanup, and a complete interactive rollback procedure. The migrator stops/disables V2 units and retains their files; it does not verify service health or remove legacy units automatically.
+- **Still outstanding:** a controlled profile/world rename, consistent confirmations for destructive operations, automated post-migration health verification before offering legacy-unit cleanup, a complete interactive rollback procedure, and an isolated BepInEx injection/runtime architecture for profiles sharing one Valheim installation. The migrator stops/disables V2 units and retains their files; it does not verify service health or remove legacy units automatically.
 
 ## Agreed conventions
 
@@ -37,7 +37,7 @@ The current implementation is an initial multi-server release, not completion of
    - `offline-players.<world-name>`
    - `steamid-player-map.<world-name>`
    - `last-world-save.<world-name>`
-3. Set the corresponding paths in each `.env.<world-name>`.
+3. Derive these paths from the VSS root and profile name; they are fixed under `data/` and are not configurable in `.env.<world-name>`.
 4. Keep `savedir` shared and do not suffix the game's save files. Document that the administration lists in that directory are shared as well.
 
 ## 3. Logs and shared log rotation
@@ -129,5 +129,14 @@ After migration, no script must depend on `.env` as an active configuration.
 - Migration preserves existing data and does not implicitly reactivate the old `.env`.
 - Profile validation detects overlapping Valheim ranges and HTTP port collisions. The optional UFW check reports missing required ALLOW rules and never edits firewall configuration.
 - An enabled BepInEx profile can publish its configured R2Modman code in Discord and server status; with BepInEx disabled, the code is omitted.
+- BepInEx logs and plugin configuration remain isolated per profile even when the Valheim installation is shared; each profile uses the VSS-managed, versioned `BepInEx.cfg`, whose upgrades retain upstream options and can be rolled back.
 - Tests use temporary configuration/state/log locations, clean up via traps, leave active server files and `crash.log` unchanged, and pass repeatedly without residue.
 - Existing tests are updated for explicit profile loading, and regression tests cover isolation between two servers.
+
+## 10. BepInEx runtime and upgrades
+
+1. Give each profile its own writable plugin configuration and log locations while sharing only immutable package files where safe. Each profile's `BepInEx.cfg` should link to the VSS-managed, versioned configuration.
+2. Verify per-profile injection and BepInEx path resolution when profiles share one Valheim installation. Doorstop is loaded into each server process, but the current installer links the same `VSSBEPINEXDIR` tree into the server directory by default, so processes can use the same plugins and runtime files. Changing `DOORSTOP_TARGET_ASSEMBLY` alone must not be assumed to isolate plugin/config paths.
+3. Resolve how separate `LogOutput.log` files will be produced when profiles share one Valheim installation. The current BepInEx configuration does not expose a configurable log path.
+4. Make `install_bepinex.sh` and `remove_bepinex.sh` track and manage only VSS-created links: rollback must remove those links, including broken ones, without deleting pre-existing server files.
+5. Add a root-level `./bepinex_upgrade.sh` workflow for upgrading a pinned official BepInEx package, applying VSS-required settings to each profile's `BepInEx.cfg` without discarding options introduced by newer versions, and retaining the previous package for rollback.

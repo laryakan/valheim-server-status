@@ -9,9 +9,10 @@ MIGRATION_ROOT="$TMPDIR_MIGRATION/vss"
 MOCK_BIN="$TMPDIR_MIGRATION/bin"
 SYSTEMD_ROOT="$TMPDIR_MIGRATION/systemd"
 LOGROTATE_ROOT="$TMPDIR_MIGRATION/logrotate"
+CUSTOM_STATE_ROOT="$TMPDIR_MIGRATION/custom-state"
 MOCK_CRONTAB="$TMPDIR_MIGRATION/crontab"
 mkdir -p "$MIGRATION_ROOT"/{data,launcher,examples,lib,systemd,fake-server,discord} \
-  "$MOCK_BIN" "$SYSTEMD_ROOT" "$LOGROTATE_ROOT"
+  "$MOCK_BIN" "$SYSTEMD_ROOT" "$LOGROTATE_ROOT" "$CUSTOM_STATE_ROOT"
 cp "$ROOT/setup" "$ROOT/migrate-v2-to-v3" "$MIGRATION_ROOT/"
 cp "$ROOT/.env.dist" "$MIGRATION_ROOT/"
 cp "$ROOT/lib/config.sh" "$ROOT/lib/validation.sh" "$MIGRATION_ROOT/lib/"
@@ -88,16 +89,16 @@ WEBHOOKUPDATE="$MIGRATION_ROOT/discord/update"
 CRONTABWEBHOOKFREQ=5
 VHSERVERPORT=2456
 STATUSPORT=8181
-CONNECTEDPLAYERSFILE="$MIGRATION_ROOT/data/online-players"
-OFFLINEPLAYERSFILE="$MIGRATION_ROOT/data/offline-players"
-STEAMIDMAPFILE="$MIGRATION_ROOT/data/steamid-player-map"
-LASTWORLDSAVEFILE="$MIGRATION_ROOT/data/last-world-save"
+CONNECTEDPLAYERSFILE="$CUSTOM_STATE_ROOT/online-players"
+OFFLINEPLAYERSFILE="$CUSTOM_STATE_ROOT/offline-players"
+STEAMIDMAPFILE="$CUSTOM_STATE_ROOT/steamid-player-map"
+LASTWORLDSAVEFILE="$CUSTOM_STATE_ROOT/last-world-save"
 EOF
 printf '%s\n' '-saveinterval 1800' > "$MIGRATION_ROOT/launcher/launcher-args"
-printf '%s\n' 'online state' > "$MIGRATION_ROOT/data/online-players"
-printf '%s\n' 'offline state' > "$MIGRATION_ROOT/data/offline-players"
-printf '%s\n' 'steam map' > "$MIGRATION_ROOT/data/steamid-player-map"
-printf '%s\n' 'save timestamp' > "$MIGRATION_ROOT/data/last-world-save"
+printf '%s\n' 'online state' > "$CUSTOM_STATE_ROOT/online-players"
+printf '%s\n' 'offline state' > "$CUSTOM_STATE_ROOT/offline-players"
+printf '%s\n' 'steam map' > "$CUSTOM_STATE_ROOT/steamid-player-map"
+printf '%s\n' 'save timestamp' > "$CUSTOM_STATE_ROOT/last-world-save"
 printf '%s\n' 'legacy systemd unit' > "$SYSTEMD_ROOT/valheim-server.service"
 printf '%s\n' 'legacy pipe unit' > "$SYSTEMD_ROOT/vss.pipe.service"
 printf '%s\n' 'legacy HTTP unit' > "$SYSTEMD_ROOT/vss.http.service"
@@ -176,7 +177,11 @@ backup_dir="$(find "$MIGRATION_ROOT/migration-backups" -mindepth 1 -maxdepth 1 -
 if [ -z "$backup_dir" ] ||
    [ "$(stat -c '%a' "$backup_dir")" != '700' ] ||
    ! grep -Fq "$MIGRATION_ROOT/discord/update" "$backup_dir/crontab" ||
-   ! grep -Fxq 'online state' "$backup_dir/data/online-players" ||
+   ! grep -Fxq 'online state' "$backup_dir/state-files/CONNECTEDPLAYERSFILE" ||
+   ! grep -Fxq 'offline state' "$backup_dir/state-files/OFFLINEPLAYERSFILE" ||
+   ! grep -Fxq 'steam map' "$backup_dir/state-files/STEAMIDMAPFILE" ||
+   ! grep -Fxq 'save timestamp' "$backup_dir/state-files/LASTWORLDSAVEFILE" ||
+   ! grep -Fq "CONNECTEDPLAYERSFILE=$CUSTOM_STATE_ROOT/online-players" "$backup_dir/state-files/paths" ||
    ! grep -Fxq 'legacy logrotate rule' "$backup_dir/logrotate/valheim"; then
   echo "FAIL: migration backup is missing protected legacy files" >&2
   exit 1

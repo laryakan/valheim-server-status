@@ -11,9 +11,6 @@ VSS_SERVER_NAME='UiWorld'
 VHSERVERWORLD='UiWorld'
 VHSERVERPORT=2456
 STATUSPORT=8181
-VHSERVERSERVICENAME='valheim-server.UiWorld.service'
-VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
-VSSHTTPSERVICENAME='vss.http.UiWorld.service'
 vss_find_server_pid() { return 1; }
 setup_ui_unit_state() { printf 'not installed'; }
 
@@ -41,6 +38,37 @@ NO_COLOR=1
 color_output="$(ColorRed warning)"
 if [[ "$color_output" != 'warning' ]]; then
   echo "FAIL: setup color helper ignored NO_COLOR" >&2
+  exit 1
+fi
+
+VHSERVERSERVICENAME='valheim-server.UiWorld.service'
+VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
+VSSHTTPSERVICENAME='vss.http.UiWorld.service'
+removal_calls=''
+replace_env_value() { removal_calls="${removal_calls}frequency=$2;"; }
+set_cron() { removal_calls="${removal_calls}cron;"; }
+uninstall_service() { removal_calls="${removal_calls}$1;"; }
+
+if ! remove_profile_services <<< 'no' > "$TMPDIR_UI/remove-cancel.out"; then
+  echo "FAIL: declining profile service removal returned an error" >&2
+  exit 1
+fi
+if [ -n "$removal_calls" ]; then
+  echo "FAIL: declining profile service removal performed actions" >&2
+  exit 1
+fi
+if ! grep -Fq 'were kept' "$TMPDIR_UI/remove-cancel.out"; then
+  echo "FAIL: declining profile service removal did not report that resources were kept" >&2
+  exit 1
+fi
+
+if ! remove_profile_services <<< 'REMOVE' > "$TMPDIR_UI/remove-confirm.out"; then
+  echo "FAIL: confirming profile service removal returned an error" >&2
+  exit 1
+fi
+expected_removal_calls="frequency=0;cron;$VHSERVERSERVICENAME;$VSSHTTPSERVICENAME;$VSSPIPESERVICENAME;"
+if [ "$removal_calls" != "$expected_removal_calls" ]; then
+  echo "FAIL: confirming profile service removal did not remove the expected profile resources" >&2
   exit 1
 fi
 

@@ -6,8 +6,8 @@ TMPDIR_PROFILE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_PROFILE"' EXIT
 cd "$ROOT"
 source ./setup >/dev/null
-source .env.test
-export VSS_ENV_FILE="$ROOT/.env.test"
+cp "$ROOT/.env.test" "$TMPDIR_PROFILE/config.env"
+export VSS_ENV_FILE="$TMPDIR_PROFILE/config.env"
 source ./lib/config.sh
 vss_load_config "$ROOT"
 CWD="$TMPDIR_PROFILE"

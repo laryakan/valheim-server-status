@@ -812,6 +812,21 @@ function remove_shared_logrotate() {
   rm -f "$CWD/systemd/valheim-vss.logrotate"
 }
 
+function remove_profile_services() {
+  local confirmation
+  read -r -p "Remove this profile's services and scheduled update? Type REMOVE to confirm: " confirmation
+  if [ "$confirmation" != "REMOVE" ]; then
+    echo "Profile services and scheduled update were kept."
+    return 0
+  fi
+
+  replace_env_value 'CRONTABWEBHOOKFREQ' 0 || return 1
+  set_cron || return 1
+  uninstall_service "$VHSERVERSERVICENAME" || return 1
+  uninstall_service "$VSSHTTPSERVICENAME" || return 1
+  uninstall_service "$VSSPIPESERVICENAME"
+}
+
 # Install / Active BepInEx_Valheim packaged version
 function bepinex(){
 	replace_env_value "$2" "VSSBEPINEXENABLED"
@@ -1129,13 +1144,7 @@ new_menu(){
       9) set_logrotate; sleep 5 ;;
       10) remove_shared_logrotate ;;
       11) setup_value_prompt 'Which user should run the services?' 'USERSERVICE' ;;
-      12)
-        replace_env_value 'CRONTABWEBHOOKFREQ' 0
-        set_cron
-        uninstall_service "$VHSERVERSERVICENAME"
-        uninstall_service "$VSSHTTPSERVICENAME"
-        uninstall_service "$VSSPIPESERVICENAME"
-        ;;
+      12) remove_profile_services ;;
       13) replace_env_value 'VSSBEPINEXENABLED' 1; "$VSSDIR/bepinex/install_bepinex.sh"; sleep 1 ;;
       14) replace_env_value 'VSSBEPINEXENABLED' 0; "$VSSDIR/bepinex/remove_bepinex.sh"; sleep 1 ;;
       15)
