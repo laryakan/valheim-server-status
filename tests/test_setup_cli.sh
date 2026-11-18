@@ -17,9 +17,10 @@ printf '#!/bin/sh\nexit 0\n' > "$CWD/bin/dig"
 chmod +x "$CWD/bin/dig"
 PATH="$CWD/bin:$PATH"
 cp "$ROOT/lib/config.sh" "$CWD/lib/config.sh"
-cp "$ROOT/.env.dist" "$CWD/.env.dist"
+cp "$ROOT/.env.server.dist" "$CWD/.env.server.dist"
+cp "$ROOT/.env.common.dist" "$CWD/.env.common.dist"
 cp "$ROOT/examples/launcher-args" "$CWD/examples/launcher-args"
-cp "$ROOT/.env.dist" "$CWD/.env.CliWorld"
+cp "$ROOT/.env.server.dist" "$CWD/.env.CliWorld"
 write_env_value "$CWD/.env.CliWorld" VHSERVERWORLD 'CliWorld'
 
 called_action=''

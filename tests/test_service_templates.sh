@@ -29,6 +29,11 @@ for service in "$VHSERVERSERVICENAME" "$VSSHTTPSERVICENAME" "$VSSPIPESERVICENAME
     echo "FAIL: $service does not select its server profile" >&2
     exit 1
   fi
+  if [ "$service" = "$VHSERVERSERVICENAME" ] &&
+     grep -q '^ExecStartPre=' "$CWD/systemd/$service"; then
+    echo "FAIL: Valheim service still updates shared server files on individual startup" >&2
+    exit 1
+  fi
 done
 
 echo "profile-specific service templates OK"

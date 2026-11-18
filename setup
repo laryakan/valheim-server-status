@@ -5,7 +5,7 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 function ensure_env_sync() {
   local env_file="${1:-${VSS_ENV_FILE:-}}"
-  local template_file="${2:-$CWD/.env.dist}"
+  local template_file="${2:-$CWD/.env.server.dist}"
   local tmp_file
   local line
   local key
@@ -14,7 +14,7 @@ function ensure_env_sync() {
     return
   fi
   if [ -z "$env_file" ] || [ ! -f "$env_file" ]; then
-    echo "Cannot synchronize a missing server configuration: ${env_file:-unset}" >&2
+    echo "Cannot synchronize a missing configuration file: ${env_file:-unset}" >&2
     return 1
   fi
 
@@ -62,8 +62,12 @@ function write_env_value() {
 
   printf -v replacement '%s=%q' "$key" "$value"
   tmp_file="$(mktemp)"
-  awk -v key="$key" -v replacement="$replacement" '
-    BEGIN { updated = 0 }
+  if ! VSS_WRITE_ENV_KEY="$key" VSS_WRITE_ENV_REPLACEMENT="$replacement" awk '
+    BEGIN {
+      key = ENVIRON["VSS_WRITE_ENV_KEY"]
+      replacement = ENVIRON["VSS_WRITE_ENV_REPLACEMENT"]
+      updated = 0
+    }
     index($0, key "=") == 1 && !updated {
       print replacement
       updated = 1
@@ -75,7 +79,14 @@ function write_env_value() {
         print replacement
       }
     }
-  ' "$env_file" > "$tmp_file" && mv "$tmp_file" "$env_file"
+  ' "$env_file" > "$tmp_file"; then
+    rm -f "$tmp_file"
+    return 1
+  fi
+  if ! mv "$tmp_file" "$env_file"; then
+    rm -f "$tmp_file"
+    return 1
+  fi
 }
 
 function list_server_profiles() {
@@ -83,7 +94,7 @@ function list_server_profiles() {
   for profile in "$CWD"/.env.*; do
     [ -f "$profile" ] || continue
     case "${profile##*/}" in
-      .env.dist|.env.test) continue ;;
+      .env.server.dist|.env.common.dist|.env.test) continue ;;
     esac
     printf '%s\n' "${profile##*.env.}"
   done
@@ -99,6 +110,75 @@ function read_profile_setting() (
   vss_load_config "$CWD" || exit 1
   printf '%s' "${!key}"
 )
+
+function read_profile_common_setting() (
+  local name="$1"
+  local key="$2"
+  VSS_SERVER_NAME="$name"
+  export VSS_SERVER_NAME
+  unset VSS_ENV_FILE VSS_CONFIG_LOADED
+  source "$CWD/lib/config.sh"
+  vss_load_config "$CWD" || exit 1
+  if [ "$key" = "STEAMCMDPATH" ] && [ -z "${STEAMCMDPATH:-}" ]; then
+    printf '%s' "${STEAMCMD:-}"
+  else
+    printf '%s' "${!key:-}"
+  fi
+)
+
+function ensure_common_config() {
+  local common_file="$CWD/.env"
+  local profile
+  local key
+  local profile_value
+  local candidate
+  local index
+  local -a common_keys=(
+    STEAMCMDPATH VHSERVERDIR VHSERVERSAVEDIR USERSERVICE VALHEIMSERVERLOGDIR
+    VSSLOGFILTER VSSERRFILTER VHSERVERLAUNCHER VSSHTTP VSSPIPE WEBHOOKUPDATE
+    PUBLICIP WEBHOOKURL WEBHOOKID WEBHOOKTOKEN SENDLASTLOGS SENDSERVERCONNECTIONINFO
+    CRONTABWEBHOOKFREQ EVENTREALTIME VSS_LANG
+  )
+  local -a common_values=()
+
+  if [ ! -f "$CWD/.env.common.dist" ]; then
+    echo "Shared configuration template not found: $CWD/.env.common.dist" >&2
+    return 1
+  fi
+  if [ -f "$common_file" ]; then
+    if ! vss_is_common_config "$common_file"; then
+      echo "A legacy .env was found. Run ./migrate-v2-to-v3 before using setup." >&2
+      return 1
+    fi
+    ensure_env_sync "$common_file" "$CWD/.env.common.dist"
+    return $?
+  fi
+  for index in "${!common_keys[@]}"; do
+    key="${common_keys[$index]}"
+    candidate="${!key:-}"
+    if [ "$key" = "STEAMCMDPATH" ] && [ -z "$candidate" ]; then
+      candidate="${STEAMCMD:-}"
+    fi
+    for profile in $(list_server_profiles); do
+      profile_value="$(read_profile_common_setting "$profile" "$key")" || return 1
+      [ -n "$profile_value" ] || continue
+      if [ -n "$candidate" ] && [ "$candidate" != "$profile_value" ]; then
+        printf 'Shared setting %s differs between profiles; align it before creating the common .env.\n' "$key" >&2
+        return 1
+      fi
+      candidate="$profile_value"
+    done
+    common_values[$index]="$candidate"
+  done
+
+  cp "$CWD/.env.common.dist" "$common_file" || return 1
+  for index in "${!common_keys[@]}"; do
+    key="${common_keys[$index]}"
+    candidate="${common_values[$index]}"
+    [ -n "$candidate" ] || continue
+    write_env_value "$common_file" "$key" "$candidate" || return 1
+  done
+}
 
 function validate_server_profile_ports() {
   local name="$1"
@@ -263,7 +343,7 @@ function create_server_profile() {
     status_port=$((status_port + 1))
   done
 
-  cp "$CWD/.env.dist" "$env_file" || return 1
+  cp "$CWD/.env.server.dist" "$env_file" || return 1
   write_env_value "$env_file" VHSERVERWORLD "$name"
   write_env_value "$env_file" VHSERVERPORT "$valheim_port"
   write_env_value "$env_file" STATUSPORT "$status_port"
@@ -286,7 +366,10 @@ function load_server_profile() {
   export VSS_SERVER_NAME VSS_ENV_FILE VSS_CONFIG_LOADED
   source "$CWD/lib/config.sh"
   vss_load_config "$CWD" || return 1
-  ensure_env_sync "$VSS_ENV_FILE" "$CWD/.env.dist" || return 1
+  ensure_common_config || return 1
+  VSS_CONFIG_LOADED=0
+  vss_load_config "$CWD" || return 1
+  ensure_env_sync "$VSS_ENV_FILE" "$CWD/.env.server.dist" || return 1
   VSS_CONFIG_LOADED=0
   vss_load_config "$CWD" || return 1
   validate_server_profile_ports "$name" "$VHSERVERPORT" "$STATUSPORT" || return 1
@@ -489,10 +572,31 @@ function default_integer_value() {
   esac
 }
 
+function reload_profile_config() {
+  VSS_CONFIG_LOADED=0
+  vss_load_config "$CWD"
+}
+
+function is_common_setting() {
+  case "$1" in
+    VSSDIR|STEAMCMDPATH|VHSERVERDIR|VHSERVERSAVEDIR|USERSERVICE|VALHEIMSERVERLOGDIR|\
+    VSSLOGFILTER|VSSERRFILTER|PUBLICIP|VHSERVERLAUNCHER|VHSERVERLAUNCHERDIR|\
+    VSSHTTP|VSSHTTPDIR|VSSPIPE|VSSPIPEDIR|WEBHOOKUPDATE|WEBHOOKURL|WEBHOOKID|\
+    WEBHOOKTOKEN|SENDLASTLOGS|SENDSERVERCONNECTIONINFO|CRONTABWEBHOOKFREQ|\
+    EVENTREALTIME|VSS_LANG)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 # env conf value changing function
 function replace_env_value() {
   local key="$1"
   local value="${2:-}"
+  local env_file="$VSS_ENV_FILE"
   local candidate_game_port="${VHSERVERPORT:-}"
   local candidate_http_port="${STATUSPORT:-}"
 
@@ -513,9 +617,7 @@ function replace_env_value() {
       else
         sed -i "s|^${key}=.*|${key}=''|" "$VSS_ENV_FILE"
       fi
-      VSS_CONFIG_LOADED=0
-      source "$VSS_ENV_FILE"
-      VSS_CONFIG_LOADED=1
+      reload_profile_config
       return
       ;;
   esac
@@ -535,15 +637,24 @@ function replace_env_value() {
     validate_server_profile_ports "$VSS_SERVER_NAME" "$candidate_game_port" "$candidate_http_port" || return 1
   fi
 
-  if [[ "$value" == *[!0-9]* ]] && [[ "$value" != "" ]]; then
-    sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$VSS_ENV_FILE"
-  else
-    sed -i "s|^${key}=.*|${key}=${value}|" "$VSS_ENV_FILE"
+  if is_common_setting "$key"; then
+    ensure_common_config || return 1
+    env_file="$CWD/.env"
+    [ -f "$env_file" ] || {
+      echo "Configuration file not found: $env_file" >&2
+      return 1
+    }
+    write_env_value "$env_file" "$key" "$value" || return 1
+  fi
+  if [ "$env_file" = "$VSS_ENV_FILE" ]; then
+    if [[ "$value" == *[!0-9]* ]] && [[ "$value" != "" ]]; then
+      sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$VSS_ENV_FILE"
+    else
+      sed -i "s|^${key}=.*|${key}=${value}|" "$VSS_ENV_FILE"
+    fi
   fi
 
-  VSS_CONFIG_LOADED=0
-  source "$VSS_ENV_FILE"
-  VSS_CONFIG_LOADED=1
+  reload_profile_config || return 1
 }
 
 # param1=value_label, param2=value_variable_in_.env
@@ -621,16 +732,151 @@ function auto_conf(){
 
 # Setup cron
 function set_cron() {
-	local marker="# vss-profile:$VSS_SERVER_NAME"
+	local profile
+	local marker
 	local current_cron
 	local updated_cron
 	current_cron="$(crontab -l 2>/dev/null || true)"
-	updated_cron="$(printf '%s\n' "$current_cron" | grep -Fv "$marker" || true)"
-	if [ "${CRONTABWEBHOOKFREQ:-0}" -gt 0 ]; then
-		updated_cron="$(printf '%s\n%s\n' "$updated_cron" "*/$CRONTABWEBHOOKFREQ * * * * VSS_SERVER_NAME=$VSS_SERVER_NAME $WEBHOOKUPDATE $marker")"
-	fi
+	updated_cron="$current_cron"
+	for profile in $(list_server_profiles); do
+	  marker="# vss-profile:$profile"
+	  updated_cron="$(printf '%s\n' "$updated_cron" | grep -Fv "$marker" || true)"
+	  if [ "${CRONTABWEBHOOKFREQ:-0}" -gt 0 ]; then
+	    updated_cron="$(printf '%s\n%s\n' "$updated_cron" "*/$CRONTABWEBHOOKFREQ * * * * VSS_SERVER_NAME=$profile $WEBHOOKUPDATE $marker")"
+	  fi
+	done
 	printf '%s\n' "$updated_cron" | crontab -
 	echo "$(ColorGreen 'crontab updated, you can check it with \*crontab -l\*, edit with \*crontab -e\*')"
+}
+
+function remove_profile_cron() {
+  local profile="$1"
+  local marker="# vss-profile:$profile"
+  local current_cron
+  local updated_cron
+  current_cron="$(crontab -l 2>/dev/null || true)"
+  updated_cron="$(printf '%s\n' "$current_cron" | grep -Fv "$marker" || true)"
+  printf '%s\n' "$updated_cron" | crontab -
+}
+
+function set_maintenance_cron() {
+  local script_command
+  local marker="# vss-maintenance"
+  local entry
+  local current_cron
+  local updated_cron
+
+  printf -v script_command '%q' "$CWD/vss.maintenance"
+  entry="0 5 * * * $script_command $marker"
+  current_cron="$(sudo crontab -l 2>/dev/null || true)"
+  updated_cron="$(printf '%s\n' "$current_cron" |
+    grep -Fv "$marker" |
+    grep -Fv "$CWD/vss.maintenance" || true)"
+  if ! printf '%s\n%s\n' "$updated_cron" "$entry" | sudo crontab -; then
+    echo "Could not install the global maintenance schedule in root's crontab." >&2
+    return 1
+  fi
+  echo "Global maintenance is scheduled daily at 05:00 local time in root's crontab."
+  echo "Remove any older manual vss.maintenance cron entry to avoid running it twice."
+}
+
+function remove_maintenance_cron() {
+  local marker="# vss-maintenance"
+  local current_cron
+  local updated_cron
+
+  current_cron="$(sudo crontab -l 2>/dev/null || true)"
+  updated_cron="$(printf '%s\n' "$current_cron" |
+    grep -Fv "$marker" |
+    grep -Fv "$CWD/vss.maintenance" || true)"
+  if ! printf '%s\n' "$updated_cron" | sudo crontab -; then
+    echo "Could not remove the global maintenance schedule from root's crontab." >&2
+    return 1
+  fi
+  echo "Global maintenance schedule removed from root's crontab."
+}
+
+function restart_maintenance_services() {
+  local unit
+  local failed=0
+  for unit in "$@"; do
+    printf 'Starting previously active service %s\n' "$unit"
+    if ! sudo systemctl start "$unit"; then
+      printf 'Failed to restart %s.\n' "$unit" >&2
+      failed=1
+    fi
+  done
+  return "$failed"
+}
+
+function run_server_maintenance() {
+  local profile
+  local unit
+  local update_status=0
+  local restart_status=0
+  local -a profiles=()
+  local -a installed_units=()
+  local -a active_units=()
+
+  while IFS= read -r profile; do
+    [ -n "$profile" ] && profiles+=("$profile")
+  done < <(list_server_profiles)
+  if [ "${#profiles[@]}" -eq 0 ]; then
+    echo "No server profiles are configured; maintenance was not run." >&2
+    return 1
+  fi
+  if [ -z "${VHSERVERDIR:-}" ] || [ ! -d "$VHSERVERDIR" ]; then
+    echo "The shared Valheim server directory is missing or invalid; maintenance was not run." >&2
+    return 1
+  fi
+  if [ -z "${STEAMCMDPATH:-}" ] || [ ! -x "$STEAMCMDPATH" ]; then
+    echo "STEAMCMDPATH is missing or is not executable; maintenance was not run." >&2
+    return 1
+  fi
+  if [ -z "${USERSERVICE:-}" ]; then
+    echo "USERSERVICE is empty; maintenance was not run." >&2
+    return 1
+  fi
+
+  for profile in "${profiles[@]}"; do
+    unit="valheim-server.$profile.service"
+    if sudo systemctl cat "$unit" >/dev/null 2>&1; then
+      installed_units+=("$unit")
+      if sudo systemctl is-active --quiet "$unit"; then
+        active_units+=("$unit")
+      fi
+    fi
+  done
+  if [ "${#installed_units[@]}" -eq 0 ]; then
+    echo "No installed Valheim server services were found; maintenance was not run." >&2
+    return 1
+  fi
+
+  printf 'Stopping all %s installed Valheim server instance(s) before updating the shared server files.\n' \
+    "${#installed_units[@]}"
+  for unit in "${installed_units[@]}"; do
+    if ! sudo systemctl stop "$unit"; then
+      printf 'Failed to stop %s; restoring services that were active before maintenance.\n' "$unit" >&2
+      restart_maintenance_services "${active_units[@]}" || true
+      return 1
+    fi
+  done
+
+  printf 'Updating Valheim server files in %s with SteamCMD.\n' "$VHSERVERDIR"
+  if ! sudo -u "$USERSERVICE" "$STEAMCMDPATH" +force_install_dir "$VHSERVERDIR" \
+      +login anonymous +app_update 896660 validate +exit; then
+    echo "SteamCMD update failed." >&2
+    update_status=1
+  fi
+
+  if ! restart_maintenance_services "${active_units[@]}"; then
+    restart_status=1
+  fi
+  if [ "$update_status" -ne 0 ] || [ "$restart_status" -ne 0 ]; then
+    echo "Maintenance completed with errors; inspect SteamCMD and systemd service status." >&2
+    return 1
+  fi
+  echo "Valheim maintenance completed; only previously active instances were restarted."
 }
 
 # Render a profile-specific unit from the shared service examples.
@@ -654,7 +900,7 @@ function render_service() {
 	if [ "$SERVICENAME" = "$VHSERVERSERVICENAME" ]
 	then
 	# set steamcmd path for server update
-	sed -i "s[###STEAMCMDPATH###[$STEAMCMD[g" "$CWD/systemd/$SERVICENAME"
+	sed -i "s[###STEAMCMDPATH###[$STEAMCMDPATH[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher path
 	sed -i "s[###VHSERVERLAUNCHER###[$VHSERVERLAUNCHER[g" "$CWD/systemd/$SERVICENAME"
 	# important : set launcher dir
@@ -820,8 +1066,7 @@ function remove_profile_services() {
     return 0
   fi
 
-  replace_env_value 'CRONTABWEBHOOKFREQ' 0 || return 1
-  set_cron || return 1
+  remove_profile_cron "$VSS_SERVER_NAME" || return 1
   uninstall_service "$VHSERVERSERVICENAME" || return 1
   uninstall_service "$VSSHTTPSERVICENAME" || return 1
   uninstall_service "$VSSPIPESERVICENAME"
@@ -845,6 +1090,7 @@ discord_menu(){
 vss_header
 echo -ne "
 *** $(ColorMagenta 'Discord') menu ***
+$(ColorYellow 'Webhook credentials and send options are shared across profiles; message IDs belong to this profile.')
 $(ColorRed 'Remember to first create your webhook on Discord and activate developer mode (in appereance menu)')
 $(ColorGreen '1)') setup current $(ColorMagenta 'Discord') webhook URL
 $(ColorGreen '2)') setup 'how many' wanted last logs on your $(ColorMagenta 'Discord') channel
@@ -1103,6 +1349,7 @@ mkdir -p "$CWD/systemd"
 # Main menu
 new_menu(){
   local a
+  local confirmation
   local notice=""
   while true; do
     setup_ui_header "Main menu"
@@ -1129,6 +1376,9 @@ new_menu(){
     printf ' 13  Enable packaged BepInEx\n'
     printf ' 14  Disable packaged BepInEx\n'
     printf ' 15  Switch server profile\n'
+    printf ' 16  Update Valheim server (stops all instances first; restarts only those previously active)\n'
+    printf ' 17  Schedule global maintenance daily at 05:00 local time (root crontab; sudo)\n'
+    printf ' 18  Remove the global maintenance schedule (root crontab; sudo)\n'
     printf '\n  0  Exit\n\n'
     printf 'Select an action: '
     read -r a || return 0
@@ -1152,6 +1402,35 @@ new_menu(){
           load_server_profile "$SELECTED_SERVER_PROFILE" || continue
         fi
         ;;
+      16)
+        printf 'This updates shared Valheim server files. Every installed server instance will be stopped first; only instances that were running will be restarted sequentially.\n'
+        printf 'Type UPDATE to continue: '
+        read -r confirmation
+        if [ "$confirmation" = "UPDATE" ]; then
+          run_server_maintenance || notice="Maintenance failed; review the errors above and service status."
+        else
+          notice="Maintenance cancelled."
+        fi
+        ;;
+      17)
+        printf 'This adds one global daily maintenance job at 05:00 local time to root'\''s crontab. Remove any older manual vss.maintenance entry first to avoid duplicate updates.\n'
+        printf 'Type SCHEDULE to continue: '
+        read -r confirmation
+        if [ "$confirmation" = "SCHEDULE" ]; then
+          set_maintenance_cron || notice="Could not schedule maintenance; review the error above."
+        else
+          notice="Maintenance schedule was not changed."
+        fi
+        ;;
+      18)
+        printf 'Type REMOVE to delete the global maintenance entry from root'\''s crontab: '
+        read -r confirmation
+        if [ "$confirmation" = "REMOVE" ]; then
+          remove_maintenance_cron || notice="Could not remove the maintenance schedule; review the error above."
+        else
+          notice="Maintenance schedule was kept."
+        fi
+        ;;
       0) exit 0 ;;
       *) notice="Unknown option: $a" ;;
     esac
@@ -1164,6 +1443,9 @@ Usage:
   ./setup [SERVER_NAME]
   ./setup --list
   ./setup --create SERVER_NAME
+  ./setup --schedule-maintenance
+  ./setup --remove-maintenance-schedule
+  ./setup --maintenance-update
   ./setup --start-server SERVER_NAME
   ./setup --stop-server SERVER_NAME
   ./setup --restart-server SERVER_NAME
@@ -1198,6 +1480,7 @@ function run_server_cli_action() {
 
 function setup_main() {
   local selected_profile="${VSS_SERVER_NAME:-}"
+  local profile
   local direct_action=""
 
   case "${1:-}" in
@@ -1209,6 +1492,22 @@ function setup_main() {
       list_server_profiles
       return 0
       ;;
+    --maintenance-update)
+      if [ -n "${2:-}" ]; then
+        printf 'Option --maintenance-update does not accept a server name.\n'
+        setup_usage
+        return 2
+      fi
+      direct_action="$1"
+      ;;
+    --schedule-maintenance|--remove-maintenance-schedule)
+      if [ -n "${2:-}" ]; then
+        printf 'Option %s does not accept a server name.\n' "$1"
+        setup_usage
+        return 2
+      fi
+      direct_action="$1"
+      ;;
     --start-server|--stop-server|--restart-server|--status-server|--check-firewall|--discord-update)
       if [ -z "${2:-}" ] || [ -n "${3:-}" ]; then
         printf 'Option %s requires exactly one server name.\n' "$1"
@@ -1219,9 +1518,29 @@ function setup_main() {
       ;;
   esac
 
-  if [ -f "$CWD/.env" ]; then
+  if [ -f "$CWD/.env" ] && ! grep -Fxq 'VSS_COMMON_CONFIG_VERSION=3' "$CWD/.env"; then
     printf 'A legacy .env was found. Run ./migrate-v2-to-v3 before using setup.\n' >&2
     return 1
+  fi
+
+  case "$direct_action" in
+    --schedule-maintenance) set_maintenance_cron; return $? ;;
+    --remove-maintenance-schedule) remove_maintenance_cron; return $? ;;
+  esac
+
+  if [ "$direct_action" = "--maintenance-update" ]; then
+    if [ -z "$selected_profile" ]; then
+      while IFS= read -r profile; do
+        selected_profile="$profile"
+        break
+      done < <(list_server_profiles)
+    fi
+    if [ -z "$selected_profile" ] || ! load_server_profile "$selected_profile"; then
+      printf 'No valid server profile is available for maintenance.\n' >&2
+      return 1
+    fi
+    run_server_maintenance
+    return $?
   fi
 
   if [ -n "$direct_action" ]; then

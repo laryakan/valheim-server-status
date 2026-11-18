@@ -45,8 +45,7 @@ VHSERVERSERVICENAME='valheim-server.UiWorld.service'
 VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
 VSSHTTPSERVICENAME='vss.http.UiWorld.service'
 removal_calls=''
-replace_env_value() { removal_calls="${removal_calls}frequency=$2;"; }
-set_cron() { removal_calls="${removal_calls}cron;"; }
+remove_profile_cron() { removal_calls="${removal_calls}cron:$1;"; }
 uninstall_service() { removal_calls="${removal_calls}$1;"; }
 
 if ! remove_profile_services <<< 'no' > "$TMPDIR_UI/remove-cancel.out"; then
@@ -66,7 +65,7 @@ if ! remove_profile_services <<< 'REMOVE' > "$TMPDIR_UI/remove-confirm.out"; the
   echo "FAIL: confirming profile service removal returned an error" >&2
   exit 1
 fi
-expected_removal_calls="frequency=0;cron;$VHSERVERSERVICENAME;$VSSHTTPSERVICENAME;$VSSPIPESERVICENAME;"
+expected_removal_calls="cron:UiWorld;$VHSERVERSERVICENAME;$VSSHTTPSERVICENAME;$VSSPIPESERVICENAME;"
 if [ "$removal_calls" != "$expected_removal_calls" ]; then
   echo "FAIL: confirming profile service removal did not remove the expected profile resources" >&2
   exit 1

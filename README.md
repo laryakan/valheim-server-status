@@ -6,6 +6,9 @@ VSS is a lightweight Bash-based monitoring and status tool for Valheim dedicated
 
 - Linux and Bash
 - `systemctl` for system services
+- `sudo` for systemd service management and the shared Valheim maintenance update
+- SteamCMD for the explicit shared-server update workflow
+- `dig` (`dnsutils`/`bind-tools`) for the default public-IP lookup; `PUBLICIP` can also be set manually
 - `curl` for Discord webhooks
 - `ncat` for the optional HTTP status endpoint and the BepInEx upgrade integration test
 - `logrotate` for rotating VSS logs
@@ -14,7 +17,9 @@ VSS is a lightweight Bash-based monitoring and status tool for Valheim dedicated
 
 ## Server profiles
 
-Each server is identified by its Valheim world name (`VHSERVERWORLD`) and has a configuration file named `.env.<world-name>`. The classic `.env` file is no longer an active configuration. `.env.dist` is the template used to create profiles.
+Each server is identified by its Valheim world name (`VHSERVERWORLD`) and has a configuration file named `.env.<world-name>`. The root `.env` stores shared installation settings; `.env.server.dist` is the template used to create profiles, and `.env.common.dist` is its shared-settings template. `./setup` creates the shared `.env` on first profile load and synchronizes newly added template keys without overwriting existing values. `VSSDIR` is the shared installation root, derived from the location of `.env`.
+
+Server paths (`VHSERVERDIR`, `VHSERVERSAVEDIR`), service user, shared log directory, VSS tools, public IP, webhook URL, and Discord send/cron options belong to the common `.env`. Per-profile Discord message IDs are limited to `STATUSMESSAGEID`, `LASTLOGMESSAGEID`, and `SERVERCONNECTIONINFOMESSAGEID`.
 
 Start the setup interface:
 
@@ -46,6 +51,23 @@ Server actions can run without opening the interactive menu. Lifecycle actions u
 
 `--status-server` reports the systemd unit status and returns its status code. These commands require the profile name explicitly; they do not infer it from another profile or from the current directory.
 `--check-firewall` checks whether active UFW has ALLOW rules for the profile's Valheim port range (`VHSERVERPORT` through `VHSERVERPORT+2`, TCP and UDP) and HTTP status port (TCP). It is informational only: it never adds or changes firewall rules, and reports when UFW is inactive, unavailable, or missing rules.
+
+Valheim updates are explicit because all profiles share the same server files. Do not enable the commented `ExecStartPre` update in the service template. Run:
+
+```bash
+./setup --maintenance-update
+```
+
+The command stops every installed profile's Valheim service, runs SteamCMD once against the shared `VHSERVERDIR`, then starts only the services that were active before the request, sequentially. Services that were already stopped remain stopped. `vss.maintenance` checks connected-player state across all profiles, sends one warning when needed, then calls the same operation. The warning title and description use the shared `VSS_LANG` setting (`en` or `fr`). Setup can schedule it as one global job; do not schedule it separately per profile.
+
+Schedule or remove the global planned maintenance job from setup:
+
+```bash
+./setup --schedule-maintenance
+./setup --remove-maintenance-schedule
+```
+
+Scheduling adds one idempotent entry to root's crontab for daily 05:00 system-local time. It requires `sudo`; if an older manual `vss.maintenance` cron entry exists, remove it first to avoid duplicate updates. The scheduled job checks every profile for connected players, then performs one global update.
 
 Setup also rejects overlapping Valheim port ranges and HTTP ports across profiles. HTTP ports must not overlap any profile's Valheim range.
 
@@ -79,7 +101,7 @@ Run the dedicated migration command from the VSS checkout; `./setup` no longer p
 The script requires the legacy `.env`, a valid `VHSERVERWORLD`, and an existing `VHSERVERDIR`. It asks for confirmation, creates a permission-restricted backup under `migration-backups/`, then:
 
 1. Stops and disables the V2 systemd units it finds (`valheim-server.service`, `vss.pipe.service`, and `vss.http.service`).
-2. Renames `.env`, launcher arguments, and VSS state files to the profile-specific names. It backs up all four configured legacy state files, including files outside `data/`, and aborts rather than overwriting existing profile/state targets.
+2. Splits the old `.env` into the shared root `.env` and `.env.<world-name>`, and renames launcher arguments and VSS state files to profile-specific names. It backs up all four configured legacy state files, including files outside `data/`, and aborts rather than overwriting existing profile/state targets.
 3. Removes cron lines containing the legacy `WEBHOOKUPDATE` path, preserves unrelated cron entries, and installs the profile-tagged V3 Discord update if its configured frequency is positive.
 4. Installs the shared V3 logrotate configuration and removes the old `/etc/logrotate.d/valheim` rule after backing it up.
 5. Installs the V3 server unit and corresponding pipe/HTTP units when those V2 units existed. Legacy unit files are retained but left stopped and disabled.
@@ -119,15 +141,15 @@ Alternatively, configure the existing server's log path in `.env.MyWorld` and us
 
 ## Discord
 
-Configure each profile's webhook URL and message IDs in the Discord menu for that profile. To create the initial status messages, select the profile in `./setup` and choose the force-update action, or run:
+Configure the shared webhook URL and send options in the Discord menu. Message IDs remain profile-specific. To create the initial status messages, select each profile in `./setup` and choose the force-update action, or run:
 
 ```bash
 VSS_SERVER_NAME=MyWorld ./discord/update
 ```
 
-Cron updates are managed per profile. Webhook URLs and message IDs are stored in the corresponding `.env.<world-name>` file.
+Cron jobs for Discord updates are generated per profile, but their frequency and webhook URL are shared. Updating the shared cron frequency refreshes all configured profile jobs; removing one profile removes only its job. The webhook URL and options live in the root `.env`; only the three message IDs listed above live in each `.env.<world-name>`.
 
-The update order is connection information, server status, then recent logs. To enable automatic updates, set `CRONTABWEBHOOKFREQ` in the selected profile to a positive number of minutes; set it to `0` to disable that profile's scheduled update.
+The update order is connection information, server status, then recent logs. Set the shared `CRONTABWEBHOOKFREQ` to a positive number of minutes to enable updates for all profiles; set it to `0` to disable all profile update jobs.
 
 For modded servers, set `VSSBEPINEXENABLED=1` and put the profile's R2Modman/Thunderstore UUID share code (for example `01a1eaf3-9be3-9083-b9b4-26768368368e`) in `R2MODMANCODE` in that world's `.env`. The code is shown in Discord and the server status output (including the HTTP status endpoint), including while the server is offline. It is omitted when BepInEx is disabled or no code is configured. VSS does not generate or synchronize the mod profile; maintain the share code from the mod manager.
 
@@ -173,7 +195,7 @@ The optional `--check-firewall` command uses `ufw` when available; it only reads
 
 ## Data isolation
 
-VSS state files are fixed under the installation's `data/` directory and suffixed with the world name: online and offline player lists, SteamID map, and last-world-save timestamp. Their paths are derived by VSS and are not configurable in profile `.env` files. If an existing profile has a state file at a custom path, move it to the fixed `data/` path shown by the loader error before starting that profile. Webhook settings, launcher arguments, services, ports, cron jobs, and log file names are also profile-specific.
+VSS state files are fixed under the installation's `data/` directory and suffixed with the world name: online and offline player lists, SteamID map, and last-world-save timestamp. Their paths are derived by VSS and are not configurable in profile `.env` files. If an existing profile has a state file at a custom path, move it to the fixed `data/` path shown by the loader error before starting that profile. Message IDs, launcher arguments, services, ports, VSS state, and log file names are profile-specific. Discord webhook credentials/options and update frequency are shared; cron entries are generated per profile.
 
 ## Tests
 

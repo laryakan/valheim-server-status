@@ -17,8 +17,8 @@ StartLimitBurst=3
 User=###EXECUSER###
 Group=###EXECUSER###
 Environment=VSS_SERVER_NAME=###VSSSERVERNAME###
-# Uncomment to update
-ExecStartPre=###STEAMCMDPATH### +force_install_dir ###VHSERVERDIR### +login anonymous +app_update 896660 validate +exit
+# Updates must be run through ./setup --maintenance-update so all instances are stopped first.
+#ExecStartPre=###STEAMCMDPATH### +force_install_dir ###VHSERVERDIR### +login anonymous +app_update 896660 validate +exit
 ExecStart=###VHSERVERLAUNCHER###
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID

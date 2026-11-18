@@ -14,7 +14,8 @@ MOCK_CRONTAB="$TMPDIR_MIGRATION/crontab"
 mkdir -p "$MIGRATION_ROOT"/{data,launcher,examples,lib,systemd,fake-server,discord} \
   "$MOCK_BIN" "$SYSTEMD_ROOT" "$LOGROTATE_ROOT" "$CUSTOM_STATE_ROOT"
 cp "$ROOT/setup" "$ROOT/migrate-v2-to-v3" "$MIGRATION_ROOT/"
-cp "$ROOT/.env.dist" "$MIGRATION_ROOT/"
+cp "$ROOT/.env.server.dist" "$MIGRATION_ROOT/"
+cp "$ROOT/.env.common.dist" "$MIGRATION_ROOT/"
 cp "$ROOT/lib/config.sh" "$ROOT/lib/validation.sh" "$MIGRATION_ROOT/lib/"
 cp "$ROOT"/examples/* "$MIGRATION_ROOT/examples/"
 cp "$ROOT/examples/launcher-args" "$MIGRATION_ROOT/launcher/"
@@ -118,8 +119,9 @@ if ! printf 'MIGRATE\nSTART\n' | "$MIGRATION_ROOT/migrate-v2-to-v3" > "$TMPDIR_M
   exit 1
 fi
 
-if [ -e "$MIGRATION_ROOT/.env" ] || [ ! -f "$MIGRATION_ROOT/.env.MigrationWorld" ]; then
-  echo "FAIL: legacy configuration was not migrated to a profile" >&2
+if ! grep -Fxq 'VSS_COMMON_CONFIG_VERSION=3' "$MIGRATION_ROOT/.env" ||
+   [ ! -f "$MIGRATION_ROOT/.env.MigrationWorld" ]; then
+  echo "FAIL: legacy configuration was not split into shared and profile files" >&2
   exit 1
 fi
 if [ -e "$MIGRATION_ROOT/launcher/launcher-args" ] ||

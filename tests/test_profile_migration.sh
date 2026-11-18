@@ -14,7 +14,8 @@ source "$ROOT/setup" >/dev/null
 source "$ROOT/migrate-v2-to-v3"
 CWD="$TMPDIR_PROFILE"
 mkdir -p "$CWD/data" "$CWD/launcher" "$CWD/examples" "$CWD/systemd"
-cp "$ROOT/.env.dist" "$CWD/.env.dist"
+cp "$ROOT/.env.server.dist" "$CWD/.env.server.dist"
+cp "$ROOT/.env.common.dist" "$CWD/.env.common.dist"
 cp "$ROOT/examples/launcher-args" "$CWD/examples/launcher-args"
 printf '%s\n' '-saveinterval 1800' > "$CWD/launcher/launcher-args"
 
@@ -37,8 +38,9 @@ if ! migrate_legacy_config; then
   exit 1
 fi
 
-if [ -e "$CWD/.env" ] || [ ! -f "$CWD/.env.LegacyWorld" ]; then
-  echo "FAIL: legacy .env was not renamed to its profile name" >&2
+if ! grep -Fxq 'VSS_COMMON_CONFIG_VERSION=3' "$CWD/.env" ||
+   [ ! -f "$CWD/.env.LegacyWorld" ]; then
+  echo "FAIL: legacy .env was not split into shared and profile configuration" >&2
   exit 1
 fi
 if [ ! -f "$CWD/launcher/launcher-args.LegacyWorld" ] ||
@@ -72,7 +74,8 @@ fi
 
 CREATE_DIR="$TMPDIR_PROFILE/create"
 mkdir -p "$CREATE_DIR/data" "$CREATE_DIR/launcher" "$CREATE_DIR/examples"
-cp "$ROOT/.env.dist" "$CREATE_DIR/.env.dist"
+cp "$ROOT/.env.server.dist" "$CREATE_DIR/.env.server.dist"
+cp "$ROOT/.env.common.dist" "$CREATE_DIR/.env.common.dist"
 cp "$ROOT/examples/launcher-args" "$CREATE_DIR/examples/launcher-args"
 cat > "$CREATE_DIR/.env" <<EOF
 VSSDIR="$CREATE_DIR"

@@ -12,7 +12,8 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 ## Important repository conventions
 
 - This project targets bash on Linux.
-- Runtime scripts load an explicit `.env.<world-name>` profile through `lib/config.sh`; `.env.dist` is only a template and `.env` is not an active configuration.
+- Runtime scripts load an explicit `.env.<world-name>` profile through `lib/config.sh`; `.env.server.dist` and `.env.common.dist` are templates, while the root `.env` stores shared installation settings.
+- `VSSDIR` is the installation root shared by every profile. `setup` synchronizes newly added keys from `.env.common.dist` into the root `.env` without overwriting existing values.
 - The root script `./setup` is an interactive installer/UI, not a generic library.
 - Any script that is loaded with `source` must not execute the interactive menu automatically.
 - Shell scripts should keep failure modes non-fatal when possible; invalid numeric config values should degrade to sane defaults instead of aborting the whole workflow.
@@ -29,7 +30,8 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - `launcher/` : server launcher helpers
 - `examples/` : systemd and logrotate examples
 - `lib/` : reusable shell helpers, if present
-- `.env.dist` / `.env.<world-name>` : configuration template and per-world configuration
+- `.env.server.dist` / `.env.<world-name>` : per-server configuration template and configuration
+- `.env.common.dist` / `.env` : shared configuration template and installation settings
 - `launcher/launcher-args.<world-name>` : per-world optional launcher arguments
 - `migration-backups/` : permission-restricted migration backups; ignored by git
 
@@ -50,8 +52,10 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - Keep VSS state files isolated with world-name suffixes. The Valheim `savedir` and its admin, banned, and permitted lists are intentionally shared.
 - `VHSERVERSEED` is informational only and is displayed in status/Discord; VSS cannot use it to set or change the Valheim world seed.
 - `R2MODMANCODE` is an optional per-profile mod-manager share code. Display it in Discord and server status only when BepInEx is enabled; VSS does not generate or synchronize the mod profile.
+- Discord webhook credentials, send options, public IP, and VSS tool paths are shared in `.env`; only `STATUSMESSAGEID`, `LASTLOGMESSAGEID`, and `SERVERCONNECTIONINFOMESSAGEID` are per-profile.
+- Valheim server files are shared across profiles. Service startup must not run SteamCMD updates; use `./setup --maintenance-update`, which stops every installed Valheim service, updates once, then sequentially starts only those that were active before the request. `vss.maintenance` checks all profiles, uses the shared `VSS_LANG` for its warning, and should be scheduled once globally in root's crontab with `./setup --schedule-maintenance`, not once per profile.
 - Setup validates port collisions between profiles and may report UFW rules for the Valheim range and HTTP status port. The check is informational and must never modify or open firewall rules.
-- Preserve migration from a legacy `.env` and `launcher/launcher-args` into profile-specific names; never overwrite an existing profile or state file.
+- Preserve migration from a legacy V2 `.env` into shared `.env` plus `.env.<world-name>`, and migrate `launcher/launcher-args` into a profile-specific name; never overwrite an existing profile or state file.
 - `./bepinex_upgrade.sh` requires `wget`, `unzip`, and `awk`. It enforces VSS-owned logging keys in the image's `BepInEx.cfg`, preserves other upstream config entries and old image directories, and does not migrate or modify plugins. The `BEPINEX_RELEASES_LATEST_URL` override is for a fixture-compatible release metadata endpoint.
 - When adding numeric config variables, validate them as integers and fall back to a safe default on parse failure.
 - Do not silently remove required configuration; show fallback and validation diagnostics on `stderr`. Background/runtime processes may additionally append operational errors to `crash.log`; the interactive `setup` CLI must not redirect there.
@@ -105,6 +109,7 @@ Do not claim “fixed” without fresh output proving the behavior.
 
 - Explain the root cause before patching.
 - Keep changes minimal and directly tied to the bug.
+- Keep `README.md` and `AGENTS.md` current at every intervention when behavior, dependencies, workflows, or repository conventions change; document user-facing operations in README and implementation guidance in AGENTS.
 - Prefer defaults over aborts for malformed values.
 - Preserve the project’s operational assumptions: Linux service management, bash, systemd, cron, Discord webhooks, and log parsing.
 

@@ -5,6 +5,10 @@ vss_validate_server_name() {
     [[ "$1" != *..* ]]
 }
 
+vss_is_common_config() {
+  [ -f "${1:-}" ] && grep -Fxq 'VSS_COMMON_CONFIG_VERSION=3' "$1"
+}
+
 vss_find_server_pid() {
   local server_pid
 
@@ -27,6 +31,13 @@ vss_load_config() {
   local config_name=""
   local config_basename=""
   local expected_server_name="${VSS_SERVER_NAME:-}"
+  local common_file
+  local profile_log_dir
+  local profile_log_path
+  local profile_public_ip
+  local profile_status_url
+  local default_status_url
+  local default_log_path
   local state_key
   local state_path
   local configured_state_path
@@ -38,6 +49,9 @@ vss_load_config() {
     printf 'VSS root directory is not accessible: %s\n' "$1" >&2
     return 1
   }
+  common_file="$root/.env"
+  VSSDIR="$root"
+  export VSSDIR
 
   if [ "${VSS_CONFIG_LOADED:-0}" = "1" ] && [ -n "${VSS_SERVER_NAME:-}" ]; then
     return 0
@@ -108,6 +122,48 @@ vss_load_config() {
     printf 'Profile name "%s" does not match VHSERVERWORLD "%s" in %s\n' \
       "$VSS_SERVER_NAME" "${VHSERVERWORLD:-}" "$VSS_ENV_FILE" >&2
     return 1
+  fi
+
+  profile_log_dir="${VALHEIMSERVERLOGDIR:-}"
+  profile_log_path="${VALHEIMSERVERLOGPATH:-}"
+  profile_public_ip="${PUBLICIP:-}"
+  profile_status_url="${STATUSURL:-}"
+  if [ -f "$common_file" ]; then
+    if ! vss_is_common_config "$common_file"; then
+      printf 'A legacy .env was found. Run ./migrate-v2-to-v3 before using VSS.\n' >&2
+      return 1
+    fi
+    if ! source "$common_file"; then
+      printf 'Failed to load shared VSS configuration: %s\n' "$common_file" >&2
+      return 1
+    fi
+  fi
+
+  if [ -z "${STEAMCMDPATH:-}" ]; then
+    STEAMCMDPATH="${STEAMCMD:-$(command -v steamcmd || true)}"
+  fi
+  if [ -z "${VALHEIMSERVERLOGDIR:-}" ]; then
+    VALHEIMSERVERLOGDIR="$root/valheim-logs.d"
+  fi
+  default_log_path="$profile_log_dir/*.$VSS_SERVER_NAME.*.log"
+  if [ -z "$profile_log_path" ] || [ "$profile_log_path" = "$default_log_path" ]; then
+    VALHEIMSERVERLOGPATH="$VALHEIMSERVERLOGDIR/*.$VSS_SERVER_NAME.*.log"
+  else
+    VALHEIMSERVERLOGPATH="$profile_log_path"
+  fi
+  if [ -n "$profile_public_ip" ]; then
+    default_status_url="http://$profile_public_ip:${STATUSPORT:-8181}/"
+  else
+    default_status_url="https://www.valheimgame.com:443/"
+  fi
+  if [ -z "$profile_status_url" ] || [ "$profile_status_url" = "$default_status_url" ]; then
+    if [ -n "${PUBLICIP:-}" ]; then
+      STATUSURL="http://$PUBLICIP:${STATUSPORT:-8181}/"
+    else
+      STATUSURL="https://www.valheimgame.com:443/"
+    fi
+  else
+    STATUSURL="$profile_status_url"
   fi
 
   for index in "${!state_keys[@]}"; do

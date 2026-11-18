@@ -114,4 +114,31 @@ if (
   exit 1
 fi
 
+cat > "$TMPDIR_PROFILE/.env" <<EOF
+VSS_COMMON_CONFIG_VERSION=3
+VSSDIR="$TMPDIR_PROFILE"
+VALHEIMSERVERLOGDIR="$TMPDIR_PROFILE/shared-logs"
+PUBLICIP='203.0.113.8'
+EOF
+SHARED_CONFIG="$(load_profile Alpha)"
+case "$SHARED_CONFIG" in
+  *"$TMPDIR_PROFILE/data/online-players.Alpha"*) ;;
+  *) echo "FAIL: common config changed profile-specific state paths" >&2; exit 1 ;;
+esac
+(
+  VSS_SERVER_NAME=Alpha
+  export VSS_SERVER_NAME
+  unset VSS_ENV_FILE VSS_CONFIG_LOADED
+  source "$ROOT/lib/config.sh"
+  vss_load_config "$TMPDIR_PROFILE"
+  [ "$VSSDIR" = "$TMPDIR_PROFILE" ] ||
+    { echo "FAIL: VSSDIR was not shared from the installation root" >&2; exit 1; }
+  [ "$VALHEIMSERVERLOGDIR" = "$TMPDIR_PROFILE/shared-logs" ] ||
+    { echo "FAIL: shared log directory did not override profile configuration" >&2; exit 1; }
+  [ "$VALHEIMSERVERLOGPATH" = "$TMPDIR_PROFILE/shared-logs/*.Alpha.*.log" ] ||
+    { echo "FAIL: default log path was not recalculated from shared settings" >&2; exit 1; }
+  [ "$STATUSURL" = 'http://203.0.113.8:8181/' ] ||
+    { echo "FAIL: default status URL was not recalculated from shared PUBLICIP" >&2; exit 1; }
+)
+
 echo "multi-server profile isolation OK"

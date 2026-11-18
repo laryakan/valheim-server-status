@@ -20,6 +20,14 @@ function migrate_legacy_config() {
   local new_offline
   local new_map
   local new_save
+  local common_file="$CWD/.env"
+  local common_key
+  local -a common_keys=(
+    VHSERVERDIR VHSERVERSAVEDIR USERSERVICE VALHEIMSERVERLOGDIR
+    VSSLOGFILTER VSSERRFILTER VSSPIPE VSSPIPEDIR WEBHOOKUPDATE PUBLICIP WEBHOOKURL
+    WEBHOOKID WEBHOOKTOKEN SENDLASTLOGS SENDSERVERCONNECTIONINFO CRONTABWEBHOOKFREQ
+    EVENTREALTIME VSS_LANG VSSHTTP VSSHTTPDIR VHSERVERLAUNCHER VHSERVERLAUNCHERDIR
+  )
 
   MIGRATION_ERROR=""
   if ! vss_validate_server_name "$profile_name"; then
@@ -60,6 +68,16 @@ function migrate_legacy_config() {
   fi
 
   mv "$legacy_file" "$target_file" || return 1
+  cp "$CWD/.env.common.dist" "$common_file" || return 1
+  if [ -n "${STEAMCMDPATH:-${STEAMCMD:-}}" ]; then
+    write_env_value "$common_file" STEAMCMDPATH "${STEAMCMDPATH:-$STEAMCMD}" || return 1
+  fi
+  for common_key in "${common_keys[@]}"; do
+    if [ -n "${!common_key:-}" ]; then
+      write_env_value "$common_file" "$common_key" "${!common_key}" || return 1
+    fi
+  done
+  sed -i -E '/^(VSSDIR|STEAMCMD|STEAMCMDPATH|VHSERVERDIR|VHSERVERSAVEDIR|USERSERVICE|VALHEIMSERVERLOGDIR|VSSLOGFILTER|VSSERRFILTER|VSSPIPE|VSSPIPEDIR|WEBHOOKUPDATE|PUBLICIP|WEBHOOKURL|WEBHOOKID|WEBHOOKTOKEN|SENDLASTLOGS|SENDSERVERCONNECTIONINFO|CRONTABWEBHOOKFREQ|EVENTREALTIME|VSS_LANG|VSSHTTP|VSSHTTPDIR|VHSERVERLAUNCHER|VHSERVERLAUNCHERDIR)=/d' "$target_file" || return 1
   if [ -f "$CWD/launcher/launcher-args" ] && [ ! -e "$target_args" ]; then
     mv "$CWD/launcher/launcher-args" "$target_args" || return 1
   elif [ ! -e "$target_args" ]; then
@@ -76,7 +94,6 @@ function migrate_legacy_config() {
   write_env_value "$target_file" OFFLINEPLAYERSFILE "$new_offline" || return 1
   write_env_value "$target_file" STEAMIDMAPFILE "$new_map" || return 1
   write_env_value "$target_file" LASTWORLDSAVEFILE "$new_save" || return 1
-  write_env_value "$target_file" VALHEIMSERVERLOGDIR "$CWD/valheim-logs.d" || return 1
   write_env_value "$target_file" VALHEIMSERVERLOGPATH "$CWD/valheim-logs.d/*.$profile_name.*.log" || return 1
   write_env_value "$target_file" VHSERVERLAUNCHERARGS "$CWD/launcher/launcher-args.$profile_name" || return 1
   write_env_value "$target_file" VHSERVERSERVICENAME "valheim-server.$profile_name.service" || return 1
@@ -312,6 +329,10 @@ function migrate_v2_to_v3() {
 
   if [ ! -f "$CWD/.env" ]; then
     echo "No legacy .env found; this installation does not need V2-to-V3 migration." >&2
+    return 1
+  fi
+  if vss_is_common_config "$CWD/.env"; then
+    echo "The root .env already contains shared V3 configuration; no V2 migration is needed." >&2
     return 1
   fi
 
