@@ -47,7 +47,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - Keep VSS state files isolated with world-name suffixes. The Valheim `savedir` and its admin, banned, and permitted lists are intentionally shared.
 - Preserve migration from a legacy `.env` and `launcher/launcher-args` into profile-specific names; never overwrite an existing profile or state file.
 - When adding numeric config variables, validate them as integers and fall back to a safe default on parse failure.
-- Do not silently remove required configuration; log the fallback to `stderr` and ensure it is saved to `crash.log`.
+- Do not silently remove required configuration; show fallback and validation diagnostics on `stderr`. Background/runtime processes may additionally append operational errors to `crash.log`; the interactive `setup` CLI must not redirect there.
 
 ### Discord / webhook behavior
 
@@ -58,6 +58,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 ### Logging / crash handling
 
 - If a background/runtime script writes to stderr and must keep running, append the output to the repository-root `crash.log`. Interactive setup diagnostics should remain visible to the user and must not be redirected there.
+- Do not redirect `setup` stderr globally; when sourced, it must not alter the calling shell's stderr.
 - Name generated logs `<date>.<world-name>.stdout.log` or `<date>.<world-name>.stderr.log`; all profiles use the shared logrotate configuration.
 - All warnings, errors, invalid values, debug traces, and recovery messages must go to `stderr`, not `stdout`.
 - Keep crash log entries concise and timestamped when possible.
@@ -73,6 +74,8 @@ Examples:
 - Direct script execution or sourcing tests for changed scripts.
 - Minimal regression checks for integer parsing/default behavior.
 - Profile-isolation and migration tests for changes to config loading or setup.
+- Tests must put generated configuration, state, and log files in temporary directories, and remove them with an `EXIT` trap. Do not let tests touch active `.env.<world-name>` files, `data/`, production logs, or `crash.log`.
+- After running tests, check for leftovers and verify that active profile files, state, logs, and `crash.log` are unchanged. Re-run the suite when practical to check idempotence.
 
 Do not claim “fixed” without fresh output proving the behavior.
 
@@ -87,7 +90,7 @@ Do not claim “fixed” without fresh output proving the behavior.
   - `VSS_SERVER_NAME=<world-name> ./discord/update`
 - Source the setup script safely (for testing helper functions):
   - `source ./setup`
-- Tail the crash log:
+- Tail the runtime crash log (background/runtime processes only):
   - `tail -f ./crash.log`
 
 ## Preferred AI behavior

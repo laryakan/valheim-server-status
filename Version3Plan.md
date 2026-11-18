@@ -4,6 +4,13 @@
 
 Allow multiple Valheim servers to be managed from a single VSS installation with shared scripts, while keeping their configuration, monitoring, services, and notifications isolated. Version 3 is a major release: the classic `.env` file will no longer be used as an active configuration.
 
+## Implementation status
+
+The current implementation is an initial multi-server release, not completion of every item in this plan.
+
+- **Implemented:** per-world `.env.<world-name>` profiles, profile-specific launcher arguments and VSS state, shared saves/admin lists, world-qualified logs with shared logrotate, profile-specific service templates, Discord settings, profile-tagged cron updates, automatic legacy profile/launcher/state migration with overwrite checks, a Bash setup dashboard/profile picker, and direct start/stop/restart/status/Discord-update commands.
+- **Still outstanding:** a controlled profile/world rename, confirmations for destructive operations, migration/cleanup of existing systemd units as part of the upgrade flow, and a complete interactive backup/rollback procedure. Existing service units are not automatically migrated or removed.
+
 ## Agreed conventions
 
 - The world name set by `VHSERVERWORLD` is the server identifier.
@@ -63,32 +70,33 @@ Setup must replace every required placeholder in the templates, including those 
 
 ## 6. `./setup` terminal interface
 
-Modernize the terminal interface in `./setup` to present profiles and available operations clearly, without turning the project into a web interface or duplicating business logic.
+Continue modernizing the terminal interface in `./setup` to present profiles and available operations clearly, without turning the project into a web interface or duplicating business logic. The first-pass implementation provides a Bash dashboard and profile picker without adding a TUI dependency.
 
-The interface must allow users to:
+The current interface displays the selected profile, world, Valheim process state, ports, and service-unit presence; groups configuration, monitoring, and maintenance menus; and lets a user select or create a profile. Direct one-line actions are also available:
 
-- list and select a server, showing the status of its services;
-- create a profile from `.env.dist` and create its `launcher-args.<world-name>` file;
-- edit its configuration, logs, and webhook;
-- install, reinstall, start, stop, and remove its services;
-- manage its cron jobs and profile-specific maintenance tasks;
-- clearly identify global operations, especially management of shared log rotation;
-- confirm destructive operations.
+- `./setup --start-server <world-name>`
+- `./setup --stop-server <world-name>`
+- `./setup --restart-server <world-name>`
+- `./setup --status-server <world-name>`
+- `./setup --discord-update <world-name>`
 
-## 7. Renaming a world/profile
+Continue improving discoverability and error handling. Direct actions currently cover Valheim lifecycle/status and Discord updates; most other setup operations still require the interactive menus. Destructive operations do not yet have a consistent confirmation flow.
+
+## 7. Renaming a world/profile — outstanding
 
 Since the world name is also the profile identifier, changing it requires renaming or regenerating the associated `.env.<name>`, `launcher-args.<name>`, files in `data/`, systemd units, and cron jobs. Add a controlled rename operation to `./setup` that checks for conflicts, updates references, and does not remove the old profile until the operation has been verified as successful.
 
+No controlled rename operation is implemented yet. The ordinary setup prompt prevents changing `VHSERVERWORLD`; users must not rename profile files manually while services or cron jobs are active.
+
 ## 8. Migration from the previous version
 
-Provide an explicit migration procedure to version 3:
+The current automatic migration runs when `./setup` starts and:
 
-1. Read the old `.env` and use `VHSERVERWORLD` as the initial profile name.
-2. Create `.env.<world-name>` and `launcher-args.<world-name>` without overwriting an existing profile.
-3. Rename or copy existing VSS state files to their suffixed names while preserving their contents.
-4. Generate the profile-specific services from templates and install the shared logrotate configuration.
-5. Verify generated files and server status before offering to remove the old units.
-6. Document backups, conflicts, and rollback steps.
+- Reads the legacy `.env` and uses `VHSERVERWORLD` as the profile name.
+- Renames it to `.env.<world-name>`, renames or creates `launcher/launcher-args.<world-name>`, and suffixes existing VSS state files.
+- Leaves the legacy `.env` untouched if the target profile already exists. It refuses to overwrite an existing launcher-args or suffixed state file and stops migration for manual review.
+
+Migration does **not** install new units, remove old units, or provide an automated rollback. Users are instructed to back up configuration/state and manually install and verify profile-specific units after migration. Complete this section with an explicit backup, conflict-resolution, unit replacement, verification, and rollback procedure before treating the release migration as finished.
 
 After migration, no script must depend on `.env` as an active configuration.
 
@@ -101,4 +109,5 @@ After migration, no script must depend on `.env` as an active configuration.
 - Generated systemd files use the world-name suffix, contain the selected profile's values, and have no unresolved placeholders.
 - Managing or removing a profile does not affect other profiles' resources or shared log rotation that is still in use.
 - Migration preserves existing data and does not implicitly reactivate the old `.env`.
+- Tests use temporary configuration/state/log locations, clean up via traps, leave active server files and `crash.log` unchanged, and pass repeatedly without residue.
 - Existing tests are updated for explicit profile loading, and regression tests cover isolation between two servers.

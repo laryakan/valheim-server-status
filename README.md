@@ -23,10 +23,13 @@ Start the setup interface:
 Choose an existing profile or create one by entering its world name. Profiles can also be listed, created, or selected directly:
 
 ```bash
+./setup --help
 ./setup --list
 ./setup --create MyWorld
 ./setup MyWorld
 ```
+
+`./setup --create` creates a profile and opens its interactive menu. `./setup <world-name>` selects an existing profile and opens the same menu.
 
 Server actions can run without opening the interactive menu. Lifecycle actions use that profile's systemd unit (and may prompt for `sudo`); Discord updates use its webhook configuration:
 
@@ -38,9 +41,11 @@ Server actions can run without opening the interactive menu. Lifecycle actions u
 ./setup --discord-update MyWorld
 ```
 
+`--status-server` reports the systemd unit status and returns its status code. These commands require the profile name explicitly; they do not infer it from another profile or from the current directory.
+
 The interactive setup dashboard shows the selected world, Valheim process state, ports, and installed service units. Menus are grouped by configuration, monitoring, and maintenance; the profile picker accepts a profile name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
 
-World names used as profile IDs must contain only letters, numbers, dots, underscores, and hyphens, and must be unique. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
+World names used as profile IDs must start with a letter or number, contain only letters, numbers, dots, underscores, and hyphens, must not contain `..`, and must be unique. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
 
 Each profile gets its own launcher arguments file:
 
@@ -59,9 +64,9 @@ The setup interface also accepts a world name as its argument and passes the sel
 
 ## Migrating an existing installation
 
-When `./setup` finds a legacy `.env` and no matching `.env.<VHSERVERWORLD>`, it renames the configuration to the new profile name, renames `launcher/launcher-args` to `launcher/launcher-args.<world-name>`, and suffixes the VSS state files in `data/`. The migration stops rather than overwriting a profile or state file that already exists.
+When `./setup` finds a legacy `.env` and no matching `.env.<VHSERVERWORLD>`, it renames the configuration to the new profile name, renames `launcher/launcher-args` to `launcher/launcher-args.<world-name>`, and suffixes the VSS state files in `data/`. If the target profile already exists, the legacy configuration is left untouched. If a target launcher-args or state file would be overwritten, migration stops and reports the conflict; inspect and back up both copies before resolving it. Migration does not automatically migrate or remove existing systemd units.
 
-After migration, select the profile in `./setup` and reinstall its server, pipe, and HTTP services so the new profile-specific systemd units are installed. Existing units are not automatically removed.
+After migration, select the profile in `./setup` and install its server, pipe, and HTTP services so the new profile-specific systemd units are installed. Review and remove any legacy units separately when you have verified the new units. Back up the legacy `.env`, launcher arguments, and VSS state before upgrading.
 
 ## Logs
 
@@ -111,7 +116,7 @@ The update order is connection information, server status, then recent logs. To 
 3. Force an update once to create the connection, status, and logs messages.
 4. Copy the message IDs into that profile if you want VSS to update those messages instead of creating new ones.
 
-If a message is deleted, VSS can create a replacement and reports the event in `crash.log`.
+If a message is deleted, VSS can create a replacement and reports the event in `crash.log`. `setup` itself does not redirect its diagnostics to `crash.log`; setup errors are shown in the terminal.
 
 ## Services and HTTP status
 
@@ -139,13 +144,15 @@ VSS state files in `data/` are suffixed with the world name, including the onlin
 
 ## Tests
 
-Run the shell regression tests from the repository root:
+Run the shell regression and log-pipeline tests from the repository root:
 
 ```bash
-for test in tests/test_*.sh; do bash "$test" || exit 1; done
+for test in tests/test_*.sh tests/debug_logfilter_pipeline_output*.sh; do
+  bash "$test" || exit 1
+done
 ```
 
-The longer `debug_logfilter_pipeline_output*.sh` scripts exercise log parsing and write to the test environment.
+Tests that exercise log parsing and profile state use temporary files and clean them up on exit. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
 
 ## Troubleshooting
 
