@@ -15,7 +15,10 @@ if [ "$1" != crontab ]; then
 fi
 case "${2:-}" in
   -l)
-    [ -f "$MOCK_ROOT_CRON" ] || exit 1
+    [ -f "$MOCK_ROOT_CRON" ] || {
+      echo "no crontab for root" >&2
+      exit 1
+    }
     cat "$MOCK_ROOT_CRON"
     ;;
   -)
@@ -47,6 +50,11 @@ if [ "$(grep -Fxc "0 5 * * * $CWD/vss.maintenance # vss-maintenance" "$MOCK_ROOT
   echo "FAIL: schedule was not unique or unrelated root cron entries changed" >&2
   exit 1
 fi
+maintenance_check_output="$(check_maintenance_cron)"
+if [[ "$maintenance_check_output" != *"Global maintenance schedule is present in root's crontab."* ]]; then
+  echo "FAIL: maintenance schedule check did not detect the configured root cron entry" >&2
+  exit 1
+fi
 
 if ! setup_main --remove-maintenance-schedule; then
   echo "FAIL: global maintenance schedule removal failed" >&2
@@ -55,6 +63,18 @@ fi
 if grep -Fq 'vss.maintenance' "$MOCK_ROOT_CRON" ||
    ! grep -Fxq '15 2 * * * /usr/local/bin/backup-world' "$MOCK_ROOT_CRON"; then
   echo "FAIL: removal changed unrelated root cron entries or kept maintenance" >&2
+  exit 1
+fi
+maintenance_check_output="$(check_maintenance_cron)"
+if [[ "$maintenance_check_output" != *"No VSS maintenance schedule found in root's crontab."* ]]; then
+  echo "FAIL: maintenance schedule check reported a removed entry as present" >&2
+  exit 1
+fi
+
+rm "$MOCK_ROOT_CRON"
+maintenance_check_output="$(check_maintenance_cron)"
+if [[ "$maintenance_check_output" != *"Root has no crontab; no VSS maintenance schedule is configured."* ]]; then
+  echo "FAIL: maintenance schedule check did not handle an empty root crontab" >&2
   exit 1
 fi
 

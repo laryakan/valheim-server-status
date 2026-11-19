@@ -299,17 +299,6 @@ function setup_ui_profile_webhook_message_id() {
 function setup_ui_profile_card() (
   local profile="$1"
   local current_marker=''
-  local server_name
-  local seed
-  local bepinex_state
-  local server_state
-  local player_count
-  local server_pid
-  local cron_state
-  local server_service_state
-  local pipe_service_state
-  local http_service_state
-  local discord_message_state
 
   if ! vss_validate_server_name "$profile"; then
     printf '  +-- %s --+\n  | Invalid profile name\n  +----------+\n' "$profile"
@@ -330,61 +319,8 @@ function setup_ui_profile_card() (
   fi
 
   [ "$profile" != "${SETUP_UI_CURRENT_PROFILE:-}" ] || current_marker=' (current)'
-  server_name="${VHSERVERNAME:-$VHSERVERWORLD}"
-  seed="${VHSERVERSEED:-not set}"
-  if [ "${VSSBEPINEXENABLED:-0}" = 1 ]; then
-    bepinex_state='enabled'
-  else
-    bepinex_state='disabled'
-  fi
-
-  server_pid="$(vss_find_server_pid || true)"
-  if [ -n "$server_pid" ]; then
-    server_state='online'
-  else
-    server_state='offline'
-  fi
-  if [ "$server_state" = 'offline' ]; then
-    player_count='0 connected'
-  elif [ -r "$CONNECTEDPLAYERSFILE" ]; then
-    player_count="$(awk -F';' 'NF >= 3 && $2 != "" { count++ } END { print count+0 }' "$CONNECTEDPLAYERSFILE")"
-    if [ "$player_count" -eq 1 ]; then
-      player_count='1 connected'
-    else
-      player_count="$player_count connected"
-    fi
-  else
-    player_count='unknown'
-  fi
-  cron_state="$(setup_ui_discord_cron_state "$profile")"
-  server_service_state="$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")"
-  pipe_service_state="$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")"
-  http_service_state="$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
-  if [ -n "$(setup_ui_profile_webhook_message_id)" ]; then
-    discord_message_state='configured'
-  else
-    discord_message_state='missing'
-  fi
-
   printf '  +-- %s%s --+\n' "$profile" "$current_marker"
-  printf '  | Server: %s\n' "$server_name"
-  printf '  | State: '
-  setup_ui_status_text "$server_state" "$server_state"
-  printf ' | Port: %s | Seed: %s | Players: %s\n' \
-    "${VHSERVERPORT:-unknown}" "$seed" "$player_count"
-  printf '  | Setup: '
-  setup_ui_status_item "$server_service_state" 'server'
-  printf ' '
-  setup_ui_status_item "$http_service_state" 'HTTP'
-  printf ' '
-  setup_ui_status_item "$pipe_service_state" 'pipe'
-  printf ' '
-  setup_ui_status_item "$cron_state" 'cron'
-  printf ' '
-  setup_ui_status_item "$discord_message_state" 'Discord'
-  printf ' '
-  setup_ui_status_item "$bepinex_state" 'BepInEx'
-  printf '\n'
+  setup_ui_profile_summary '  | '
   printf '  +--------------------------------------------------+\n'
 )
 
@@ -903,9 +839,18 @@ function setup_ui_unit_state() {
   fi
 }
 
+function setup_ui_logrotate_state() {
+  if [ -e '/etc/logrotate.d/valheim-vss' ]; then
+    printf 'installed'
+  else
+    printf 'not installed'
+  fi
+}
+
 function setup_ui_status_color() {
   case "$1" in
     installed|scheduled|configured|enabled|online) setup_ui_color '32' ;;
+    unknown) setup_ui_color '33' ;;
     *) setup_ui_color '31' ;;
   esac
 }
@@ -923,29 +868,76 @@ function setup_ui_status_item() {
   printf ' %s' "$2"
 }
 
-function setup_ui_dashboard() {
+function setup_ui_profile_summary() {
+  local prefix="$1"
+  local profile="${VSS_SERVER_NAME:-}"
+  local server_name="${VHSERVERNAME:-${VHSERVERWORLD:-unknown}}"
   local server_pid
-  local server_state="offline"
-  local webhook_state
+  local server_state='offline'
+  local player_count
+  local seed="${VHSERVERSEED:-not set}"
+  local bepinex_state='disabled'
   local cron_state
+  local server_service_state
+  local http_service_state
+  local pipe_service_state
+  local logrotate_state
+  local discord_message_state='missing'
 
   server_pid="$(vss_find_server_pid || true)"
   if [ -n "$server_pid" ] && ps -p "$server_pid" >/dev/null 2>&1; then
-    server_state="running (PID $server_pid)"
+    server_state='online'
   fi
+  if [ "$server_state" = 'offline' ]; then
+    player_count='0 connected'
+  elif [ -r "${CONNECTEDPLAYERSFILE:-}" ]; then
+    player_count="$(awk -F';' 'NF >= 3 && $2 != "" { count++ } END { print count+0 }' "$CONNECTEDPLAYERSFILE")"
+    if [ "$player_count" -eq 1 ]; then
+      player_count='1 connected'
+    else
+      player_count="$player_count connected"
+    fi
+  else
+    player_count='unknown'
+  fi
+  [ "${VSSBEPINEXENABLED:-0}" != 1 ] || bepinex_state='enabled'
+  cron_state="$(setup_ui_discord_cron_state "$profile")"
+  server_service_state="$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")"
+  http_service_state="$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
+  pipe_service_state="$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")"
+  logrotate_state="$(setup_ui_logrotate_state)"
+  [ -z "$(setup_ui_profile_webhook_message_id)" ] || discord_message_state='configured'
 
+  printf '%sServer: %s\n' "$prefix" "$server_name"
+  printf '%sWorld: %s  |  Valheim: ' "$prefix" "${VHSERVERWORLD:-unknown}"
+  setup_ui_status_text "$server_state" "$server_state"
+  printf '\n'
+  printf '%sPorts: game %s  |  HTTP %s\n' \
+    "$prefix" "${VHSERVERPORT:-unknown}" "${STATUSPORT:-unknown}"
+  printf '%sSeed: %s  |  Players: %s\n' "$prefix" "$seed" "$player_count"
+  printf '%sSetup: ' "$prefix"
+  setup_ui_status_item "$server_service_state" 'server'
+  printf ' '
+  setup_ui_status_item "$http_service_state" 'HTTP'
+  printf ' '
+  setup_ui_status_item "$pipe_service_state" 'pipe'
+  printf ' '
+  setup_ui_status_item "$bepinex_state" 'BepInEx'
+  printf ' '
+  setup_ui_status_item "$logrotate_state" 'logrotate'
+  printf '\n'
+  printf '%sDiscord: ' "$prefix"
+  setup_ui_status_item "$discord_message_state" 'message ID'
+  printf ' '
+  setup_ui_status_item "$cron_state" 'update cron'
+  printf '\n'
+}
+
+function setup_ui_dashboard() {
   setup_ui_color '1'
   printf '\nProfile: %s\n' "${VSS_SERVER_NAME:-none selected}"
   setup_ui_reset_color
-  printf 'World: %s  |  Valheim: %s\n' "${VHSERVERWORLD:-not configured}" "$server_state"
-  printf 'Ports: game %s  |  HTTP %s\n' "${VHSERVERPORT:-unknown}" "${STATUSPORT:-unknown}"
-  printf 'Services: server %s  |  standalone pipe %s  |  HTTP %s\n' \
-    "$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")" \
-    "$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")" \
-    "$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
-  webhook_state="$(setup_ui_discord_webhook_state)"
-  cron_state="$(setup_ui_discord_cron_state "${VSS_SERVER_NAME:-}")"
-  printf 'Discord webhook: %s  |  Automatic update: %s\n' "$webhook_state" "$cron_state"
+  setup_ui_profile_summary ''
   printf '%s\n' '------------------------------------------------------------'
 }
 
@@ -1264,6 +1256,33 @@ function remove_maintenance_cron() {
     return 1
   fi
   echo "Global maintenance schedule removed from root's crontab."
+}
+
+function check_maintenance_cron() {
+  local root_cron
+
+  if root_cron="$(sudo crontab -l 2>&1)"; then
+    if printf '%s\n' "$root_cron" | grep -Fq '# vss-maintenance'; then
+      setup_ui_status_text 'scheduled' "Global maintenance schedule is present in root's crontab."
+      printf '\n'
+    elif printf '%s\n' "$root_cron" | grep -Fq 'vss.maintenance'; then
+      setup_ui_status_text 'unknown' "Found an unmarked vss.maintenance entry in root's crontab."
+      printf '\n'
+    else
+      setup_ui_status_text 'missing' "No VSS maintenance schedule found in root's crontab."
+      printf '\n'
+    fi
+    return 0
+  fi
+
+  if printf '%s\n' "$root_cron" | grep -Fqi 'no crontab'; then
+    setup_ui_status_text 'missing' "Root has no crontab; no VSS maintenance schedule is configured."
+    printf '\n'
+    return 0
+  fi
+
+  printf 'Could not inspect root crontab with sudo: %s\n' "$root_cron" >&2
+  return 1
 }
 
 function restart_maintenance_services() {
@@ -2527,17 +2546,18 @@ new_menu(){
     setup_ui_menu_option "$selected" 15 'Update Valheim server (stops all instances first; restarts only those previously active)'
     setup_ui_menu_option "$selected" 16 'Schedule global maintenance daily at 05:00 local time (root crontab; sudo)'
     setup_ui_menu_option "$selected" 17 'Remove the global maintenance schedule (root crontab; sudo)'
+    setup_ui_menu_option "$selected" 18 'Check global maintenance schedule (root crontab; sudo, read-only)'
     printf '\n'
     setup_ui_menu_option "$selected" 0 'Exit'
     printf '\n'
     printf 'Select an action: '
-    setup_ui_read_menu_choice 17 "$selected" || return 0
+    setup_ui_read_menu_choice 18 "$selected" || return 0
     a="$SETUP_UI_CHOICE"
     if [ "$a" = '__redraw__' ]; then
       selected="$SETUP_UI_SELECTED_CHOICE"
       continue
     fi
-    [[ "$a" =~ ^[0-9]+$ ]] && (( a <= 17 )) && selected="$a"
+    [[ "$a" =~ ^[0-9]+$ ]] && (( a <= 18 )) && selected="$a"
     case "$a" in
       1) setup_ui_clear; discord_menu ;;
       2) setup_ui_clear; launcher_menu ;;
@@ -2624,6 +2644,11 @@ new_menu(){
           remove_maintenance_cron || notice="Could not remove the maintenance schedule; review the error above."
         else
           notice="Maintenance schedule was kept."
+        fi
+        ;;
+      18)
+        if ! notice="$(check_maintenance_cron)"; then
+          notice="Could not inspect the root maintenance schedule; review the error above."
         fi
         ;;
       0) exit 0 ;;

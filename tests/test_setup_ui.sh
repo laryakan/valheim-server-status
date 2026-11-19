@@ -32,9 +32,11 @@ for expected in \
   'World: UiWorld  |  Valheim: offline' \
   'Ports: game 2456  |  HTTP 8181' \
   'Discord and webhook' \
-  'Discord webhook: configured  |  Automatic update: missing' \
+  'Setup: ● server ● HTTP ● pipe ● BepInEx ● logrotate' \
+  'Discord: ● message ID ● update cron' \
   'BepInEx and modding' \
   'Switch server profile' \
+  'Check global maintenance schedule (root crontab; sudo, read-only)' \
   'Select an action:' \
   'Unknown option: invalid' \
   'Exit'; do
@@ -99,15 +101,19 @@ overview_output="$(setup_ui_profiles_overview)"
 for expected in \
   'OverviewA (current)' \
   'Server: Server A' \
-  'State: online | Port: 2456' \
+  'World: OverviewA  |  Valheim: online' \
+  'Ports: game 2456  |  HTTP 8181' \
   'Seed: SeedA' \
   'Players: 1 connected' \
-  'Setup: ● server ● HTTP ● pipe ● cron ● Discord ● BepInEx' \
+  'Setup: ● server ● HTTP ● pipe ● BepInEx ● logrotate' \
+  'Discord: ● message ID ● update cron' \
   'OverviewB' \
-  'State: offline | Port: 2460' \
+  'World: OverviewB  |  Valheim: offline' \
+  'Ports: game 2460  |  HTTP 8181' \
   'Seed: SeedB' \
   'Players: 0 connected' \
-  'Setup: ● server ● HTTP ● pipe ● cron ● Discord ● BepInEx'; do
+  'Setup: ● server ● HTTP ● pipe ● BepInEx ● logrotate' \
+  'Discord: ● message ID ● update cron'; do
   if [[ "$overview_output" != *"$expected"* ]]; then
     printf 'FAIL: profile overview is missing "%s"\n' "$expected" >&2
     exit 1
@@ -202,6 +208,29 @@ if [[ "$color_output" != 'warning' ]]; then
   echo "FAIL: setup color helper ignored NO_COLOR" >&2
   exit 1
 fi
+cat > "$TMPDIR_UI/status-colors.sh" <<EOF
+unset NO_COLOR
+source "$ROOT/setup" >/dev/null
+setup_ui_status_item installed server
+setup_ui_status_item missing HTTP
+setup_ui_status_item scheduled discord-cron
+setup_ui_status_item unknown root-maintenance
+setup_ui_status_text online online
+setup_ui_status_text offline offline
+EOF
+status_colors_output="$(script -qec "bash '$TMPDIR_UI/status-colors.sh'" /dev/null)"
+for expected in \
+  $'\033[32m●\033[0m server' \
+  $'\033[31m●\033[0m HTTP' \
+  $'\033[32m●\033[0m discord-cron' \
+  $'\033[33m●\033[0m root-maintenance' \
+  $'\033[32monline\033[0m' \
+  $'\033[31moffline\033[0m'; do
+  if [[ "$status_colors_output" != *"$expected"* ]]; then
+    echo "FAIL: setup UI did not apply the expected status color" >&2
+    exit 1
+  fi
+done
 
 VHSERVERSERVICENAME='valheim-server.UiWorld.service'
 VSSPIPESERVICENAME='vss.pipe.UiWorld.service'
