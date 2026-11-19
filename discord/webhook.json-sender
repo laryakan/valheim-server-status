@@ -3,13 +3,8 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-# Test by-pass
-if [ "${DEBUGMODE:-0}" -eq 1 ];
-then
-   source "$CWD/../.env.test"
-else
-   source "$CWD/../.env"
-fi
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
 source "$CWD/../i18n.sh"
 
 # Sending status messages on Discord script
@@ -26,9 +21,10 @@ then
 fi
 
 # Not status send
-if [ "$1" != "--status" ]
-then
+if [ "$1" != "--status" ]; then
 	MESSAGEID="$1"
+elif [ -z "${MESSAGEID:-}" ]; then
+	MESSAGEID="${LASTLOGMESSAGEID:-${SERVERCONNECTIONINFOMESSAGEID:-}}"
 fi
 CONTENT="$(</dev/stdin)"
 
@@ -61,7 +57,7 @@ then
 				if [ "$1" = "--status" ]
 				then
 					echo -e "Status message has been deleted from the server, \
-	a new message will be sent, please fill the .env file. | Content : "$CONTENT" "$WHURL/messages/$MESSAGEID"" >&2
+	a new message will be sent, please check .env.$VSS_SERVER_NAME. | Content : "$CONTENT" "$WHURL/messages/$MESSAGEID"" >&2
 				fi
 				MESSAGEID=''
 			else

@@ -1,22 +1,11 @@
 #!/bin/bash
 # author: laryakan, date 2021/03/12
 
-# Checking .env init
-if [ -z "$VSSDIR" ]
-then
-   # Basic env init
-   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-   source "$CWD/.env"
-else
-   CWD="$VSSDIR"
-fi
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/lib/config.sh"
+vss_load_config "$CWD" || exit 1
 
 # Test by-pass
-if [ "${DEBUGMODE:-0}" -eq 1 ];
-then
-   source "$CWD/.env.test"
-fi
-
 # Valheim Server log filter
 # This script brings a Valheim Log Management which doesn't exist directly through steamcmd and Valheim server ATM
 # YOU NEED TO PIPE YOUR VALHEIM SERVER START SCRIPT ON THIS, no matter how, the vss.standalone.pipe do this with a tail
@@ -43,7 +32,7 @@ while read LINE; do
    # Remove debug and blank lines
    if [ "$1" != '--tail-pipe-input' ]
    then
-      echo "${LINE}" |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stdout.log"
+      echo "${LINE}" |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/$(date +%Y-%m-%d).$VSS_SERVER_NAME.stdout.log"
    fi
 
    # Detect server start and online player cleaning routine
@@ -77,8 +66,8 @@ while read LINE; do
       VERSION_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
       FOUND_VERSION="${BASH_REMATCH[4]}"
       if [ "${VALSERVERVERSION:-0.0.0}" != "$FOUND_VERSION" ]; then
-         sed -i "s|^VALSERVERVERSION=.*|VALSERVERVERSION=\"${FOUND_VERSION}\"|" "$CWD/.env"
-         sed -i "s|^VALSERVERLASTUPDATE=.*|VALSERVERLASTUPDATE=\"${VERSION_TS}\"|" "$CWD/.env"
+         sed -i "s|^VALSERVERVERSION=.*|VALSERVERVERSION=\"${FOUND_VERSION}\"|" "$VSS_ENV_FILE"
+         sed -i "s|^VALSERVERLASTUPDATE=.*|VALSERVERLASTUPDATE=\"${VERSION_TS}\"|" "$VSS_ENV_FILE"
          VALSERVERVERSION="$FOUND_VERSION"
          VALSERVERLASTUPDATE="$VERSION_TS"
       fi
@@ -96,8 +85,8 @@ while read LINE; do
          FOUND_VERSION="${BASH_REMATCH[1]}"
          VERSION_TS="${BASH_REMATCH[3]} ${BASH_REMATCH[4]}"
          if [ "${BEPINEXVERSION:-0.0.0}" != "$FOUND_VERSION" ]; then
-            sed -i "s|^BEPINEXVERSION=.*|BEPINEXVERSION=\"${FOUND_VERSION}\"|" "$CWD/.env"
-            sed -i "s|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE=\"${VERSION_TS}\"|" "$CWD/.env"
+            sed -i "s|^BEPINEXVERSION=.*|BEPINEXVERSION=\"${FOUND_VERSION}\"|" "$VSS_ENV_FILE"
+            sed -i "s|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE=\"${VERSION_TS}\"|" "$VSS_ENV_FILE"
             BEPINEXVERSION="$FOUND_VERSION"
             BEPINEXLASTUPDATE="$VERSION_TS"
             if [ "${DEBUGMODE:-0}" -eq 1 ];

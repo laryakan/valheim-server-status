@@ -1,37 +1,78 @@
 #!/bin/bash
 
-# Checking .env init
-if [ -z "$VSSDIR" ]
-then
-   # Basic env init
-   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-   source "$CWD/.env"
-else
-   CWD="$VSSDIR"
-fi
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/lib/config.sh"
 
 # Bash file dedicated to planned maintenance (can be called through a crontab to make a Valheim server service restart/update)
-# But first, check if there is any connected player
+function profile_connected_count() (
+   local profile="$1"
+   local server_pid
+   local count
 
-CURRENTLYCONNECTEDNUM=$( wc -l "$CONNECTEDPLAYERSFILE" | cut -d ' ' -f1 )
-if [ $CURRENTLYCONNECTEDNUM > 0 ]
+   VSS_SERVER_NAME="$profile"
+   export VSS_SERVER_NAME
+   unset VSS_ENV_FILE VSS_CONFIG_LOADED
+   vss_load_config "$CWD" || exit 1
+   if [ ! -r "$CONNECTEDPLAYERSFILE" ]; then
+      server_pid="$(vss_find_server_pid || true)"
+      if [ -n "$server_pid" ]; then
+         printf 'Cannot read connected-player state for running profile %s: %s\n' \
+            "$profile" "$CONNECTEDPLAYERSFILE" >&2
+         exit 1
+      fi
+      printf '0\n'
+      exit 0
+   fi
+   count="$(wc -l < "$CONNECTEDPLAYERSFILE")"
+   if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+      printf 'Invalid connected-player count for profile %s in %s\n' \
+         "$profile" "$CONNECTEDPLAYERSFILE" >&2
+      exit 1
+   fi
+   printf '%s\n' "$count"
+)
+
+SERVER_PROFILE_LIST="$("$CWD/setup" --list)" || {
+   echo "Could not list server profiles; maintenance was not run." >&2
+   exit 1
+}
+if [ -z "$SERVER_PROFILE_LIST" ]; then
+   echo "No server profiles are configured; maintenance was not run." >&2
+   exit 1
+fi
+mapfile -t SERVER_PROFILES <<< "$SERVER_PROFILE_LIST"
+if [ "${#SERVER_PROFILES[@]}" -eq 0 ]; then
+   echo "No server profiles are configured; maintenance was not run." >&2
+   exit 1
+fi
+VSS_SERVER_NAME="${SERVER_PROFILES[0]}"
+export VSS_SERVER_NAME
+unset VSS_ENV_FILE VSS_CONFIG_LOADED
+vss_load_config "$CWD" || exit 1
+source "$CWD/i18n.sh" || {
+   echo "Could not load maintenance translations." >&2
+   exit 1
+}
+
+CURRENTLYCONNECTEDNUM=0
+for profile in "${SERVER_PROFILES[@]}"; do
+   profile_count="$(profile_connected_count "$profile")" || exit 1
+   CURRENTLYCONNECTEDNUM=$((CURRENTLYCONNECTEDNUM + profile_count))
+done
+
+if [ "$CURRENTLYCONNECTEDNUM" -gt 0 ]
 then
    # There is still some player connected on the server, we will delay the maintenance for 5 minutes but send a warning on discord first
    echo -e "{
-   \"title\": \"Planned maintenance\",
+   \"title\": \"$T_MAINTENANCE_TITLE\",
    \"embeds\": [{
-      \"title\": \"Planned maintenance\",
+      \"title\": \"$T_MAINTENANCE_TITLE\",
       \"color\": 3447003,
-      \"description\": \"A planned maintenance has been scheduled on the Valheim Server, but we saw there is still some connected player(s). We are delaying the maintenance for 5 minutes. Get your things in order \!\"
+      \"description\": \"$T_MAINTENANCE_WARNING\"
    }]
    }" | "$CWD/discord/webhook.json-sender"
    # Wait for 5 minutes to player to disconnect
    sleep 5m
 fi
 
-if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ]; then
-   sudo systemctl restart "$VHSERVERSERVICENAME"
-   echo -e "$(ColorGreen 'Valheim server service restarted')"
-else
-   echo -e "$(ColorRed 'Valheim server service does not exist')" >&2
-fi
+exec "$CWD/setup" --maintenance-update
