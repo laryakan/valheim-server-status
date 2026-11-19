@@ -100,17 +100,14 @@ for expected in \
   'OverviewA (current)' \
   'Server: Server A' \
   'State: online | Port: 2456' \
-  'BepInEx: on' \
   'Seed: SeedA' \
   'Players: 1 connected' \
-  'Discord webhook: configured | Auto-update: scheduled' \
-  'Setup: server[ ] HTTP[ ] pipe[ ] cron[x] Discord[x]' \
+  'Setup: ● server ● HTTP ● pipe ● cron ● Discord ● BepInEx' \
   'OverviewB' \
   'State: offline | Port: 2460' \
-  'BepInEx: off' \
   'Seed: SeedB' \
   'Players: 0 connected' \
-  'Setup: server[ ] HTTP[ ] pipe[ ] cron[ ] Discord[ ]'; do
+  'Setup: ● server ● HTTP ● pipe ● cron ● Discord ● BepInEx'; do
   if [[ "$overview_output" != *"$expected"* ]]; then
     printf 'FAIL: profile overview is missing "%s"\n' "$expected" >&2
     exit 1

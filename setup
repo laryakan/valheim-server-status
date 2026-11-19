@@ -301,11 +301,10 @@ function setup_ui_profile_card() (
   local current_marker=''
   local server_name
   local seed
-  local bepinex
+  local bepinex_state
   local server_state
   local player_count
   local server_pid
-  local webhook_state
   local cron_state
   local server_service_state
   local pipe_service_state
@@ -334,9 +333,9 @@ function setup_ui_profile_card() (
   server_name="${VHSERVERNAME:-$VHSERVERWORLD}"
   seed="${VHSERVERSEED:-not set}"
   if [ "${VSSBEPINEXENABLED:-0}" = 1 ]; then
-    bepinex='on'
+    bepinex_state='enabled'
   else
-    bepinex='off'
+    bepinex_state='disabled'
   fi
 
   server_pid="$(vss_find_server_pid || true)"
@@ -357,11 +356,10 @@ function setup_ui_profile_card() (
   else
     player_count='unknown'
   fi
-  webhook_state="$(setup_ui_discord_webhook_state)"
   cron_state="$(setup_ui_discord_cron_state "$profile")"
-  server_service_state="$(setup_ui_checkmark "$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")")"
-  pipe_service_state="$(setup_ui_checkmark "$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")")"
-  http_service_state="$(setup_ui_checkmark "$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")")"
+  server_service_state="$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")"
+  pipe_service_state="$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")"
+  http_service_state="$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
   if [ -n "$(setup_ui_profile_webhook_message_id)" ]; then
     discord_message_state='configured'
   else
@@ -370,13 +368,23 @@ function setup_ui_profile_card() (
 
   printf '  +-- %s%s --+\n' "$profile" "$current_marker"
   printf '  | Server: %s\n' "$server_name"
-  printf '  | State: %s | Port: %s | BepInEx: %s | Seed: %s | Players: %s\n' \
-    "$server_state" "${VHSERVERPORT:-unknown}" "$bepinex" "$seed" "$player_count"
-  printf '  | Discord webhook: %s | Auto-update: %s\n' "$webhook_state" "$cron_state"
-  printf '  | Setup: server%s HTTP%s pipe%s cron%s Discord%s\n' \
-    "$server_service_state" "$http_service_state" "$pipe_service_state" \
-    "$(setup_ui_checkmark "$cron_state")" \
-    "$(setup_ui_checkmark "$discord_message_state")"
+  printf '  | State: '
+  setup_ui_status_text "$server_state" "$server_state"
+  printf ' | Port: %s | Seed: %s | Players: %s\n' \
+    "${VHSERVERPORT:-unknown}" "$seed" "$player_count"
+  printf '  | Setup: '
+  setup_ui_status_item "$server_service_state" 'server'
+  printf ' '
+  setup_ui_status_item "$http_service_state" 'HTTP'
+  printf ' '
+  setup_ui_status_item "$pipe_service_state" 'pipe'
+  printf ' '
+  setup_ui_status_item "$cron_state" 'cron'
+  printf ' '
+  setup_ui_status_item "$discord_message_state" 'Discord'
+  printf ' '
+  setup_ui_status_item "$bepinex_state" 'BepInEx'
+  printf '\n'
   printf '  +--------------------------------------------------+\n'
 )
 
@@ -895,11 +903,24 @@ function setup_ui_unit_state() {
   fi
 }
 
-function setup_ui_checkmark() {
+function setup_ui_status_color() {
   case "$1" in
-    installed|scheduled|configured) printf '[x]' ;;
-    *) printf '[ ]' ;;
+    installed|scheduled|configured|enabled|online) setup_ui_color '32' ;;
+    *) setup_ui_color '31' ;;
   esac
+}
+
+function setup_ui_status_text() {
+  setup_ui_status_color "$1"
+  printf '%s' "$2"
+  setup_ui_reset_color
+}
+
+function setup_ui_status_item() {
+  setup_ui_status_color "$1"
+  printf '●'
+  setup_ui_reset_color
+  printf ' %s' "$2"
 }
 
 function setup_ui_dashboard() {
