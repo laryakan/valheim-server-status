@@ -142,7 +142,30 @@ else
     if ! unzip -q "$ARCHIVE" -d "$WORK_DIR/package"; then
         fail "Could not extract BepInEx archive: $ASSET_NAME"
     fi
-    [[ -f "$WORK_DIR/package/BepInEx/config/BepInEx.cfg" ]] || fail "Archive has no BepInEx/config/BepInEx.cfg"
+    CONFIG_FILE="$WORK_DIR/package/BepInEx/config/BepInEx.cfg"
+    if [[ ! -e "$CONFIG_FILE" && ! -L "$CONFIG_FILE" ]]; then
+        mkdir -p "$(dirname -- "$CONFIG_FILE")" || fail "Could not create the BepInEx config directory"
+        if ! cat > "$CONFIG_FILE" <<'CONFIG'
+# Minimal VSS logging configuration; BepInEx adds its other defaults on first launch.
+[Logging]
+UnityLogListening = true
+LogConsoleToUnityLog = true
+
+[Logging.Console]
+StandardOutType = StandardOut
+LogLevels = Fatal, Error, Warning, Message, Info
+
+[Logging.Disk]
+WriteUnityLog = true
+AppendLog = false
+Enabled = true
+LogLevels = Fatal, Error, Warning, Message, Info
+CONFIG
+        then
+            fail "Could not create a default BepInEx.cfg"
+        fi
+    fi
+    [[ -f "$CONFIG_FILE" ]] || fail "Archive has no regular BepInEx/config/BepInEx.cfg"
     [[ -f "$WORK_DIR/package/BepInEx/core/BepInEx.Preloader.dll" ]] || fail "Archive has no BepInEx/core/BepInEx.Preloader.dll"
     [[ -f "$WORK_DIR/package/doorstop_libs/libdoorstop.so" ]] || fail "Archive has no doorstop_libs/libdoorstop.so"
     if ! mv -- "$WORK_DIR/package" "$INSTALL_DIR"; then

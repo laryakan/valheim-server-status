@@ -20,6 +20,24 @@ for command_name in wget unzip ncat base64 find; do
     fi
 done
 
+REAL_UNZIP="$(command -v unzip)"
+MOCK_BIN="$TMPDIR_UPGRADE/bin"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/unzip" <<'UNZIP'
+#!/bin/bash
+if [[ "${BEPINEX_TEST_MISSING_CONFIG:-0}" == 1 &&
+      "${1:-}" == '-q' && "${3:-}" == '-d' ]]; then
+    "$REAL_UNZIP" "$@" || exit $?
+    rm -f -- "$4/BepInEx/config/BepInEx.cfg"
+    exit 0
+fi
+exec "$REAL_UNZIP" "$@"
+UNZIP
+chmod +x "$MOCK_BIN/unzip"
+export REAL_UNZIP
+PATH="$MOCK_BIN:$PATH"
+export PATH
+
 HTTP_HANDLER="$TMPDIR_UPGRADE/http-handler.sh"
 cat > "$HTTP_HANDLER" <<'HANDLER'
 #!/bin/bash
@@ -270,5 +288,29 @@ if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]] |
     echo "FAIL: upgrade changed or removed the active image without a migration target" >&2
     exit 1
 fi
+
+rm -f "$BEPINEX_DIR/current/BepInEx/plugins/shared.dll"
+sed -i 's/^VSSBEPINEXENABLED=.*/VSSBEPINEXENABLED=1/' "$TEST_ROOT/.env.Alpha"
+make_fixture 5.4.23.10
+if ! BEPINEX_TEST_MISSING_CONFIG=1 \
+    BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.10.json" \
+    "$TEST_ROOT/bepinex_upgrade.sh" > "$TMPDIR_UPGRADE/missing-config.out" 2> "$TMPDIR_UPGRADE/missing-config.err"; then
+    cat "$TMPDIR_UPGRADE/missing-config.err" >&2
+    echo "FAIL: upgrade did not create a missing BepInEx.cfg" >&2
+    exit 1
+fi
+GENERATED_CONFIG="$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg"
+for expected in \
+    '[Logging]' \
+    'UnityLogListening = true' \
+    '[Logging.Console]' \
+    'StandardOutType = StandardOut' \
+    '[Logging.Disk]' \
+    'AppendLog = false'; do
+    if ! grep -Fxq "$expected" "$GENERATED_CONFIG"; then
+        printf 'FAIL: generated BepInEx.cfg is missing: %s\n' "$expected" >&2
+        exit 1
+    fi
+done
 
 echo "BepInEx image upgrade OK"
