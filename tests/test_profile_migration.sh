@@ -80,9 +80,9 @@ if ! create_server_profile NewWorld; then
   echo "FAIL: new server profile could not be created" >&2
   exit 1
 fi
-if ! grep -Fxq 'VHSERVERPORT=2466' "$CWD/.env.NewWorld" ||
+if ! grep -Fxq 'VHSERVERPORT=2458' "$CWD/.env.NewWorld" ||
    ! grep -Fxq 'STATUSPORT=8182' "$CWD/.env.NewWorld"; then
-  echo "FAIL: new profile did not receive distinct default ports" >&2
+  echo "FAIL: new profile did not receive the next unused Valheim port pair" >&2
   exit 1
 fi
 

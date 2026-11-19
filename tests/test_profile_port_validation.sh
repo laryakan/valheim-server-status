@@ -24,8 +24,12 @@ VHSERVERPORT=2460
 STATUSPORT=8182
 EOF
 
-if validate_server_profile_ports Beta 2458 8182 >/dev/null 2>&1; then
+if validate_server_profile_ports Beta 2457 8182 >/dev/null 2>&1; then
   echo "FAIL: overlapping Valheim port ranges were accepted" >&2
+  exit 1
+fi
+if ! validate_server_profile_ports Beta 2458 8182; then
+  echo "FAIL: adjacent Valheim port pairs were rejected" >&2
   exit 1
 fi
 if validate_server_profile_ports Beta 2460 8181 >/dev/null 2>&1; then
@@ -57,7 +61,7 @@ VSS_SERVER_NAME=Beta
 VSS_ENV_FILE="$CWD/.env.Beta"
 VHSERVERPORT=2460
 STATUSPORT=8182
-if replace_env_value VHSERVERPORT 2458 >/dev/null 2>&1; then
+if replace_env_value VHSERVERPORT 2457 >/dev/null 2>&1; then
   echo "FAIL: setup saved a port range that overlaps another profile" >&2
   exit 1
 fi
@@ -73,14 +77,14 @@ sudo() {
 VSS_SERVER_NAME=Beta
 VHSERVERPORT=2460
 STATUSPORT=8182
-MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2462/tcp              ALLOW IN    Anywhere\n2460:2462/udp              ALLOW IN    Anywhere\n8182/tcp                   ALLOW IN    Anywhere\n'
+MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2461/tcp              ALLOW IN    Anywhere\n2460:2461/udp              ALLOW IN    Anywhere\n8182/tcp                   ALLOW IN    Anywhere\n'
 if ! check_ufw_profile_rules > "$TMPDIR_PORTS/ufw.out" 2>&1 ||
    ! grep -Fq 'UFW ALLOW rules found for Beta' "$TMPDIR_PORTS/ufw.out"; then
   echo "FAIL: complete UFW range rules were not recognized" >&2
   exit 1
 fi
 
-MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2462/udp              ALLOW IN    Anywhere\n8182/tcp                   ALLOW IN    Anywhere\n'
+MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2461/udp              ALLOW IN    Anywhere\n8182/tcp                   ALLOW IN    Anywhere\n'
 if check_ufw_profile_rules > "$TMPDIR_PORTS/ufw-missing.out" 2>&1; then
   echo "FAIL: missing game TCP rules were not reported" >&2
   exit 1
@@ -102,7 +106,7 @@ fi
 
 VHSERVERPORT=2460
 STATUSPORT=invalid
-MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2462/tcp              ALLOW IN    Anywhere\n2460:2462/udp              ALLOW IN    Anywhere\n'
+MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2461/tcp              ALLOW IN    Anywhere\n2460:2461/udp              ALLOW IN    Anywhere\n'
 if ! check_ufw_profile_rules 0 > "$TMPDIR_PORTS/ufw-no-http.out" 2>&1 ||
    ! grep -Fq 'HTTP status is not installed' "$TMPDIR_PORTS/ufw-no-http.out"; then
   echo "FAIL: disabled HTTP port prevented the UFW game-port check" >&2

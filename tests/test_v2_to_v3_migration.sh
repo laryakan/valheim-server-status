@@ -53,8 +53,8 @@ Status: active
 
 To                         Action      From
 --                         ------      ----
-2456:2458/tcp              ALLOW IN    Anywhere
-2456:2458/udp              ALLOW IN    Anywhere
+2456:2457/tcp              ALLOW IN    Anywhere
+2456:2457/udp              ALLOW IN    Anywhere
 8181/tcp                   ALLOW IN    Anywhere
 STATUS
 EOF

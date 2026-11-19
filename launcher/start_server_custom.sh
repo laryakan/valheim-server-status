@@ -24,7 +24,7 @@ fi
 
 # Tip: Make a local copy of this script to avoid it being overwritten by steam.
 # NOTE: Minimum password length is 5 characters & Password cant be in the server name.
-# NOTE: You need to make sure the ports 2456-2458 (or the one specified +2) is being forwarded to
+# NOTE: You need to make sure the ports 2456-2457 (or the one specified +1) is being forwarded to
 #   your server through your local router & firewall.
 # Redirect stdout to log-filter and stderr to another file
 LAUNCH_ARGS=(

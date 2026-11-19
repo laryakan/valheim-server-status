@@ -15,7 +15,7 @@ This document tracks the current branch implementation and the work that remains
 - `setup` creates shared configuration when needed and synchronizes new template keys into existing configuration without overwriting existing values.
 - Shared settings include server and save paths, service user, log directory, VSS tool paths, public IP, one Discord webhook URL and its options, language, and update frequency. Separate webhook URLs per profile are not supported.
 - Each profile uses one `STATUSMESSAGEID` for a single webhook message containing server identity/status, optional connection details, and optional recent logs. Existing `LASTLOGMESSAGEID` and `SERVERCONNECTIONINFOMESSAGEID` values are fallbacks only when `STATUSMESSAGEID` is empty.
-- Profile names are validated and must match `VHSERVERWORLD`. Setup checks game-port range and HTTP-port collisions across profiles.
+- Profile names are validated and must match `VHSERVERWORLD`. Valheim uses the configured game port and the next port; setup checks these two-port pairs and HTTP-port collisions across profiles. New profiles are assigned the next unused pair.
 - Valheim save files and the `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files remain shared. `VHSERVERSEED` is informational; VSS cannot set or change world generation.
 
 ### State, logs, launcher, and services

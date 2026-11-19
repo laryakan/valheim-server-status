@@ -476,7 +476,7 @@ function validate_server_profile_ports() {
     return 1
   fi
   game_start=$((10#$game_port))
-  if (( game_start < 1 || game_start > 65533 )); then
+  if (( game_start < 1 || game_start > 65534 )); then
     printf 'Server profile %s has a game port outside the valid range.\n' "$name" >&2
     return 1
   fi
@@ -490,9 +490,9 @@ function validate_server_profile_ports() {
       printf 'Server profile %s has an HTTP port outside the valid range.\n' "$name" >&2
       return 1
     fi
-    if (( http_value >= game_start && http_value <= game_start + 2 )); then
+    if (( http_value >= game_start && http_value <= game_start + 1 )); then
       printf 'HTTP port %s overlaps the game port range %s-%s for %s.\n' \
-        "$http_value" "$game_start" "$((game_start + 2))" "$name" >&2
+        "$http_value" "$game_start" "$((game_start + 1))" "$name" >&2
       return 1
     fi
   fi
@@ -505,10 +505,10 @@ function validate_server_profile_ports() {
     configured_game=$((10#$configured_game))
     configured_http=$((10#$configured_http))
 
-    if (( game_start <= configured_game + 2 && configured_game <= game_start + 2 )); then
+    if (( game_start <= configured_game + 1 && configured_game <= game_start + 1 )); then
       printf 'Game port range %s-%s overlaps profile %s (%s-%s).\n' \
-        "$game_start" "$((game_start + 2))" "$profile" \
-        "$configured_game" "$((configured_game + 2))" >&2
+        "$game_start" "$((game_start + 1))" "$profile" \
+        "$configured_game" "$((configured_game + 1))" >&2
       return 1
     fi
     if [ "$http_enabled" -eq 1 ]; then
@@ -516,14 +516,14 @@ function validate_server_profile_ports() {
         printf 'HTTP port %s is already used by profile %s.\n' "$http_value" "$profile" >&2
         return 1
       fi
-      if (( http_value >= configured_game && http_value <= configured_game + 2 )); then
+      if (( http_value >= configured_game && http_value <= configured_game + 1 )); then
         printf 'HTTP port %s overlaps the game port range for profile %s.\n' "$http_value" "$profile" >&2
         return 1
       fi
     fi
-    if (( configured_http >= game_start && configured_http <= game_start + 2 )); then
+    if (( configured_http >= game_start && configured_http <= game_start + 1 )); then
       printf 'Game port range %s-%s overlaps the HTTP port for profile %s (%s).\n' \
-        "$game_start" "$((game_start + 2))" "$profile" "$configured_http" >&2
+        "$game_start" "$((game_start + 1))" "$profile" "$configured_http" >&2
       return 1
     fi
   done < <(list_server_profiles)
@@ -570,7 +570,7 @@ function check_ufw_profile_rules() {
     return 2
   fi
   game_port=$((10#$VHSERVERPORT))
-  if (( game_port < 1 || game_port > 65533 )); then
+  if (( game_port < 1 || game_port > 65534 )); then
     echo "Game port is outside the valid range; UFW rule check skipped." >&2
     return 2
   fi
@@ -599,7 +599,7 @@ function check_ufw_profile_rules() {
     return 2
   fi
 
-  for ((port = game_port; port <= game_port + 2; port++)); do
+  for ((port = game_port; port <= game_port + 1; port++)); do
     for protocol in tcp udp; do
       if ! ufw_rule_covers_port "$rules" "$port" "$protocol"; then
         missing+=("$port/$protocol")
@@ -616,10 +616,10 @@ function check_ufw_profile_rules() {
 
   if [ "$http_enabled" -eq 1 ]; then
     printf 'UFW ALLOW rules found for %s game ports %s-%s (TCP/UDP) and HTTP port %s/TCP.\n' \
-      "$VSS_SERVER_NAME" "$game_port" "$((game_port + 2))" "$http_port"
+      "$VSS_SERVER_NAME" "$game_port" "$((game_port + 1))" "$http_port"
   else
     printf 'UFW ALLOW rules found for %s game ports %s-%s (TCP/UDP); HTTP status is not installed.\n' \
-      "$VSS_SERVER_NAME" "$game_port" "$((game_port + 2))"
+      "$VSS_SERVER_NAME" "$game_port" "$((game_port + 1))"
   fi
 }
 
@@ -640,11 +640,11 @@ function create_server_profile() {
   fi
 
   while ! validate_server_profile_ports "$name" "$valheim_port" "$status_port" >/dev/null 2>&1; do
-    if (( valheim_port > 65523 || status_port >= 65535 )); then
+    if (( valheim_port > 65532 || status_port >= 65535 )); then
       echo "No non-overlapping ports remain for server profile '$name'." >&2
       return 1
     fi
-    valheim_port=$((valheim_port + 10))
+    valheim_port=$((valheim_port + 2))
     status_port=$((status_port + 1))
   done
 
@@ -932,7 +932,7 @@ if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];then echo -e "BepInEx packaged version $(
 echo ""
 echo "--Ports--"
 echo -e "Please, run \e[1msudo ufw status\e[0m (firewall) to see if these ports are open:"
-echo -e "- $VHSERVERPORT to $(($VHSERVERPORT+2))/tcp/udp (Valheim server)"
+echo -e "- $VHSERVERPORT to $(($VHSERVERPORT+1))/tcp/udp (Valheim server)"
 echo -e "- $STATUSPORT/tcp (VSS over HTTP)"
 echo "======================================="
 }

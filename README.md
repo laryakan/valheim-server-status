@@ -50,7 +50,7 @@ Server actions can run without opening the interactive menu. Lifecycle actions u
 ```
 
 `--status-server` reports the systemd unit status and returns its status code. These commands require the profile name explicitly; they do not infer it from another profile or from the current directory.
-`--check-firewall` checks whether active UFW has ALLOW rules for the profile's Valheim port range (`VHSERVERPORT` through `VHSERVERPORT+2`, TCP and UDP) and HTTP status port (TCP). It is informational only: it never adds or changes firewall rules, and reports when UFW is inactive, unavailable, or missing rules.
+`--check-firewall` checks whether active UFW has ALLOW rules for the profile's Valheim port pair (`VHSERVERPORT` and `VHSERVERPORT+1`, TCP and UDP) and HTTP status port (TCP). It is informational only: it never adds or changes firewall rules, and reports when UFW is inactive, unavailable, or missing rules.
 
 Valheim updates are explicit because all profiles share the same server files. Do not enable the commented `ExecStartPre` update in the service template. Run:
 
@@ -70,6 +70,8 @@ Schedule or remove the global planned maintenance job from setup:
 Scheduling adds one idempotent entry to root's crontab for daily 05:00 system-local time. It requires `sudo`; if an older manual `vss.maintenance` cron entry exists, remove it first to avoid duplicate updates. The scheduled job checks every profile for connected players, then performs one global update.
 
 Setup also rejects overlapping Valheim port ranges and HTTP ports across profiles. HTTP ports must not overlap any profile's Valheim range.
+
+Valheim's dedicated-server guide describes the default port pair as `2456-2457`: the configured port and the next port. For a server not using crossplay, configure router port forwarding to match the server's ports. With the `-crossplay` argument, router forwarding is not required; the port still distinguishes servers sharing a public IP address. VSS checks conflicts and UFW rules for `VHSERVERPORT` and `VHSERVERPORT+1`; new profiles are assigned the next unused two-port pair. See the [official dedicated-server guide](https://valheim.com/support/a-guide-to-dedicated-servers/).
 
 The profile selector and **Switch server profile** menu show a compact overview card for every profile, including its server display name, online/offline state, game port, BepInEx setting, informational seed, connected-player count when state is available, shared Discord webhook configuration, and whether that profile's automatic update job is scheduled, missing, or disabled. Webhook status means the URL is configured locally; it does not test Discord connectivity. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. The selected profile is marked. The main menu shows the same Discord indicators for the currently selected profile. Menus are grouped by configuration, monitoring, and maintenance; in a terminal, use the up/down arrows and Enter to navigate. The currently selected action is highlighted, and typing its existing number remains available as a shortcut. The profile picker also accepts a profile number or name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
 
