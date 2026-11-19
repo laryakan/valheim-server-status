@@ -32,6 +32,7 @@ for expected in \
   'Ports: game 2456  |  HTTP 8181' \
   'Discord and webhook' \
   'Discord webhook: configured  |  Automatic update: missing' \
+  'BepInEx and modding' \
   'Switch server profile' \
   'Select an action:' \
   'Unknown option: invalid' \
@@ -41,6 +42,22 @@ for expected in \
     exit 1
   fi
 done
+modding_menu_output="$(printf '0\n' | bepinex_menu)"
+for expected in \
+  'BEPINEX AND MODDING' \
+  'Enable BepInEx for this profile' \
+  'Disable BepInEx for this profile' \
+  'Set optional R2Modman/Thunderstore share code'; do
+  if [[ "$modding_menu_output" != *"$expected"* ]]; then
+    printf 'FAIL: BepInEx menu is missing "%s"\n' "$expected" >&2
+    exit 1
+  fi
+done
+launcher_menu_output="$(printf '0\n' | launcher_menu)"
+if [[ "$launcher_menu_output" == *'R2Modman/Thunderstore share code'* ]]; then
+  echo "FAIL: mod-manager share code remained in the Valheim launcher menu" >&2
+  exit 1
+fi
 if [[ "$menu_output" == *$'\033'* ]]; then
   echo "FAIL: setup menu emitted color codes when output was not a terminal" >&2
   exit 1

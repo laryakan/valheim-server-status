@@ -2055,8 +2055,6 @@ $(ColorGreen '12)') $(ColorRed 'sudo required') stop the existing service and sh
 $(ColorGreen '13)') $(ColorRed 'sudo required') start the existing service and run the server
 $(ColorGreen '14)') $(ColorRed 'sudo required') restart the existing service and the server
 $(ColorGreen '15)') $(ColorRed 'sudo required') $(ColorYellow 'delete my old world and start a new one (stop server, delete saved world, start server)')
-$(ColorGreen '16)') set the optional R2Modman profile code shared with players via Discord
-
 $(ColorGreen '0)') return to previous menu
 $(ColorGreen 'CTRL+C)') quit
 $(ColorBlue 'You can scroll up to see previous screens')
@@ -2089,8 +2087,6 @@ mkdir -p "$CWD/systemd"
 					echo -e "$(ColorRed 'VHSERVERWORLD is empty; cannot delete the current world.')" >&2
 				fi
 				sleep 2 ; "$CWD/discord/update" ; clear ; launcher_menu ;;
-			16) setup_value_prompt 'set the optional R2Modman profile code (shown in Discord when BepInEx is enabled)' 'R2MODMANCODE' ; clear ; launcher_menu ;;
-
 		0) setup_ui_clear; return 0 ;;
 		*) echo -e $red"Wrong option."$clear >&2; WrongCommand;;
         esac
@@ -2237,18 +2233,17 @@ function launcher_menu() {
     setup_ui_menu_option "$selected" 13 'Start this profile server'
     setup_ui_menu_option "$selected" 14 'Restart this profile server'
     setup_ui_menu_option "$selected" 15 'Reset this world save (confirmation required)'
-    setup_ui_menu_option "$selected" 16 'Set optional R2Modman/Thunderstore share code'
     printf '\n'
     setup_ui_menu_option "$selected" 0 'Return'
     printf '\n'
     printf 'Select an action: '
-    setup_ui_read_menu_choice 16 "$selected" || return 0
+    setup_ui_read_menu_choice 15 "$selected" || return 0
     choice="$SETUP_UI_CHOICE"
     if [ "$choice" = '__redraw__' ]; then
       selected="$SETUP_UI_SELECTED_CHOICE"
       continue
     fi
-    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 16 )) && selected="$choice"
+    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 15 )) && selected="$choice"
     case "$choice" in
       1)
         if auto_conf; then notice='Detected settings were applied.'
@@ -2306,10 +2301,6 @@ function launcher_menu() {
       15)
         if reset_profile_world; then notice="${VSS_SETUP_NOTICE:-World reset completed.}"
         else notice="${VSS_SETUP_NOTICE:-World reset failed; review the error above.}"; fi
-        ;;
-      16)
-        if setup_value_prompt 'Optional R2Modman/Thunderstore share code' R2MODMANCODE; then notice='Mod-manager share code updated.'
-        else notice='Mod-manager share code was not changed.'; fi
         ;;
       0) return 0 ;;
       *) notice="Unknown option: $choice" ;;
@@ -2407,6 +2398,55 @@ function http_status_menu() {
   done
 }
 
+function bepinex_menu() {
+  local choice
+  local selected=1
+  local notice=''
+  while true; do
+    setup_menu_render 'BepInEx and modding' "$notice"
+    notice=''
+    setup_ui_menu_option "$selected" 1 'Enable BepInEx for this profile'
+    setup_ui_menu_option "$selected" 2 'Disable BepInEx for this profile'
+    setup_ui_menu_option "$selected" 3 'Set optional R2Modman/Thunderstore share code'
+    printf '\n'
+    setup_ui_menu_option "$selected" 0 'Return'
+    printf '\n'
+    printf 'Select an action: '
+    setup_ui_read_menu_choice 3 "$selected" || return 0
+    choice="$SETUP_UI_CHOICE"
+    if [ "$choice" = '__redraw__' ]; then
+      selected="$SETUP_UI_SELECTED_CHOICE"
+      continue
+    fi
+    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 3 )) && selected="$choice"
+    case "$choice" in
+      1)
+        if enable_bepinex_profile; then
+          notice="${VSS_SETUP_NOTICE:-BepInEx enabled.}"
+        else
+          notice="${VSS_SETUP_NOTICE:-Could not enable BepInEx and its log pipe; the profile was left disabled.}"
+        fi
+        ;;
+      2)
+        if disable_bepinex_profile; then
+          notice="${VSS_SETUP_NOTICE:-BepInEx disabled.}"
+        else
+          notice="${VSS_SETUP_NOTICE:-Could not disable BepInEx cleanly; review the service status.}"
+        fi
+        ;;
+      3)
+        if setup_value_prompt 'Optional R2Modman/Thunderstore share code' R2MODMANCODE; then
+          notice='Mod-manager share code updated.'
+        else
+          notice='Mod-manager share code was not changed.'
+        fi
+        ;;
+      0) return 0 ;;
+      *) notice="Unknown option: $choice" ;;
+    esac
+  done
+}
+
 # Main menu
 new_menu(){
   local a
@@ -2435,23 +2475,22 @@ new_menu(){
     printf '\nMAINTENANCE\n'
     setup_ui_menu_option "$selected" 11 'Set system service user'
     setup_ui_menu_option "$selected" 12 "Remove this profile's services and scheduled update (sudo)"
-    setup_ui_menu_option "$selected" 13 'Enable packaged BepInEx'
-    setup_ui_menu_option "$selected" 14 'Disable packaged BepInEx'
-    setup_ui_menu_option "$selected" 15 'Switch server profile'
-    setup_ui_menu_option "$selected" 16 'Update Valheim server (stops all instances first; restarts only those previously active)'
-    setup_ui_menu_option "$selected" 17 'Schedule global maintenance daily at 05:00 local time (root crontab; sudo)'
-    setup_ui_menu_option "$selected" 18 'Remove the global maintenance schedule (root crontab; sudo)'
+    setup_ui_menu_option "$selected" 13 'BepInEx and modding'
+    setup_ui_menu_option "$selected" 14 'Switch server profile'
+    setup_ui_menu_option "$selected" 15 'Update Valheim server (stops all instances first; restarts only those previously active)'
+    setup_ui_menu_option "$selected" 16 'Schedule global maintenance daily at 05:00 local time (root crontab; sudo)'
+    setup_ui_menu_option "$selected" 17 'Remove the global maintenance schedule (root crontab; sudo)'
     printf '\n'
     setup_ui_menu_option "$selected" 0 'Exit'
     printf '\n'
     printf 'Select an action: '
-    setup_ui_read_menu_choice 18 "$selected" || return 0
+    setup_ui_read_menu_choice 17 "$selected" || return 0
     a="$SETUP_UI_CHOICE"
     if [ "$a" = '__redraw__' ]; then
       selected="$SETUP_UI_SELECTED_CHOICE"
       continue
     fi
-    [[ "$a" =~ ^[0-9]+$ ]] && (( a <= 18 )) && selected="$a"
+    [[ "$a" =~ ^[0-9]+$ ]] && (( a <= 17 )) && selected="$a"
     case "$a" in
       1) setup_ui_clear; discord_menu ;;
       2) setup_ui_clear; launcher_menu ;;
@@ -2496,20 +2535,9 @@ new_menu(){
         else notice='Could not remove all profile services; review the errors above.'; fi
         ;;
       13)
-        if enable_bepinex_profile; then
-          notice="${VSS_SETUP_NOTICE:-BepInEx enabled.}"
-        else
-          notice="${VSS_SETUP_NOTICE:-Could not enable BepInEx and its log pipe; the profile was left disabled.}"
-        fi
+        bepinex_menu
         ;;
       14)
-        if disable_bepinex_profile; then
-          notice="${VSS_SETUP_NOTICE:-BepInEx disabled.}"
-        else
-          notice="${VSS_SETUP_NOTICE:-Could not disable BepInEx cleanly; review the service status.}"
-        fi
-        ;;
-      15)
         if select_server_profile; then
           if load_server_profile "$SELECTED_SERVER_PROFILE"; then
             notice="Active profile is now $VSS_SERVER_NAME."
@@ -2522,7 +2550,7 @@ new_menu(){
           fi
         fi
         ;;
-      16)
+      15)
         printf 'This updates shared Valheim server files. Every installed server instance will be stopped first; only instances that were running will be restarted sequentially.\n'
         printf 'Type UPDATE to continue: '
         read -r confirmation
@@ -2532,7 +2560,7 @@ new_menu(){
           notice="Maintenance cancelled."
         fi
         ;;
-      17)
+      16)
         printf 'This adds one global daily maintenance job at 05:00 local time to root'\''s crontab. Remove any older manual vss.maintenance entry first to avoid duplicate updates.\n'
         printf 'Type SCHEDULE to continue: '
         read -r confirmation
@@ -2542,7 +2570,7 @@ new_menu(){
           notice="Maintenance schedule was not changed."
         fi
         ;;
-      18)
+      17)
         printf 'Type REMOVE to delete the global maintenance entry from root'\''s crontab: '
         read -r confirmation
         if [ "$confirmation" = "REMOVE" ]; then
