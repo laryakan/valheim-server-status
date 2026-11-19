@@ -307,6 +307,10 @@ function setup_ui_profile_card() (
   local server_pid
   local webhook_state
   local cron_state
+  local server_service_state
+  local pipe_service_state
+  local http_service_state
+  local discord_message_state
 
   if ! vss_validate_server_name "$profile"; then
     printf '  +-- %s --+\n  | Invalid profile name\n  +----------+\n' "$profile"
@@ -316,6 +320,7 @@ function setup_ui_profile_card() (
   export VSS_SERVER_NAME
   unset VSS_ENV_FILE VSS_CONFIG_LOADED
   unset VHSERVERWORLD VHSERVERNAME VHSERVERSEED VHSERVERPORT VSSBEPINEXENABLED VALSERVERPID
+  unset STATUSMESSAGEID LASTLOGMESSAGEID SERVERCONNECTIONINFOMESSAGEID
   source "$CWD/lib/config.sh" || {
     printf '  +-- %s --+\n  | Configuration unavailable\n  +----------------------+\n' "$profile"
     return 0
@@ -354,12 +359,24 @@ function setup_ui_profile_card() (
   fi
   webhook_state="$(setup_ui_discord_webhook_state)"
   cron_state="$(setup_ui_discord_cron_state "$profile")"
+  server_service_state="$(setup_ui_checkmark "$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")")"
+  pipe_service_state="$(setup_ui_checkmark "$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")")"
+  http_service_state="$(setup_ui_checkmark "$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")")"
+  if [ -n "$(setup_ui_profile_webhook_message_id)" ]; then
+    discord_message_state='configured'
+  else
+    discord_message_state='missing'
+  fi
 
   printf '  +-- %s%s --+\n' "$profile" "$current_marker"
   printf '  | Server: %s\n' "$server_name"
   printf '  | State: %s | Port: %s | BepInEx: %s | Seed: %s | Players: %s\n' \
     "$server_state" "${VHSERVERPORT:-unknown}" "$bepinex" "$seed" "$player_count"
   printf '  | Discord webhook: %s | Auto-update: %s\n' "$webhook_state" "$cron_state"
+  printf '  | Setup: server%s HTTP%s pipe%s cron%s Discord%s\n' \
+    "$server_service_state" "$http_service_state" "$pipe_service_state" \
+    "$(setup_ui_checkmark "$cron_state")" \
+    "$(setup_ui_checkmark "$discord_message_state")"
   printf '  +--------------------------------------------------+\n'
 )
 
@@ -876,6 +893,13 @@ function setup_ui_unit_state() {
   else
     printf 'not installed'
   fi
+}
+
+function setup_ui_checkmark() {
+  case "$1" in
+    installed|scheduled|configured) printf '[x]' ;;
+    *) printf '[ ]' ;;
+  esac
 }
 
 function setup_ui_dashboard() {
@@ -2475,7 +2499,9 @@ new_menu(){
     printf '\nMAINTENANCE\n'
     setup_ui_menu_option "$selected" 11 'Set system service user'
     setup_ui_menu_option "$selected" 12 "Remove this profile's services and scheduled update (sudo)"
+    printf '\nBEPINEX AND MODDING\n'
     setup_ui_menu_option "$selected" 13 'BepInEx and modding'
+    printf '\nPROFILE AND GLOBAL MAINTENANCE\n'
     setup_ui_menu_option "$selected" 14 'Switch server profile'
     setup_ui_menu_option "$selected" 15 'Update Valheim server (stops all instances first; restarts only those previously active)'
     setup_ui_menu_option "$selected" 16 'Schedule global maintenance daily at 05:00 local time (root crontab; sudo)'

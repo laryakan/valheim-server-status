@@ -11,6 +11,7 @@ WEBHOOKURL='https://discord.com/api/webhooks/123456789/fake-token'
 WEBHOOKID='123456789'
 WEBHOOKTOKEN='fake-token'
 CRONTABWEBHOOKFREQ=5
+export STATUSMESSAGEID=stale-parent-message-id
 MOCK_UI_CRONTAB=$'# vss-profile:OverviewA\n'
 crontab() {
   [ "${1:-}" = '-l' ] || return 2
@@ -44,7 +45,7 @@ for expected in \
 done
 modding_menu_output="$(printf '0\n' | bepinex_menu)"
 for expected in \
-  'BEPINEX AND MODDING' \
+  'BepInEx and modding' \
   'Enable BepInEx for this profile' \
   'Disable BepInEx for this profile' \
   'Set optional R2Modman/Thunderstore share code'; do
@@ -78,6 +79,7 @@ VHSERVERNAME='Server A'
 VHSERVERPORT=2456
 VHSERVERSEED=SeedA
 VSSBEPINEXENABLED=1
+STATUSMESSAGEID=123456
 EOF
 cat > "$PROFILE_OVERVIEW_DIR/.env.OverviewB" <<'EOF'
 VHSERVERWORLD=OverviewB
@@ -102,11 +104,13 @@ for expected in \
   'Seed: SeedA' \
   'Players: 1 connected' \
   'Discord webhook: configured | Auto-update: scheduled' \
+  'Setup: server[ ] HTTP[ ] pipe[ ] cron[x] Discord[x]' \
   'OverviewB' \
   'State: offline | Port: 2460' \
   'BepInEx: off' \
   'Seed: SeedB' \
-  'Players: 0 connected'; do
+  'Players: 0 connected' \
+  'Setup: server[ ] HTTP[ ] pipe[ ] cron[ ] Discord[ ]'; do
   if [[ "$overview_output" != *"$expected"* ]]; then
     printf 'FAIL: profile overview is missing "%s"\n' "$expected" >&2
     exit 1
