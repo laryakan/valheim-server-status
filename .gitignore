@@ -16,3 +16,6 @@ launcher/launcher-args
 launcher/launcher-args.*
 fake-server
 bepinex/BepInEx_linux_x64_*/
+bepinex/current
+bepinex/profiles
+bepinex/profiles/*

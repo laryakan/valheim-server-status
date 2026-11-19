@@ -1626,6 +1626,7 @@ function enable_bepinex_profile() {
   local pipe_was_preexisting=0
   local running_pid
   VSS_SETUP_NOTICE=''
+  printf '%s\n' "Sudo is needed to install/start this profile's systemd log-pipe service and stop/restart its Valheim service if running; downloading BepInEx itself does not require sudo."
 
   if [ "${VSSBEPINEXENABLED:-0}" = 1 ]; then
     if systemctl is-active --quiet "$VSSPIPESERVICENAME"; then
