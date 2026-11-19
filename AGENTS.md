@@ -15,6 +15,7 @@ This repository contains a Bash-based Valheim server monitoring/status project. 
 - Runtime scripts load an explicit `.env.<world-name>` profile through `lib/config.sh`; `.env.server.dist` and `.env.common.dist` are templates, while the root `.env` stores shared installation settings.
 - `VSSDIR` is the installation root shared by every profile. `setup` synchronizes newly added keys from `.env.common.dist` into the root `.env` without overwriting existing values.
 - The root script `./setup` is an interactive installer/UI, not a generic library.
+- In the interactive setup UI, preserve up/down arrow navigation, in-list selection highlighting, and numeric shortcuts. The profile overview belongs only in the initial selector and **Switch server profile**; keep profile questions above the input prompt and retain line-based input behavior when stdin is not a terminal.
 - Any script that is loaded with `source` must not execute the interactive menu automatically.
 - Shell scripts should keep failure modes non-fatal when possible; invalid numeric config values should degrade to sane defaults instead of aborting the whole workflow.
 - Background VSS processes may append non-user-facing errors to `crash.log` at the repository root. The interactive `setup` CLI must keep its diagnostics visible and must not redirect its stderr to `crash.log`.

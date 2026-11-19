@@ -34,7 +34,98 @@ if [[ "$menu_output" == *$'\033'* ]]; then
   echo "FAIL: setup menu emitted color codes when output was not a terminal" >&2
   exit 1
 fi
+if [[ "$menu_output" == *'PROFILES OVERVIEW'* ]]; then
+  echo "FAIL: setup dashboard showed the profile overview outside profile selection" >&2
+  exit 1
+fi
 
+PROFILE_OVERVIEW_DIR="$TMPDIR_UI/profile-overview"
+mkdir -p "$PROFILE_OVERVIEW_DIR/data"
+mkdir -p "$PROFILE_OVERVIEW_DIR/lib"
+cp "$ROOT/lib/config.sh" "$PROFILE_OVERVIEW_DIR/lib/config.sh"
+printf 'VSS_COMMON_CONFIG_VERSION=3\n' > "$PROFILE_OVERVIEW_DIR/.env"
+cat > "$PROFILE_OVERVIEW_DIR/.env.OverviewA" <<'EOF'
+VHSERVERWORLD=OverviewA
+VHSERVERNAME='Server A'
+VHSERVERPORT=2456
+VHSERVERSEED=SeedA
+VSSBEPINEXENABLED=1
+EOF
+cat > "$PROFILE_OVERVIEW_DIR/.env.OverviewB" <<'EOF'
+VHSERVERWORLD=OverviewB
+VHSERVERNAME='Server B'
+VHSERVERPORT=2460
+VHSERVERSEED=SeedB
+VSSBEPINEXENABLED=0
+VALSERVERPID=''
+EOF
+printf 'VALSERVERPID=%s\n' "$$" >> "$PROFILE_OVERVIEW_DIR/.env.OverviewA"
+printf 'steamid;PlayerA;zdoid\n' > "$PROFILE_OVERVIEW_DIR/data/online-players.OverviewA"
+touch "$PROFILE_OVERVIEW_DIR/data/online-players.OverviewB"
+CWD="$PROFILE_OVERVIEW_DIR"
+VSS_SERVER_NAME='OverviewA'
+vss_find_server_pid() { printf '1\n'; }
+overview_output="$(setup_ui_profiles_overview)"
+for expected in \
+  'OverviewA (current)' \
+  'Server: Server A' \
+  'State: online | Port: 2456' \
+  'BepInEx: on' \
+  'Seed: SeedA' \
+  'Players: 1 connected' \
+  'OverviewB' \
+  'State: offline | Port: 2460' \
+  'BepInEx: off' \
+  'Seed: SeedB' \
+  'Players: 0 connected'; do
+  if [[ "$overview_output" != *"$expected"* ]]; then
+    printf 'FAIL: profile overview is missing "%s"\n' "$expected" >&2
+    exit 1
+  fi
+done
+vss_find_server_pid() { return 1; }
+
+cat > "$TMPDIR_UI/keyboard-choice.sh" <<EOF
+source "$ROOT/setup" >/dev/null
+selected=1
+while :; do
+  setup_ui_menu_option "\$selected" 1 one
+  setup_ui_menu_option "\$selected" 2 two
+  setup_ui_menu_option "\$selected" 3 three
+  setup_ui_menu_option "\$selected" 0 Exit
+  setup_ui_read_menu_choice 3 "\$selected"
+  if [[ "\$SETUP_UI_CHOICE" == '__redraw__' ]]; then
+    selected="\$SETUP_UI_SELECTED_CHOICE"
+    continue
+  fi
+  break
+done
+printf 'KEYBOARD_CHOICE=%s\\n' "\$SETUP_UI_CHOICE"
+EOF
+keyboard_output="$(printf '\033[B\n' | script -qec "bash '$TMPDIR_UI/keyboard-choice.sh'" /dev/null)"
+if [[ "$keyboard_output" != *'KEYBOARD_CHOICE=2'* ||
+      "$keyboard_output" != *$'\033[7m   2  two\033[0m'* ]]; then
+  echo "FAIL: down-arrow navigation did not select the next menu option" >&2
+  exit 1
+fi
+cat > "$TMPDIR_UI/keyboard-main-menu.sh" <<EOF
+source "$ROOT/setup" >/dev/null
+VSS_SERVER_NAME=UiWorld
+VHSERVERWORLD=UiWorld
+VHSERVERPORT=2456
+STATUSPORT=8181
+vss_find_server_pid() { return 1; }
+setup_ui_unit_state() { printf 'not installed'; }
+new_menu
+EOF
+keyboard_main_output="$(printf '\033[B\n0\n0\n' | TERM=xterm script -qec "bash '$TMPDIR_UI/keyboard-main-menu.sh'" /dev/null)"
+if [[ "$keyboard_main_output" != *$'\033[7m   2  Valheim launcher and server\033[0m'* ||
+      "$keyboard_main_output" == *'> 1. Discord and webhook <'* ]]; then
+  echo "FAIL: main menu did not highlight the selected item in its option list" >&2
+  exit 1
+fi
+
+VSS_SERVER_NAME='UiWorld'
 launcher_output="$(printf '5\n0\n' | NO_COLOR=1 launcher_menu)"
 if [[ "$launcher_output" != *'Valheim server'* ||
       "$launcher_output" != *'Show world/profile ID (read-only)'* ||
@@ -280,8 +371,10 @@ if [[ "$secret_prompt_output" != *'configured (hidden)'* ]] ||
 fi
 
 CWD="$TMPDIR_UI"
-touch "$CWD/.env.UiWorld"
-touch "$CWD/.env.OtherWorld"
+mkdir -p "$CWD/lib"
+cp "$ROOT/lib/config.sh" "$CWD/lib/config.sh"
+printf 'VHSERVERWORLD=UiWorld\n' > "$CWD/.env.UiWorld"
+printf 'VHSERVERWORLD=OtherWorld\n' > "$CWD/.env.OtherWorld"
 VSS_SERVER_NAME=''
 if ! select_server_profile <<< 'OtherWorld' > "$TMPDIR_UI/picker.out"; then
   echo "FAIL: profile picker did not accept a listed profile name" >&2
@@ -291,8 +384,37 @@ if [ "$SELECTED_SERVER_PROFILE" != 'OtherWorld' ]; then
   echo "FAIL: profile picker selected the wrong profile" >&2
   exit 1
 fi
-if ! grep -Fq 'Profile name or choice:' "$TMPDIR_UI/picker.out"; then
+if ! grep -Fq 'Which server profile do you want to select?' "$TMPDIR_UI/picker.out" ||
+   ! grep -Fq 'Choice:' "$TMPDIR_UI/picker.out"; then
   echo "FAIL: profile picker prompt was not visible on stdout" >&2
+  exit 1
+fi
+profile_question_line="$(grep -n -F 'Which server profile do you want to select?' "$TMPDIR_UI/picker.out" | cut -d: -f1)"
+profile_input_line="$(grep -n -F 'Choice:' "$TMPDIR_UI/picker.out" | cut -d: -f1)"
+if [ "$profile_question_line" -ge "$profile_input_line" ]; then
+  echo "FAIL: profile picker question was not shown above the input prompt" >&2
+  exit 1
+fi
+if ! grep -Fq 'PROFILES OVERVIEW' "$TMPDIR_UI/picker.out"; then
+  echo "FAIL: profile picker did not show the profile overview" >&2
+  exit 1
+fi
+if ! select_server_profile <<< '1' > "$TMPDIR_UI/picker-number.out" ||
+   [ "$SELECTED_SERVER_PROFILE" != 'OtherWorld' ]; then
+  echo "FAIL: profile picker did not accept a numeric profile selection" >&2
+  exit 1
+fi
+cat > "$TMPDIR_UI/keyboard-profile.sh" <<EOF
+source "$ROOT/setup" >/dev/null
+CWD="$TMPDIR_UI"
+VSS_SERVER_NAME=''
+select_server_profile
+printf 'KEYBOARD_PROFILE=%s\\n' "\$SELECTED_SERVER_PROFILE"
+EOF
+keyboard_profile_output="$(printf '\033[B\n' | script -qec "bash '$TMPDIR_UI/keyboard-profile.sh'" /dev/null)"
+if [[ "$keyboard_profile_output" != *'KEYBOARD_PROFILE=UiWorld'* ||
+      "$keyboard_profile_output" != *$'\033[7m   2  UiWorld\033[0m'* ]]; then
+  echo "FAIL: down-arrow navigation did not select the next server profile" >&2
   exit 1
 fi
 

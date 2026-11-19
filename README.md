@@ -71,7 +71,7 @@ Scheduling adds one idempotent entry to root's crontab for daily 05:00 system-lo
 
 Setup also rejects overlapping Valheim port ranges and HTTP ports across profiles. HTTP ports must not overlap any profile's Valheim range.
 
-The interactive setup dashboard shows the selected world, Valheim process state, ports, and installed service units. Menus are grouped by configuration, monitoring, and maintenance; the profile picker accepts a profile name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
+The profile selector and **Switch server profile** menu show a compact overview card for every profile, including its server display name, online/offline state, game port, BepInEx setting, informational seed, and connected-player count when state is available. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. The selected profile is marked. Menus are grouped by configuration, monitoring, and maintenance; in a terminal, use the up/down arrows and Enter to navigate. The currently selected action is highlighted, and typing its existing number remains available as a shortcut. The profile picker also accepts a profile number or name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
 
 World names used as profile IDs must start with a letter or number, contain only letters, numbers, dots, underscores, and hyphens, must not contain `..`, and must be unique. Profile/world IDs cannot currently be renamed in setup. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
 
@@ -215,7 +215,7 @@ for test in tests/test_*.sh tests/debug_logfilter_pipeline_output*.sh; do
 done
 ```
 
-Tests that exercise log parsing and profile state use temporary files and clean them up on exit. Setup tests cover profile switching, BepInEx pipe ownership, world-reset safeguards, and service-removal failures. The BepInEx runtime test launches two modded profiles and one vanilla profile concurrently against a stub server to verify environment isolation. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
+Tests that exercise log parsing and profile state use temporary files and clean them up on exit. The setup UI test uses the standard `script` utility (from util-linux) to exercise arrow-key navigation in a pseudo-terminal. Setup tests also cover profile switching, BepInEx pipe ownership, world-reset safeguards, and service-removal failures. The BepInEx runtime test launches two modded profiles and one vanilla profile concurrently against a stub server to verify environment isolation. Re-running the suite should not modify active profile configuration, server data, production logs, or `crash.log`; review any new test's side effects before adding it.
 
 ## Troubleshooting
 

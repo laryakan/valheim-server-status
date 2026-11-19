@@ -25,7 +25,8 @@ This document tracks the current branch implementation and the work that remains
 - Server logs use `<date>.<world-name>.stdout.log` and `<date>.<world-name>.stderr.log`. One shared logrotate configuration covers all profiles.
 - Setup renders separate `valheim-server.<world-name>.service`, `vss.pipe.<world-name>.service`, and `vss.http.<world-name>.service` units from shared examples. Units pass the selected profile to their scripts.
 - The vanilla VSS launcher pipes stdout directly to `vss.log-filter`; its service does not need `vss.pipe`. The standalone pipe supports both BepInEx `LogOutput.log` and external servers with redirected log files.
-- Setup includes a Bash dashboard and profile picker, profile creation, per-profile service operations, and direct CLI commands for starting, stopping, restarting, checking status, checking UFW rules, and updating Discord.
+- Setup includes a Bash dashboard, profile picker, profile creation, and per-profile service operations. The initial profile selector and **Switch server profile** show overview cards with each profile's display name, online/offline state, Valheim port, BepInEx setting, informational seed, and connected-player count when available. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. Up/down arrows move the highlighted row in the menu or profile list; Enter selects it, and existing numeric menu choices and profile numbers/names remain available.
+- Setup also provides direct CLI commands for starting, stopping, restarting, checking status, checking UFW rules, and updating Discord.
 - The UFW check is informational only; it does not alter firewall rules.
 
 ### Discord and scheduled jobs
@@ -88,4 +89,4 @@ Profile/world IDs cannot currently be renamed in setup. A controlled rename oper
 - Runtime target: Bash on Linux with systemd. Service management and the root maintenance schedule require `sudo`; the update workflow also requires SteamCMD.
 - `curl` is used for Discord webhooks. `dig` supplies the default public IP but can be replaced by a configured `PUBLICIP`. `ncat` is used by the optional HTTP endpoint and the BepInEx integration test.
 - `./bepinex_upgrade.sh` requires `wget`, `unzip`, and `awk`; its integration test also uses `ncat` and `base64`. Python is not required.
-- Regression tests use temporary configuration/state and clean up on exit. Relevant coverage includes profile isolation, template synchronization, V2 migration, service templates, setup CLI/UI, maintenance ordering/restoration, the global cron job, BepInEx status, and image upgrades.
+- Regression tests use temporary configuration/state and clean up on exit. The setup UI test uses `script` from util-linux to exercise arrow navigation and verify the selected row is highlighted in a pseudo-terminal. Relevant coverage also includes profile isolation, template synchronization, V2 migration, service templates, setup CLI/UI, maintenance ordering/restoration, the global cron job, BepInEx status, and image upgrades.
