@@ -6,22 +6,28 @@ TMPDIR_PROFILE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_PROFILE"' EXIT
 
 mkdir -p "$TMPDIR_PROFILE/bin"
+mkdir -p "$TMPDIR_PROFILE/systemd"
 printf '#!/bin/sh\nexit 0\n' > "$TMPDIR_PROFILE/bin/dig"
 chmod +x "$TMPDIR_PROFILE/bin/dig"
 PATH="$TMPDIR_PROFILE/bin:$PATH"
+export VSS_MIGRATION_SYSTEMD_DIR="$TMPDIR_PROFILE/systemd"
 
 source "$ROOT/setup" >/dev/null
 source "$ROOT/migrate-v2-to-v3"
 CWD="$TMPDIR_PROFILE"
-mkdir -p "$CWD/data" "$CWD/launcher" "$CWD/examples" "$CWD/systemd"
+mkdir -p "$CWD/data" "$CWD/launcher" "$CWD/examples" "$CWD/systemd" "$CWD/lib"
 cp "$ROOT/.env.server.dist" "$CWD/.env.server.dist"
 cp "$ROOT/.env.common.dist" "$CWD/.env.common.dist"
+cp "$ROOT/lib/config.sh" "$CWD/lib/config.sh"
 cp "$ROOT/examples/launcher-args" "$CWD/examples/launcher-args"
 printf '%s\n' '-saveinterval 1800' > "$CWD/launcher/launcher-args"
 
 cat > "$CWD/.env" <<EOF
 VSSDIR="$CWD"
 VHSERVERWORLD='LegacyWorld'
+VHSERVERPORT=2456
+STATUSPORT=invalid
+CRONTABWEBHOOKFREQ=5
 CONNECTEDPLAYERSFILE="$CWD/data/online-players"
 OFFLINEPLAYERSFILE="$CWD/data/offline-players"
 STEAMIDMAPFILE="$CWD/data/steamid-player-map"
@@ -35,6 +41,14 @@ printf '%s\n' 'save timestamp' > "$CWD/data/last-world-save"
 
 if ! migrate_legacy_config; then
   echo "FAIL: legacy configuration migration failed" >&2
+  exit 1
+fi
+if ! grep -Fxq 'STATUSPORT=invalid' "$CWD/.env.LegacyWorld"; then
+  echo "FAIL: migration without an HTTP unit did not preserve the unused port value" >&2
+  exit 1
+fi
+if ! load_server_profile LegacyWorld; then
+  echo "FAIL: migrated profile without an HTTP unit rejected its unused HTTP port" >&2
   exit 1
 fi
 

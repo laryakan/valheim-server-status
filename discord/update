@@ -5,20 +5,6 @@ exec 2>>"$CWD/../crash.log"
 source "$CWD/../lib/config.sh"
 vss_load_config "$CWD/.." || exit 1
 source "$CWD/../i18n.sh"
-# Output the server connection info first if asked.
-if [ "${SENDSERVERCONNECTIONINFO:-0}" -gt 0 ] 2>/dev/null
-then
-  "$CWD/connection-info" | "$CWD/webhook.json-sender" "$SERVERCONNECTIONINFOMESSAGEID"
-  sleep 2
-fi
-
-# Update server status second.
+# Update the profile status, including connection details when enabled.
 "$VSSDIR/status/server-status" --for-webhook | "$CWD/webhook.json-sender" --status
-sleep 2
-
-# Output the last stdout logs last if asked.
-if [ "${SENDLASTLOGS:-0}" -gt 0 ] 2>/dev/null
-then
-  "$CWD/last-logs" | "$CWD/webhook.json-sender" "$LASTLOGMESSAGEID"
-fi
 

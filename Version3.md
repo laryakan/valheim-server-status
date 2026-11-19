@@ -14,7 +14,7 @@ This document tracks the current branch implementation and the work that remains
 - The root `.env` contains shared installation configuration based on `.env.common.dist`. `VSSDIR` is the shared installation root.
 - `setup` creates shared configuration when needed and synchronizes new template keys into existing configuration without overwriting existing values.
 - Shared settings include server and save paths, service user, log directory, VSS tool paths, public IP, one Discord webhook URL and its options, language, and update frequency. Separate webhook URLs per profile are not supported.
-- The only profile-specific Discord settings are `STATUSMESSAGEID`, `LASTLOGMESSAGEID`, and `SERVERCONNECTIONINFOMESSAGEID`.
+- Each profile uses one `STATUSMESSAGEID` for a single webhook message containing server identity/status, optional connection details, and optional recent logs. Existing `LASTLOGMESSAGEID` and `SERVERCONNECTIONINFOMESSAGEID` values are fallbacks only when `STATUSMESSAGEID` is empty.
 - Profile names are validated and must match `VHSERVERWORLD`. Setup checks game-port range and HTTP-port collisions across profiles.
 - Valheim save files and the `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files remain shared. `VHSERVERSEED` is informational; VSS cannot set or change world generation.
 
@@ -25,14 +25,14 @@ This document tracks the current branch implementation and the work that remains
 - Server logs use `<date>.<world-name>.stdout.log` and `<date>.<world-name>.stderr.log`. One shared logrotate configuration covers all profiles.
 - Setup renders separate `valheim-server.<world-name>.service`, `vss.pipe.<world-name>.service`, and `vss.http.<world-name>.service` units from shared examples. Units pass the selected profile to their scripts.
 - The vanilla VSS launcher pipes stdout directly to `vss.log-filter`; its service does not need `vss.pipe`. The standalone pipe supports both BepInEx `LogOutput.log` and external servers with redirected log files.
-- Setup includes a Bash dashboard, profile picker, profile creation, and per-profile service operations. The initial profile selector and **Switch server profile** show overview cards with each profile's display name, online/offline state, Valheim port, BepInEx setting, informational seed, and connected-player count when available. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. Up/down arrows move the highlighted row in the menu or profile list; Enter selects it, and existing numeric menu choices and profile numbers/names remain available.
+- Setup includes a Bash dashboard, profile picker, profile creation, and per-profile service operations. The initial profile selector and **Switch server profile** show overview cards with each profile's display name, online/offline state, Valheim port, BepInEx setting, informational seed, connected-player count when available, shared Discord webhook configuration, and whether that profile's automatic update job is scheduled, missing, or disabled. Webhook status reflects local URL configuration only; it does not test Discord connectivity. The main menu shows the Discord indicators for its selected profile. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. Up/down arrows move the highlighted row in the menu or profile list; Enter selects it, and existing numeric menu choices and profile numbers/names remain available.
 - Setup also provides direct CLI commands for starting, stopping, restarting, checking status, checking UFW rules, and updating Discord.
 - The UFW check is informational only; it does not alter firewall rules.
 
 ### Discord and scheduled jobs
 
-- Webhook credentials and send options are shared; each profile retains its own message IDs and state.
-- Discord updates are scheduled separately per profile, using shared credentials and the profile-specific message IDs. The shared `CRONTABWEBHOOKFREQ` setting updates or removes all profile jobs; removing a profile removes only that profile's cron entry.
+- Webhook credentials and send options are shared; each profile has one message ID and profile-specific status state.
+- Discord updates are scheduled separately per profile, using shared credentials and the profile-specific message ID. Status, optional connection details, and optional recent logs are sent together in one message update. The shared `CRONTABWEBHOOKFREQ` setting updates or removes all profile jobs; removing a profile removes only that profile's cron entry.
 - Existing Discord messages are updated rather than duplicated. Deleted messages can be recreated, and webhook failures are handled without crashing the main monitoring flow.
 
 ### Shared Valheim maintenance
@@ -45,7 +45,7 @@ This document tracks the current branch implementation and the work that remains
 ### V2-to-V3 migration
 
 - `./migrate-v2-to-v3` is an explicit migration command; setup refuses to treat an unmarked legacy root `.env` as V3 shared configuration.
-- The migrator creates a restricted backup, splits legacy settings into shared `.env` and profile `.env.<world-name>`, and migrates launcher arguments and state files without overwriting existing targets.
+- The migrator creates a restricted backup, splits legacy settings into shared `.env` and profile `.env.<world-name>`, and migrates launcher arguments and state files without overwriting existing targets. It validates `STATUSPORT` and checks its UFW rule only when the legacy `vss.http.service` unit exists; without that unit, HTTP port validation and the HTTP firewall check are skipped. The unused value is preserved; set a valid port before installing HTTP later.
 - It stops and disables legacy V2 systemd units, replaces the legacy Discord cron entry while preserving unrelated entries, installs shared logrotate and profile-specific units, refreshes systemd, checks UFW rules without changing them, and asks before enabling/starting V3 units.
 - Legacy units and the backup are retained for manual verification and recovery.
 

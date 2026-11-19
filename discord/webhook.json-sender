@@ -21,9 +21,10 @@ then
 fi
 
 # Not status send
-if [ "$1" != "--status" ]
-then
+if [ "$1" != "--status" ]; then
 	MESSAGEID="$1"
+elif [ -z "${MESSAGEID:-}" ]; then
+	MESSAGEID="${LASTLOGMESSAGEID:-${SERVERCONNECTIONINFOMESSAGEID:-}}"
 fi
 CONTENT="$(</dev/stdin)"
 

@@ -262,6 +262,40 @@ function setup_ui_profile_option() {
   fi
 }
 
+function setup_ui_discord_webhook_state() {
+  if [ -n "${WEBHOOKURL:-}" ] &&
+     [ "${WEBHOOKURL:-}" != 'https://discord.com/api/webhooks/webhookId/webhookToken' ] &&
+     [ "${WEBHOOKID:-}" != 'webhookId' ] &&
+     [ "${WEBHOOKTOKEN:-}" != 'webhookToken' ] &&
+     [ -n "${WEBHOOKID:-}" ] &&
+     [ -n "${WEBHOOKTOKEN:-}" ]; then
+    printf 'configured'
+  else
+    printf 'missing'
+  fi
+}
+
+function setup_ui_discord_cron_state() {
+  local profile="$1"
+  local frequency="${CRONTABWEBHOOKFREQ:-}"
+  local cron
+
+  if [[ "$frequency" =~ ^[0-9]+$ ]] && (( 10#$frequency == 0 )); then
+    printf 'disabled'
+    return 0
+  fi
+  cron="$(crontab -l 2>/dev/null || true)"
+  if printf '%s\n' "$cron" | grep -Fq "# vss-profile:$profile"; then
+    printf 'scheduled'
+  else
+    printf 'missing'
+  fi
+}
+
+function setup_ui_profile_webhook_message_id() {
+  printf '%s' "${STATUSMESSAGEID:-${LASTLOGMESSAGEID:-${SERVERCONNECTIONINFOMESSAGEID:-}}}"
+}
+
 function setup_ui_profile_card() (
   local profile="$1"
   local current_marker=''
@@ -271,6 +305,8 @@ function setup_ui_profile_card() (
   local server_state
   local player_count
   local server_pid
+  local webhook_state
+  local cron_state
 
   if ! vss_validate_server_name "$profile"; then
     printf '  +-- %s --+\n  | Invalid profile name\n  +----------+\n' "$profile"
@@ -316,11 +352,14 @@ function setup_ui_profile_card() (
   else
     player_count='unknown'
   fi
+  webhook_state="$(setup_ui_discord_webhook_state)"
+  cron_state="$(setup_ui_discord_cron_state "$profile")"
 
   printf '  +-- %s%s --+\n' "$profile" "$current_marker"
   printf '  | Server: %s\n' "$server_name"
   printf '  | State: %s | Port: %s | BepInEx: %s | Seed: %s | Players: %s\n' \
     "$server_state" "${VHSERVERPORT:-unknown}" "$bepinex" "$seed" "$player_count"
+  printf '  | Discord webhook: %s | Auto-update: %s\n' "$webhook_state" "$cron_state"
   printf '  +--------------------------------------------------+\n'
 )
 
@@ -425,26 +464,37 @@ function validate_server_profile_ports() {
   local name="$1"
   local game_port="$2"
   local http_port="$3"
+  local http_enabled="${4:-1}"
   local profile
   local configured_game
   local configured_http
   local game_start
-  local http_value
+  local http_value=0
 
-  if ! [[ "$game_port" =~ ^[0-9]+$ ]] || ! [[ "$http_port" =~ ^[0-9]+$ ]]; then
-    printf 'Server profile %s must use numeric game and HTTP ports.\n' "$name" >&2
+  if ! [[ "$game_port" =~ ^[0-9]+$ ]]; then
+    printf 'Server profile %s must use a numeric game port.\n' "$name" >&2
     return 1
   fi
   game_start=$((10#$game_port))
-  http_value=$((10#$http_port))
-  if (( game_start < 1 || game_start > 65533 || http_value < 1 || http_value > 65535 )); then
-    printf 'Server profile %s has a port outside the valid range.\n' "$name" >&2
+  if (( game_start < 1 || game_start > 65533 )); then
+    printf 'Server profile %s has a game port outside the valid range.\n' "$name" >&2
     return 1
   fi
-  if (( http_value >= game_start && http_value <= game_start + 2 )); then
-    printf 'HTTP port %s overlaps the game port range %s-%s for %s.\n' \
-      "$http_value" "$game_start" "$((game_start + 2))" "$name" >&2
-    return 1
+  if [ "$http_enabled" -eq 1 ]; then
+    if ! [[ "$http_port" =~ ^[0-9]+$ ]]; then
+      printf 'Server profile %s must use a numeric HTTP port.\n' "$name" >&2
+      return 1
+    fi
+    http_value=$((10#$http_port))
+    if (( http_value < 1 || http_value > 65535 )); then
+      printf 'Server profile %s has an HTTP port outside the valid range.\n' "$name" >&2
+      return 1
+    fi
+    if (( http_value >= game_start && http_value <= game_start + 2 )); then
+      printf 'HTTP port %s overlaps the game port range %s-%s for %s.\n' \
+        "$http_value" "$game_start" "$((game_start + 2))" "$name" >&2
+      return 1
+    fi
   fi
 
   while IFS= read -r profile; do
@@ -461,13 +511,15 @@ function validate_server_profile_ports() {
         "$configured_game" "$((configured_game + 2))" >&2
       return 1
     fi
-    if (( http_value == configured_http )); then
-      printf 'HTTP port %s is already used by profile %s.\n' "$http_value" "$profile" >&2
-      return 1
-    fi
-    if (( http_value >= configured_game && http_value <= configured_game + 2 )); then
-      printf 'HTTP port %s overlaps the game port range for profile %s.\n' "$http_value" "$profile" >&2
-      return 1
+    if [ "$http_enabled" -eq 1 ]; then
+      if (( http_value == configured_http )); then
+        printf 'HTTP port %s is already used by profile %s.\n' "$http_value" "$profile" >&2
+        return 1
+      fi
+      if (( http_value >= configured_game && http_value <= configured_game + 2 )); then
+        printf 'HTTP port %s overlaps the game port range for profile %s.\n' "$http_value" "$profile" >&2
+        return 1
+      fi
     fi
     if (( configured_http >= game_start && configured_http <= game_start + 2 )); then
       printf 'Game port range %s-%s overlaps the HTTP port for profile %s (%s).\n' \
@@ -510,17 +562,24 @@ function check_ufw_profile_rules() {
   local missing=()
   local game_port
   local http_port
+  local http_enabled="${1:-1}"
 
   if ! [[ "${VHSERVERPORT:-}" =~ ^[0-9]+$ ]] ||
-     ! [[ "${STATUSPORT:-}" =~ ^[0-9]+$ ]]; then
-    echo "Game and HTTP ports must be numeric; UFW rule check skipped." >&2
+     { [ "$http_enabled" -eq 1 ] && ! [[ "${STATUSPORT:-}" =~ ^[0-9]+$ ]]; }; then
+    echo "Game port and active HTTP port must be numeric; UFW rule check skipped." >&2
     return 2
   fi
   game_port=$((10#$VHSERVERPORT))
-  http_port=$((10#$STATUSPORT))
-  if (( game_port < 1 || game_port > 65533 || http_port < 1 || http_port > 65535 )); then
-    echo "Game or HTTP port is outside the valid range; UFW rule check skipped." >&2
+  if (( game_port < 1 || game_port > 65533 )); then
+    echo "Game port is outside the valid range; UFW rule check skipped." >&2
     return 2
+  fi
+  if [ "$http_enabled" -eq 1 ]; then
+    http_port=$((10#$STATUSPORT))
+    if (( http_port < 1 || http_port > 65535 )); then
+      echo "HTTP port is outside the valid range; UFW rule check skipped." >&2
+      return 2
+    fi
   fi
 
   if ! command -v ufw >/dev/null 2>&1; then
@@ -547,7 +606,7 @@ function check_ufw_profile_rules() {
       fi
     done
   done
-  if ! ufw_rule_covers_port "$rules" "$http_port" tcp; then
+  if [ "$http_enabled" -eq 1 ] && ! ufw_rule_covers_port "$rules" "$http_port" tcp; then
     missing+=("$http_port/tcp")
   fi
   if [ "${#missing[@]}" -gt 0 ]; then
@@ -555,8 +614,13 @@ function check_ufw_profile_rules() {
     return 1
   fi
 
-  printf 'UFW ALLOW rules found for %s game ports %s-%s (TCP/UDP) and HTTP port %s/TCP.\n' \
-    "$VSS_SERVER_NAME" "$game_port" "$((game_port + 2))" "$http_port"
+  if [ "$http_enabled" -eq 1 ]; then
+    printf 'UFW ALLOW rules found for %s game ports %s-%s (TCP/UDP) and HTTP port %s/TCP.\n' \
+      "$VSS_SERVER_NAME" "$game_port" "$((game_port + 2))" "$http_port"
+  else
+    printf 'UFW ALLOW rules found for %s game ports %s-%s (TCP/UDP); HTTP status is not installed.\n' \
+      "$VSS_SERVER_NAME" "$game_port" "$((game_port + 2))"
+  fi
 }
 
 function create_server_profile() {
@@ -609,6 +673,7 @@ function create_server_profile() {
 
 function load_server_profile_unchecked() {
   local name="$1"
+  local http_enabled="${2:-}"
   if ! vss_validate_server_name "$name"; then
     echo "Invalid server profile name: '$name'" >&2
     return 1
@@ -625,7 +690,17 @@ function load_server_profile_unchecked() {
   ensure_env_sync "$VSS_ENV_FILE" "$CWD/.env.server.dist" || return 1
   VSS_CONFIG_LOADED=0
   vss_load_config "$CWD" || return 1
-  validate_server_profile_ports "$name" "$VHSERVERPORT" "$STATUSPORT" || return 1
+  if [ -z "$http_enabled" ]; then
+    if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ] ||
+       [ -L "/etc/systemd/system/$VSSHTTPSERVICENAME" ] ||
+       [ -e "$CWD/systemd/$VSSHTTPSERVICENAME" ] ||
+       [ -L "$CWD/systemd/$VSSHTTPSERVICENAME" ]; then
+      http_enabled=1
+    else
+      http_enabled=0
+    fi
+  fi
+  validate_server_profile_ports "$name" "$VHSERVERPORT" "$STATUSPORT" "$http_enabled" || return 1
   if [ ! -f "$VHSERVERLAUNCHERARGS" ]; then
     cp "$CWD/examples/launcher-args" "$VHSERVERLAUNCHERARGS" || return 1
   fi
@@ -633,11 +708,12 @@ function load_server_profile_unchecked() {
 
 function load_server_profile() {
   local requested_name="$1"
+  local http_enabled="${2:-}"
   local previous_name="${VSS_SERVER_NAME:-}"
   local load_status
   VSS_PROFILE_RESTORE_FAILED=0
 
-  if load_server_profile_unchecked "$requested_name"; then
+  if load_server_profile_unchecked "$requested_name" "$http_enabled"; then
     return 0
   else
     load_status=$?
@@ -805,6 +881,8 @@ function setup_ui_unit_state() {
 function setup_ui_dashboard() {
   local server_pid
   local server_state="offline"
+  local webhook_state
+  local cron_state
 
   server_pid="$(vss_find_server_pid || true)"
   if [ -n "$server_pid" ] && ps -p "$server_pid" >/dev/null 2>&1; then
@@ -820,6 +898,9 @@ function setup_ui_dashboard() {
     "$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")" \
     "$(setup_ui_unit_state "${VSSPIPESERVICENAME:-}")" \
     "$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
+  webhook_state="$(setup_ui_discord_webhook_state)"
+  cron_state="$(setup_ui_discord_cron_state "${VSS_SERVER_NAME:-}")"
+  printf 'Discord webhook: %s  |  Automatic update: %s\n' "$webhook_state" "$cron_state"
   printf '%s\n' '------------------------------------------------------------'
 }
 
@@ -835,11 +916,15 @@ if [ -n "$LIVE_VALHEIM_PID" ] && ps -p "$LIVE_VALHEIM_PID" >/dev/null 2>&1; then
 if [ ! -z $(pgrep $(basename $VSSLOGFILTER)) ];then echo -e "VSS log filter $(ColorGreen running)";else echo -e "VSS log filter $(ColorRed stopped) or $(ColorRed 'not piped!')";fi
 if [ "$VHSERVERWORLD" != 'server.world' ];then echo -e "Custom launcher world $(ColorGreen 'is set')";else echo -e "Custom launcher world $(ColorRed 'has default value')";fi
 if [ -e '/etc/logrotate.d/valheim-vss' ];then echo -e "shared logrotate $(ColorGreen set)";else echo -e "shared logrotate $(ColorRed 'not set')";fi
-if [ "$WEBHOOKTOKEN" != 'webhookToken' ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen ready)";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'not ready')";fi
-if [ ! -z "$STATUSMESSAGEID" ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'can update status')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'cannot update status')";fi
+if [ "$(setup_ui_discord_webhook_state)" = 'configured' ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'configured locally')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'not configured')";fi
+if [ -n "$(setup_ui_profile_webhook_message_id)" ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'can update its message')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorRed 'will create its message')";fi
 if [ "$SENDLASTLOGS" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send logs')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send log')";fi
 if [ "$SENDSERVERCONNECTIONINFO" -gt 0 ];then echo -e "$(ColorMagenta 'Discord') webhook $(ColorGreen 'will send connection info')";else echo -e "$(ColorMagenta 'Discord') webhook $(ColorYellow 'will not send connection info')";fi
-if crontab -l 2>/dev/null | grep -Fq "# vss-profile:$VSS_SERVER_NAME";then echo -e "Webhook crontab $(ColorGreen 'is set')";else echo -e "Webhook crontab $(ColorRed 'not set')";fi
+case "$(setup_ui_discord_cron_state "$VSS_SERVER_NAME")" in
+  scheduled) echo -e "Webhook crontab $(ColorGreen 'is scheduled')" ;;
+  disabled) echo -e "Webhook crontab $(ColorYellow 'is disabled')" ;;
+  *) echo -e "Webhook crontab $(ColorRed 'is missing')" ;;
+esac
 if [ -e "/etc/systemd/system/$VHSERVERSERVICENAME" ];then echo -e "$VHSERVERSERVICENAME (valheim server) is $(ColorGreen 'present') in system";else echo -e  "$VHSERVERSERVICENAME (valheim server) is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSSHTTPSERVICENAME" ];then echo -e "$VSSHTTPSERVICENAME (vss over http) is $(ColorGreen 'present') in system";else echo -e  "$VSSHTTPSERVICENAME (vss over http) is $(ColorRed 'missing') in system";fi
 if [ -e "/etc/systemd/system/$VSSPIPESERVICENAME" ];then echo -e "$VSSPIPESERVICENAME is $(ColorGreen 'present') in system (captures BepInEx or externally redirected logs)";else echo -e  "$VSSPIPESERVICENAME is $(ColorRed 'missing') in system (installed automatically for BepInEx or external logs)";fi
@@ -1274,6 +1359,9 @@ function render_service() {
 # Setup service with profile-specific conf values.
 function set_service(){
 	local SERVICENAME="$1"
+	if [ "$SERVICENAME" = "$VSSHTTPSERVICENAME" ]; then
+		validate_server_profile_ports "$VSS_SERVER_NAME" "$VHSERVERPORT" "$STATUSPORT" 1 || return 1
+	fi
 	render_service "$SERVICENAME" || return 1
 	# copying to system
 	if ! sudo ln -sfn "$CWD/systemd/$SERVICENAME" "/etc/systemd/system/$SERVICENAME"; then
@@ -1743,29 +1831,27 @@ function discord_menu() {
   while true; do
     setup_menu_render 'Discord and webhook' "$notice"
     notice=''
-    printf 'One Discord webhook URL is shared by all profiles; only message IDs differ.\n\n'
+    printf 'One Discord webhook URL is shared by all profiles; each profile uses one message for status, connection details, and optional logs.\n\n'
     setup_ui_menu_option "$selected" 1 'Set shared webhook URL'
     setup_ui_menu_option "$selected" 2 'Set shared number of recent logs'
     setup_ui_menu_option "$selected" 3 'Send an update for this profile now'
-    setup_ui_menu_option "$selected" 4 'Set this profile status message ID'
-    setup_ui_menu_option "$selected" 5 'Set this profile recent-logs message ID'
-    setup_ui_menu_option "$selected" 6 'Set this profile connection-info message ID'
-    setup_ui_menu_option "$selected" 7 'Toggle shared connection-info updates'
-    setup_ui_menu_option "$selected" 8 'Toggle shared real-time event updates'
-    setup_ui_menu_option "$selected" 9 'Set shared webhook language (en/fr)'
-    setup_ui_menu_option "$selected" 10 'Set shared automatic update frequency (minutes; 0 disables)'
-    setup_ui_menu_option "$selected" 11 'Disable automatic updates for every profile'
+    setup_ui_menu_option "$selected" 4 'Set this profile webhook message ID'
+    setup_ui_menu_option "$selected" 5 'Include connection details in status message (shared)'
+    setup_ui_menu_option "$selected" 6 'Toggle shared real-time event updates'
+    setup_ui_menu_option "$selected" 7 'Set shared webhook language (en/fr)'
+    setup_ui_menu_option "$selected" 8 'Set shared automatic update frequency (minutes; 0 disables)'
+    setup_ui_menu_option "$selected" 9 'Disable automatic updates for every profile'
     printf '\n'
     setup_ui_menu_option "$selected" 0 'Return'
     printf '\n'
     printf 'Select an action: '
-    setup_ui_read_menu_choice 11 "$selected" || return 0
+    setup_ui_read_menu_choice 9 "$selected" || return 0
     choice="$SETUP_UI_CHOICE"
     if [ "$choice" = '__redraw__' ]; then
       selected="$SETUP_UI_SELECTED_CHOICE"
       continue
     fi
-    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 11 )) && selected="$choice"
+    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 9 )) && selected="$choice"
     case "$choice" in
       1)
         if setup_value_prompt 'Shared Discord webhook URL (hidden)' WEBHOOKURL; then
@@ -1789,48 +1875,34 @@ function discord_menu() {
         fi
         ;;
       4)
-        if setup_value_prompt 'Status message ID for this profile' STATUSMESSAGEID; then
-          notice='Status message ID updated.'
+        if setup_value_prompt 'Webhook message ID for this profile (status, connection, and logs)' STATUSMESSAGEID; then
+          notice='Webhook message ID updated.'
         else
-          notice='Status message ID was not changed.'
+          notice='Webhook message ID was not changed.'
         fi
         ;;
       5)
-        if setup_value_prompt 'Recent-logs message ID for this profile' LASTLOGMESSAGEID; then
-          notice='Recent-logs message ID updated.'
+        if setup_value_prompt 'Include connection details in each profile status message? (1=yes, 0=no)' SENDSERVERCONNECTIONINFO; then
+          notice='Shared status-message connection details setting updated.'
         else
-          notice='Recent-logs message ID was not changed.'
+          notice='Status-message connection details setting was not changed.'
         fi
         ;;
       6)
-        if setup_value_prompt 'Connection-info message ID for this profile' SERVERCONNECTIONINFOMESSAGEID; then
-          notice='Connection-info message ID updated.'
-        else
-          notice='Connection-info message ID was not changed.'
-        fi
-        ;;
-      7)
-        if setup_value_prompt 'Send connection-info messages? (1=yes, 0=no)' SENDSERVERCONNECTIONINFO; then
-          notice='Shared connection-info setting updated.'
-        else
-          notice='Connection-info setting was not changed.'
-        fi
-        ;;
-      8)
         if setup_value_prompt 'Send real-time event updates? (1=yes, 0=no)' EVENTREALTIME; then
           notice='Shared real-time update setting changed; restart running log filters to apply it.'
         else
           notice='Real-time update setting was not changed.'
         fi
         ;;
-      9)
+      7)
         if setup_value_prompt 'Shared webhook language (en or fr)' VSS_LANG; then
           notice='Shared webhook language updated.'
         else
           notice='Webhook language was not changed.'
         fi
         ;;
-      10)
+      8)
         if setup_value_prompt 'Shared automatic update frequency in minutes (0 disables)' CRONTABWEBHOOKFREQ &&
            set_cron; then
           notice='Automatic update jobs refreshed for all profiles.'
@@ -1838,7 +1910,7 @@ function discord_menu() {
           notice='Could not update automatic Discord jobs; review the error above.'
         fi
         ;;
-      11)
+      9)
         if replace_env_value CRONTABWEBHOOKFREQ 0 && set_cron; then
           notice='Automatic Discord jobs disabled for all profiles.'
         else

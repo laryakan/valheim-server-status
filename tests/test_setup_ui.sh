@@ -7,6 +7,16 @@ trap 'rm -rf "$TMPDIR_UI"' EXIT
 
 source "$ROOT/setup" >/dev/null
 
+WEBHOOKURL='https://discord.com/api/webhooks/123456789/fake-token'
+WEBHOOKID='123456789'
+WEBHOOKTOKEN='fake-token'
+CRONTABWEBHOOKFREQ=5
+MOCK_UI_CRONTAB=$'# vss-profile:OverviewA\n'
+crontab() {
+  [ "${1:-}" = '-l' ] || return 2
+  printf '%s' "$MOCK_UI_CRONTAB"
+}
+
 VSS_SERVER_NAME='UiWorld'
 VHSERVERWORLD='UiWorld'
 VHSERVERPORT=2456
@@ -21,6 +31,7 @@ for expected in \
   'World: UiWorld  |  Valheim: offline' \
   'Ports: game 2456  |  HTTP 8181' \
   'Discord and webhook' \
+  'Discord webhook: configured  |  Automatic update: missing' \
   'Switch server profile' \
   'Select an action:' \
   'Unknown option: invalid' \
@@ -73,6 +84,7 @@ for expected in \
   'BepInEx: on' \
   'Seed: SeedA' \
   'Players: 1 connected' \
+  'Discord webhook: configured | Auto-update: scheduled' \
   'OverviewB' \
   'State: offline | Port: 2460' \
   'BepInEx: off' \
@@ -83,6 +95,19 @@ for expected in \
     exit 1
   fi
 done
+CRONTABWEBHOOKFREQ=0
+if [ "$(setup_ui_discord_cron_state OverviewA)" != 'disabled' ]; then
+  echo "FAIL: disabled Discord cron frequency was not reflected in the profile state" >&2
+  exit 1
+fi
+CRONTABWEBHOOKFREQ=5
+WEBHOOKURL='https://discord.com/api/webhooks/webhookId/webhookToken'
+WEBHOOKID='webhookId'
+WEBHOOKTOKEN='webhookToken'
+if [ "$(setup_ui_discord_webhook_state)" != 'missing' ]; then
+  echo "FAIL: placeholder Discord webhook configuration was reported as configured" >&2
+  exit 1
+fi
 vss_find_server_pid() { return 1; }
 
 cat > "$TMPDIR_UI/keyboard-choice.sh" <<EOF
@@ -147,7 +172,8 @@ if [[ "$http_output" != *'HTTP status endpoint'* ||
 fi
 discord_output="$(printf '0\n' | NO_COLOR=1 discord_menu)"
 if [[ "$discord_output" != *'One Discord webhook URL is shared by all profiles'* ||
-      "$discord_output" != *'only message IDs differ'* ]]; then
+      "$discord_output" != *'one message for status, connection details, and optional logs'* ||
+      "$discord_output" != *'Set this profile webhook message ID'* ]]; then
   echo "FAIL: Discord menu does not explain shared webhook behavior" >&2
   exit 1
 fi

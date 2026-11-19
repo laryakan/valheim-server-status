@@ -44,6 +44,14 @@ if ! validate_server_profile_ports Beta 2460 8182; then
   echo "FAIL: non-overlapping ports were rejected" >&2
   exit 1
 fi
+if ! validate_server_profile_ports Beta 2460 invalid 0; then
+  echo "FAIL: an unused HTTP port was validated" >&2
+  exit 1
+fi
+if validate_server_profile_ports Beta 2460 invalid 1 >/dev/null 2>&1; then
+  echo "FAIL: an active HTTP port accepted a non-numeric value" >&2
+  exit 1
+fi
 
 VSS_SERVER_NAME=Beta
 VSS_ENV_FILE="$CWD/.env.Beta"
@@ -89,6 +97,15 @@ if check_ufw_profile_rules > "$TMPDIR_PORTS/ufw-inactive.out" 2>&1; then
 fi
 if ! grep -Fq 'UFW is inactive' "$TMPDIR_PORTS/ufw-inactive.out"; then
   echo "FAIL: inactive UFW warning was not reported" >&2
+  exit 1
+fi
+
+VHSERVERPORT=2460
+STATUSPORT=invalid
+MOCK_UFW_STATUS=$'Status: active\n\nTo                         Action      From\n--                         ------      ----\n2460:2462/tcp              ALLOW IN    Anywhere\n2460:2462/udp              ALLOW IN    Anywhere\n'
+if ! check_ufw_profile_rules 0 > "$TMPDIR_PORTS/ufw-no-http.out" 2>&1 ||
+   ! grep -Fq 'HTTP status is not installed' "$TMPDIR_PORTS/ufw-no-http.out"; then
+  echo "FAIL: disabled HTTP port prevented the UFW game-port check" >&2
   exit 1
 fi
 

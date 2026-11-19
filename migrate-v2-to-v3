@@ -10,6 +10,7 @@ source "$CWD/setup"
 function migrate_legacy_config() {
   local legacy_file="$CWD/.env"
   local profile_name="${VHSERVERWORLD:-}"
+  local http_status_enabled=0
   local target_file
   local target_args
   local old_connected
@@ -285,12 +286,20 @@ function check_state_targets() {
     echo "CRONTABWEBHOOKFREQ in the legacy .env must be an integer." >&2
     return 1
   fi
-  if ! validate_env_integer VHSERVERPORT "${VHSERVERPORT:-}" ||
-     ! validate_env_integer STATUSPORT "${STATUSPORT:-}"; then
-    echo "VHSERVERPORT and STATUSPORT in the legacy .env must be integers." >&2
+  if [ -e "$SYSTEMD_DIR/vss.http.service" ] || [ -L "$SYSTEMD_DIR/vss.http.service" ]; then
+    http_status_enabled=1
+  fi
+  if ! validate_env_integer VHSERVERPORT "${VHSERVERPORT:-}"; then
+    echo "VHSERVERPORT in the legacy .env must be an integer." >&2
     return 1
   fi
-  validate_server_profile_ports "$profile_name" "$VHSERVERPORT" "$STATUSPORT" || return 1
+  if [ "$http_status_enabled" -eq 1 ] &&
+     ! validate_env_integer STATUSPORT "${STATUSPORT:-}"; then
+    echo "STATUSPORT in the legacy .env must be an integer when vss.http.service exists." >&2
+    return 1
+  fi
+  validate_server_profile_ports "$profile_name" "$VHSERVERPORT" "${STATUSPORT:-}" "$http_status_enabled" || return 1
+  MIGRATION_HTTP_STATUS_ENABLED="$http_status_enabled"
 
   for index in "${!suffixes[@]}"; do
     old_path="${old_paths[$index]}"
@@ -326,6 +335,7 @@ function migrate_v2_to_v3() {
   local profile_name
   local legacy_update
   local confirmation
+  local http_status_enabled
 
   if [ ! -f "$CWD/.env" ]; then
     echo "No legacy .env found; this installation does not need V2-to-V3 migration." >&2
@@ -382,7 +392,8 @@ function migrate_v2_to_v3() {
     migration_error "${MIGRATION_ERROR:-could not migrate the legacy files.}"
     return 1
   }
-  load_server_profile "$profile_name" || {
+  http_status_enabled="${MIGRATION_HTTP_STATUS_ENABLED:-1}"
+  load_server_profile "$profile_name" "$http_status_enabled" || {
     migration_error "the migrated profile could not be loaded."
     return 1
   }
@@ -405,7 +416,7 @@ function migrate_v2_to_v3() {
     return 1
   }
 
-  if ! check_ufw_profile_rules; then
+  if ! check_ufw_profile_rules "$http_status_enabled"; then
     printf 'Firewall check did not pass; migration continues without changing UFW rules.\n' >&2
   fi
 

@@ -19,7 +19,7 @@ VSS is a lightweight Bash-based monitoring and status tool for Valheim dedicated
 
 Each server is identified by its Valheim world name (`VHSERVERWORLD`) and has a configuration file named `.env.<world-name>`. The root `.env` stores shared installation settings; `.env.server.dist` is the template used to create profiles, and `.env.common.dist` is its shared-settings template. `./setup` creates the shared `.env` on first profile load and synchronizes newly added template keys without overwriting existing values. `VSSDIR` is the shared installation root, derived from the location of `.env`.
 
-Server paths (`VHSERVERDIR`, `VHSERVERSAVEDIR`), service user, shared log directory, VSS tools, public IP, webhook URL, and Discord send/cron options belong to the common `.env`. Per-profile Discord message IDs are limited to `STATUSMESSAGEID`, `LASTLOGMESSAGEID`, and `SERVERCONNECTIONINFOMESSAGEID`.
+Server paths (`VHSERVERDIR`, `VHSERVERSAVEDIR`), service user, shared log directory, VSS tools, public IP, webhook URL, and Discord send/cron options belong to the common `.env`. Each profile uses one webhook message ID, `STATUSMESSAGEID`, for status, connection details, and optional recent logs. Existing profiles may still contain `LASTLOGMESSAGEID` or `SERVERCONNECTIONINFOMESSAGEID`; if `STATUSMESSAGEID` is empty, the updater reuses one of those older IDs rather than creating a second message.
 
 Start the setup interface:
 
@@ -71,7 +71,7 @@ Scheduling adds one idempotent entry to root's crontab for daily 05:00 system-lo
 
 Setup also rejects overlapping Valheim port ranges and HTTP ports across profiles. HTTP ports must not overlap any profile's Valheim range.
 
-The profile selector and **Switch server profile** menu show a compact overview card for every profile, including its server display name, online/offline state, game port, BepInEx setting, informational seed, and connected-player count when state is available. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. The selected profile is marked. Menus are grouped by configuration, monitoring, and maintenance; in a terminal, use the up/down arrows and Enter to navigate. The currently selected action is highlighted, and typing its existing number remains available as a shortcut. The profile picker also accepts a profile number or name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
+The profile selector and **Switch server profile** menu show a compact overview card for every profile, including its server display name, online/offline state, game port, BepInEx setting, informational seed, connected-player count when state is available, shared Discord webhook configuration, and whether that profile's automatic update job is scheduled, missing, or disabled. Webhook status means the URL is configured locally; it does not test Discord connectivity. Player counts come from VSS's parsed log state, not a live game query, so they can be stale if log processing has stopped. The selected profile is marked. The main menu shows the same Discord indicators for the currently selected profile. Menus are grouped by configuration, monitoring, and maintenance; in a terminal, use the up/down arrows and Enter to navigate. The currently selected action is highlighted, and typing its existing number remains available as a shortcut. The profile picker also accepts a profile number or name, `n` to create one, or `q` to quit. It uses only Bash and standard terminal output (no additional TUI package). Colors are disabled with `NO_COLOR`, and the screen is only cleared in an interactive terminal.
 
 World names used as profile IDs must start with a letter or number, contain only letters, numbers, dots, underscores, and hyphens, must not contain `..`, and must be unique. Profile/world IDs cannot currently be renamed in setup. Valheim saves are stored in the shared `savedir` and distinguished by world name. The game's `adminlist.txt`, `bannedlist.txt`, and `permittedlist.txt` files are shared by all profiles.
 
@@ -106,7 +106,7 @@ The script requires the legacy `.env`, a valid `VHSERVERWORLD`, and an existing 
 2. Splits the old `.env` into the shared root `.env` and `.env.<world-name>`, and renames launcher arguments and VSS state files to profile-specific names. It backs up all four configured legacy state files, including files outside `data/`, and aborts rather than overwriting existing profile/state targets.
 3. Removes cron lines containing the legacy `WEBHOOKUPDATE` path, preserves unrelated cron entries, and installs the profile-tagged V3 Discord update if its configured frequency is positive.
 4. Installs the shared V3 logrotate configuration and removes the old `/etc/logrotate.d/valheim` rule after backing it up.
-5. Installs the V3 server unit and corresponding pipe/HTTP units when those V2 units existed. Legacy unit files are retained but left stopped and disabled.
+5. Installs the V3 server unit and corresponding pipe/HTTP units when those V2 units existed. Legacy unit files are retained but left stopped and disabled. `STATUSPORT` is validated only when the legacy `vss.http.service` unit exists; otherwise HTTP port validation and its UFW rule check are skipped. The unused value is preserved; set a valid port before installing HTTP later.
 6. Checks UFW rules for the migrated profile without changing them; missing rules or an unavailable/inactive UFW are warnings and do not stop migration.
 7. Asks for `START` before enabling and starting the V3 units. If declined, the new units remain installed but stopped and disabled.
 
@@ -143,15 +143,15 @@ For an external server not launched by VSS, you can instead configure its existi
 
 ## Discord
 
-All profiles use one shared Discord webhook URL and shared send options; separate webhook URLs per profile are not supported. Message IDs remain profile-specific. To create the initial status messages, select each profile in `./setup` and choose **Send an update for this profile now**, or run:
+All profiles use one shared Discord webhook URL and shared send options; separate webhook URLs per profile are not supported. Each profile has one message containing its server identity and status, optional connection details, and optional recent logs. To create the initial message, select each profile in `./setup` and choose **Send an update for this profile now**, or run:
 
 ```bash
 VSS_SERVER_NAME=MyWorld ./discord/update
 ```
 
-Cron jobs for Discord updates are generated per profile, but their frequency and webhook URL are shared. Updating the shared cron frequency refreshes all configured profile jobs; removing one profile removes only its job. The webhook URL and options live in the root `.env`; only the three message IDs listed above live in each `.env.<world-name>`.
+Cron jobs for Discord updates are generated per profile, but their frequency and webhook URL are shared. Updating the shared cron frequency refreshes all configured profile jobs; removing one profile removes only its job. The webhook URL and options live in the root `.env`; `STATUSMESSAGEID` lives in each `.env.<world-name>`.
 
-The update order is connection information, server status, then recent logs. Set the shared `CRONTABWEBHOOKFREQ` to a positive number of minutes to enable updates for all profiles; set it to `0` to disable all profile update jobs.
+Set the shared `SENDSERVERCONNECTIONINFO` to `1` to include connection details in the profile status message. Set `SENDLASTLOGS` to a positive number to include that many recent log lines in the same message. Set the shared `CRONTABWEBHOOKFREQ` to a positive number of minutes to enable updates for all profiles; set it to `0` to disable all profile update jobs. Older separate connection/log messages are not deleted automatically; remove those manually after confirming the combined message works.
 
 For modded servers, set `VSSBEPINEXENABLED=1` and put the profile's R2Modman/Thunderstore UUID share code (for example `01a1eaf3-9be3-9083-b9b4-26768368368e`) in `R2MODMANCODE` in that world's `.env`. The code is shown in Discord and the server status output (including the HTTP status endpoint), including while the server is offline. It is omitted when BepInEx is disabled or no code is configured. VSS does not generate or synchronize the mod profile; maintain the share code from the mod manager.
 
@@ -175,8 +175,8 @@ This project has no staging server, and the BepInEx runtime test uses a stub ser
 
 1. Create a webhook in the desired Discord channel and copy its URL.
 2. Run `./setup <world-name>` and configure the shared webhook URL in the Discord menu.
-3. Force an update once to create the connection, status, and logs messages.
-4. Copy the message IDs into that profile if you want VSS to update those messages instead of creating new ones.
+3. Force an update once to create the combined profile message.
+4. Copy that message's ID into `STATUSMESSAGEID` if you want VSS to update it instead of creating a new one.
 
 If a message is deleted, VSS can create a replacement and reports the event in `crash.log`. `setup` itself does not redirect its diagnostics to `crash.log`; setup errors are shown in the terminal.
 
