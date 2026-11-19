@@ -46,9 +46,11 @@ if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webh
 fi
 if ! grep -Fq 'R2Modman code' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '01a1eaf3-9be3-9083-b9b4-26768368368e' "$TMPDIR_STATUS/webhook-enabled.out" ||
-   ! grep -Fq '"name":"Server name","value":"StatusTest"' "$TMPDIR_STATUS/webhook-enabled.out" ||
+   ! grep -Fq '"title":"DisplayWorld","color":15158332' "$TMPDIR_STATUS/webhook-enabled.out" ||
+   grep -Fq '"name":"Server name"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '203.0.113.1:2456' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq 'test-password' "$TMPDIR_STATUS/webhook-enabled.out" ||
+   ! grep -Fq '"inline":false' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '"title":"Last Logs"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq 'second \"quoted\" log line' "$TMPDIR_STATUS/webhook-enabled.out"; then
   echo "FAIL: enabled BepInEx status did not include the R2Modman code" >&2
@@ -61,7 +63,8 @@ if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webh
   echo "FAIL: status webhook output failed with optional details disabled" >&2
   exit 1
 fi
-if ! grep -Fq '"name":"Server name","value":"StatusTest"' "$TMPDIR_STATUS/webhook-minimal.out" ||
+if ! grep -Fq '"title":"DisplayWorld","color":15158332' "$TMPDIR_STATUS/webhook-minimal.out" ||
+   grep -Fq '"name":"Server name"' "$TMPDIR_STATUS/webhook-minimal.out" ||
    grep -Fq '"name":"IP"' "$TMPDIR_STATUS/webhook-minimal.out" ||
    grep -Fq '"title":"Last Logs"' "$TMPDIR_STATUS/webhook-minimal.out"; then
   echo "FAIL: optional details were not gated or server identity was missing" >&2
