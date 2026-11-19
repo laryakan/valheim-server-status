@@ -102,6 +102,61 @@ vss_bepinex_link_files() {
   done < <(find "$profile_dir" -type l -print0)
 }
 
+vss_bepinex_link_doorstop_file() {
+  local source_file="$1"
+  local destination="$2"
+  local link_target="$3"
+  local existing_target
+
+  [[ -f "$source_file" ]] || {
+    printf 'Doorstop library not found: %s\n' "$source_file" >&2
+    return 1
+  }
+
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    if [[ -L "$destination" ]]; then
+      existing_target="$(readlink -- "$destination")" || return 1
+      [[ "$existing_target" == "$link_target" ]] && return 0
+      case "$existing_target" in
+        "$VSSDIR"/bepinex/*/libdoorstop.so|"$VSSDIR"/bepinex/*/doorstop_libs/libdoorstop.so)
+          rm -- "$destination" || return 1
+          ;;
+        *)
+          printf 'Refusing to replace non-VSS Doorstop library: %s\n' "$destination" >&2
+          return 1
+          ;;
+      esac
+    else
+      printf 'Refusing to replace non-symbolic Doorstop library: %s\n' "$destination" >&2
+      return 1
+    fi
+  fi
+
+  ln -s -- "$link_target" "$destination" || return 1
+}
+
+vss_bepinex_remove_legacy_doorstop_link() {
+  local profile_root="$1"
+  local legacy_dir="$profile_root/doorstop_libs"
+  local legacy_file="$legacy_dir/libdoorstop.so"
+  local link_target
+
+  [[ -d "$legacy_dir" && ! -L "$legacy_dir" ]] || return 0
+
+  if [[ -L "$legacy_file" ]]; then
+    link_target="$(readlink -- "$legacy_file")" || return 1
+    case "$link_target" in
+      "$VSSDIR"/bepinex/*/doorstop_libs/libdoorstop.so)
+        rm -- "$legacy_file" || return 1
+        ;;
+    esac
+  fi
+
+  if [[ -z "$(find "$legacy_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    rmdir -- "$legacy_dir" || return 1
+  fi
+}
+
 vss_bepinex_prepare_profile() {
   local profile_root="$1"
   local image_root="$2"
@@ -110,6 +165,8 @@ vss_bepinex_prepare_profile() {
   local expected_cfg="$VSSDIR/bepinex/current/BepInEx/config/BepInEx.cfg"
   local profile_cfg="$profile_bepinex/config/BepInEx.cfg"
   local profile_marker="$profile_root/.vss-bepinex-profile"
+  local image_doorstop_library
+  local current_doorstop_library
   local path
 
   if [[ -L "$profile_marker" || ( -e "$profile_marker" && ! -f "$profile_marker" ) ]]; then
@@ -125,10 +182,16 @@ vss_bepinex_prepare_profile() {
     printf 'BepInEx preloader not found in image: %s\n' "$image_root" >&2
     return 1
   }
-  [[ -f "$image_root/doorstop_libs/libdoorstop.so" ]] || {
+  if [[ -f "$image_root/libdoorstop.so" ]]; then
+    image_doorstop_library="$image_root/libdoorstop.so"
+    current_doorstop_library="$VSSDIR/bepinex/current/libdoorstop.so"
+  elif [[ -f "$image_root/doorstop_libs/libdoorstop.so" ]]; then
+    image_doorstop_library="$image_root/doorstop_libs/libdoorstop.so"
+    current_doorstop_library="$VSSDIR/bepinex/current/doorstop_libs/libdoorstop.so"
+  else
     printf 'Doorstop library not found in image: %s\n' "$image_root" >&2
     return 1
-  }
+  fi
 
   for path in \
     "$profile_root" \
@@ -137,8 +200,7 @@ vss_bepinex_prepare_profile() {
     "$profile_bepinex/config" \
     "$profile_bepinex/plugins" \
     "$profile_bepinex/patchers" \
-    "$profile_bepinex/cache" \
-    "$profile_root/doorstop_libs"; do
+    "$profile_bepinex/cache"; do
     if [[ -L "$path" ]]; then
       printf 'BepInEx profile directories must not be symbolic links: %s\n' "$path" >&2
       return 1
@@ -154,8 +216,7 @@ vss_bepinex_prepare_profile() {
     "$profile_bepinex/config" \
     "$profile_bepinex/plugins" \
     "$profile_bepinex/patchers" \
-    "$profile_bepinex/cache" \
-    "$profile_root/doorstop_libs" || return 1
+    "$profile_bepinex/cache" || return 1
 
   if [[ ! -f "$profile_marker" ]]; then
     if [[ -n "$legacy_image_root" && -d "$legacy_image_root" ]]; then
@@ -167,10 +228,11 @@ vss_bepinex_prepare_profile() {
     "$image_root/BepInEx/core" \
     "$profile_bepinex/core" \
     "$VSSDIR/bepinex/current/BepInEx/core" || return 1
-  vss_bepinex_link_files \
-    "$image_root/doorstop_libs" \
-    "$profile_root/doorstop_libs" \
-    "$VSSDIR/bepinex/current/doorstop_libs" || return 1
+  vss_bepinex_link_doorstop_file \
+    "$image_doorstop_library" \
+    "$profile_root/libdoorstop.so" \
+    "$current_doorstop_library" || return 1
+  vss_bepinex_remove_legacy_doorstop_link "$profile_root" || return 1
 
   if [[ -e "$profile_cfg" || -L "$profile_cfg" ]]; then
     if [[ ! -L "$profile_cfg" || "$(readlink -- "$profile_cfg")" != "$expected_cfg" ]]; then
@@ -207,16 +269,25 @@ vss_bepinex_remove_doorstop_preload() {
 
 vss_bepinex_remove_library_paths() {
   local library_path_entry
+  local profile_path_suffix
   local remaining_library_paths=''
-  local profile_doorstop_dir="${VSSBEPINEXDIR%/}/doorstop_libs"
+  local profile_doorstop_dir="${VSSBEPINEXDIR%/}"
   local -a library_path_entries=()
 
   IFS=':' read -r -a library_path_entries <<< "${LD_LIBRARY_PATH:-}"
   for library_path_entry in "${library_path_entries[@]}"; do
     [[ -n "$library_path_entry" ]] || continue
     if [[ "$library_path_entry" == "$profile_doorstop_dir" ||
+          "$library_path_entry" == "$profile_doorstop_dir/" ||
+          "$library_path_entry" == "$VSSDIR"/bepinex/current ||
+          "$library_path_entry" == "$VSSDIR"/bepinex/current/ ||
           "$library_path_entry" == "$VSSDIR"/bepinex/*/doorstop_libs ]]; then
       continue
+    fi
+    if [[ "$library_path_entry" == "$VSSDIR"/bepinex/profiles/* ]]; then
+      profile_path_suffix="${library_path_entry#"$VSSDIR"/bepinex/profiles/}"
+      profile_path_suffix="${profile_path_suffix%/}"
+      [[ "$profile_path_suffix" != */* ]] && continue
     fi
     remaining_library_paths="${remaining_library_paths:+$remaining_library_paths:}$library_path_entry"
   done
@@ -230,7 +301,8 @@ vss_bepinex_remove_library_paths() {
 
 vss_bepinex_configure_runtime() {
   local preloader="$VSSBEPINEXDIR/BepInEx/core/BepInEx.Preloader.dll"
-  local doorstop_dir="$VSSBEPINEXDIR/doorstop_libs"
+  local doorstop_dir="${VSSBEPINEXDIR%/}"
+  local doorstop_library="$doorstop_dir/libdoorstop.so"
 
   vss_bepinex_remove_library_paths
   if [[ "${VSSBEPINEXENABLED:-0}" == "1" ]]; then
@@ -239,9 +311,9 @@ vss_bepinex_configure_runtime() {
         "${VSS_SERVER_NAME:-unknown}" "$preloader" >&2
       return 1
     }
-    [[ -f "$doorstop_dir/libdoorstop.so" ]] || {
+    [[ -f "$doorstop_library" ]] || {
       printf 'BepInEx is enabled for %s but its profile Doorstop library is missing. Run setup to install it: %s\n' \
-        "${VSS_SERVER_NAME:-unknown}" "$doorstop_dir/libdoorstop.so" >&2
+        "${VSS_SERVER_NAME:-unknown}" "$doorstop_library" >&2
       return 1
     }
 
@@ -250,7 +322,7 @@ vss_bepinex_configure_runtime() {
     export DOORSTOP_ENABLED=1
     export DOORSTOP_TARGET_ASSEMBLY="$preloader"
     export LD_LIBRARY_PATH="$doorstop_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    export LD_PRELOAD="$doorstop_dir/libdoorstop.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    export LD_PRELOAD="$doorstop_library${LD_PRELOAD:+:$LD_PRELOAD}"
   else
     unset DOORSTOP_ENABLED DOORSTOP_TARGET_ASSEMBLY DOORSTOP_INVOKE_DLL_PATH DOORSTOP_MANAGED_FOLDER_DIR
     vss_bepinex_remove_doorstop_preload

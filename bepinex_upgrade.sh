@@ -38,11 +38,26 @@ BEPINEX_REAL_DIR="$(cd -- "$BEPINEX_DIR" && pwd -P)" || fail "Could not resolve 
 OLD_TARGET=''
 OLD_LINK_TARGET=''
 if [[ -L "$CURRENT_LINK" ]]; then
-    OLD_TARGET="$(readlink -f -- "$CURRENT_LINK")" || fail "Current BepInEx link is broken: $CURRENT_LINK"
     OLD_LINK_TARGET="$(readlink -- "$CURRENT_LINK")" || fail "Could not read current BepInEx link: $CURRENT_LINK"
-    [[ -d "$OLD_TARGET" ]] || fail "Current BepInEx target is not a directory: $OLD_TARGET"
-    [[ "$(dirname -- "$OLD_TARGET")" == "$BEPINEX_REAL_DIR" ]] ||
-        fail "Current BepInEx target is outside $BEPINEX_DIR; refusing to remove it"
+    if [[ -e "$CURRENT_LINK" ]]; then
+        OLD_TARGET="$(readlink -f -- "$CURRENT_LINK")" || fail "Could not resolve current BepInEx link: $CURRENT_LINK"
+        [[ -d "$OLD_TARGET" ]] || fail "Current BepInEx target is not a directory: $OLD_TARGET"
+        [[ "$(dirname -- "$OLD_TARGET")" == "$BEPINEX_REAL_DIR" ]] ||
+            fail "Current BepInEx target is outside $BEPINEX_DIR; refusing to remove it"
+    else
+        broken_target_name="$OLD_LINK_TARGET"
+        case "$broken_target_name" in
+            "$BEPINEX_REAL_DIR"/*)
+                broken_target_name="${broken_target_name#"$BEPINEX_REAL_DIR"/}"
+                ;;
+        esac
+        broken_target_name="${broken_target_name%/}"
+        [[ "$broken_target_name" =~ ^BepInEx_linux_x64_[A-Za-z0-9._-]+$ ]] ||
+            fail "Current BepInEx link is broken and does not point to a managed package: $CURRENT_LINK"
+        printf 'Warning: replacing broken BepInEx link to %s with the downloaded image.\n' \
+            "$OLD_LINK_TARGET" >&2
+        OLD_LINK_TARGET=''
+    fi
 fi
 
 prepare_enabled_profile() (
@@ -136,7 +151,8 @@ if [[ -e "$INSTALL_DIR" || -L "$INSTALL_DIR" ]]; then
     [[ -d "$INSTALL_DIR" && ! -L "$INSTALL_DIR" ]] || fail "Existing package path is not a regular directory: $INSTALL_DIR"
     [[ -f "$INSTALL_DIR/BepInEx/config/BepInEx.cfg" ]] || fail "Existing package is incomplete: $INSTALL_DIR"
     [[ -f "$INSTALL_DIR/BepInEx/core/BepInEx.Preloader.dll" ]] || fail "Existing package is incomplete: $INSTALL_DIR"
-    [[ -f "$INSTALL_DIR/doorstop_libs/libdoorstop.so" ]] || fail "Existing package is incomplete: $INSTALL_DIR"
+    [[ -f "$INSTALL_DIR/libdoorstop.so" || -f "$INSTALL_DIR/doorstop_libs/libdoorstop.so" ]] ||
+        fail "Existing package is incomplete: $INSTALL_DIR"
 else
     mkdir "$WORK_DIR/package" || fail "Could not create a package staging directory"
     if ! unzip -q "$ARCHIVE" -d "$WORK_DIR/package"; then
@@ -167,7 +183,8 @@ CONFIG
     fi
     [[ -f "$CONFIG_FILE" ]] || fail "Archive has no regular BepInEx/config/BepInEx.cfg"
     [[ -f "$WORK_DIR/package/BepInEx/core/BepInEx.Preloader.dll" ]] || fail "Archive has no BepInEx/core/BepInEx.Preloader.dll"
-    [[ -f "$WORK_DIR/package/doorstop_libs/libdoorstop.so" ]] || fail "Archive has no doorstop_libs/libdoorstop.so"
+    [[ -f "$WORK_DIR/package/libdoorstop.so" || -f "$WORK_DIR/package/doorstop_libs/libdoorstop.so" ]] ||
+        fail "Archive has no root-level libdoorstop.so"
     if ! mv -- "$WORK_DIR/package" "$INSTALL_DIR"; then
         fail "Could not install package into $INSTALL_DIR"
     fi

@@ -10,9 +10,9 @@ source "$ROOT/lib/bepinex.sh"
 VSSDIR="$TMPDIR_BEPINEX"
 VSS_SERVER_NAME='RuntimeTest'
 VSSBEPINEXDIR="$TMPDIR_BEPINEX/bepinex/profiles/RuntimeTest"
-mkdir -p "$VSSBEPINEXDIR/BepInEx/core" "$VSSBEPINEXDIR/doorstop_libs"
+mkdir -p "$VSSBEPINEXDIR/BepInEx/core"
 touch "$VSSBEPINEXDIR/BepInEx/core/BepInEx.Preloader.dll"
-touch "$VSSBEPINEXDIR/doorstop_libs/libdoorstop.so"
+touch "$VSSBEPINEXDIR/libdoorstop.so"
 
 VSSBEPINEXENABLED=1
 LD_LIBRARY_PATH="$TMPDIR_BEPINEX/bepinex/profiles/Other/doorstop_libs:/usr/lib/valheim:$TMPDIR_BEPINEX/bepinex/current/doorstop_libs"
@@ -26,11 +26,11 @@ if [[ "$DOORSTOP_TARGET_ASSEMBLY" != "$VSSBEPINEXDIR/BepInEx/core/BepInEx.Preloa
   echo "FAIL: Doorstop target did not use the profile-specific preloader path" >&2
   exit 1
 fi
-if [[ "$LD_LIBRARY_PATH" != "$VSSBEPINEXDIR/doorstop_libs:/usr/lib/valheim" ]]; then
+if [[ "$LD_LIBRARY_PATH" != "$VSSBEPINEXDIR:/usr/lib/valheim" ]]; then
   echo "FAIL: Doorstop library search path retained stale profiles or missed the active profile" >&2
   exit 1
 fi
-if [[ "$LD_PRELOAD" != "$VSSBEPINEXDIR/doorstop_libs/libdoorstop.so:/usr/lib/example.so" ]]; then
+if [[ "$LD_PRELOAD" != "$VSSBEPINEXDIR/libdoorstop.so:/usr/lib/example.so" ]]; then
   echo "FAIL: Doorstop preload was not profile-specific or duplicated" >&2
   exit 1
 fi
@@ -43,7 +43,7 @@ VSSBEPINEXENABLED=0
 DOORSTOP_ENABLED=1
 DOORSTOP_TARGET_ASSEMBLY='/old/profile/BepInEx/core/BepInEx.Preloader.dll'
 DOORSTOP_INVOKE_DLL_PATH='/old/profile/BepInEx/core/BepInEx.Preloader.dll'
-LD_PRELOAD="$VSSDIR/bepinex/current/doorstop_libs/libdoorstop.so:/usr/lib/example.so"
+LD_PRELOAD="$VSSDIR/bepinex/current/libdoorstop.so:/usr/lib/example.so"
 if ! vss_bepinex_configure_runtime; then
   echo "FAIL: disabled BepInEx runtime cleanup failed" >&2
   exit 1
@@ -145,9 +145,9 @@ VSSBEPINEXENABLED=1
 VSSBEPINEXDIR="\$VSSDIR/bepinex/profiles/$profile"
 VSSBEPINEXLOGOUTPUT="\$VSSBEPINEXDIR/BepInEx/LogOutput.log"
 EOF
-  mkdir -p "$profile_root/BepInEx/core" "$profile_root/doorstop_libs"
+  mkdir -p "$profile_root/BepInEx/core"
   touch "$profile_root/BepInEx/core/BepInEx.Preloader.dll"
-  touch "$profile_root/doorstop_libs/libdoorstop.so"
+  touch "$profile_root/libdoorstop.so"
   touch "$LAUNCH_ROOT/launcher/launcher-args.$profile"
 }
 
@@ -193,8 +193,8 @@ for profile in ModAlpha ModBeta; do
   if ! grep -Fxq "VSS_SERVER_NAME=$profile" "$capture_file" ||
      ! grep -Fxq 'DOORSTOP_ENABLED=1' "$capture_file" ||
      ! grep -Fxq "DOORSTOP_TARGET_ASSEMBLY=$profile_root/BepInEx/core/BepInEx.Preloader.dll" "$capture_file" ||
-     ! grep -Fxq "LD_PRELOAD=$profile_root/doorstop_libs/libdoorstop.so:/usr/lib/example.so" "$capture_file" ||
-     ! grep -Fxq "LD_LIBRARY_PATH=$profile_root/doorstop_libs:./linux64:/usr/lib/example" "$capture_file"; then
+     ! grep -Fxq "LD_PRELOAD=$profile_root/libdoorstop.so:/usr/lib/example.so" "$capture_file" ||
+     ! grep -Fxq "LD_LIBRARY_PATH=$profile_root:./linux64:/usr/lib/example" "$capture_file"; then
     printf 'FAIL: profile %s received another profile’s BepInEx environment\n' "$profile" >&2
     exit 1
   fi

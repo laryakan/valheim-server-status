@@ -28,7 +28,19 @@ cat > "$MOCK_BIN/unzip" <<'UNZIP'
 if [[ "${BEPINEX_TEST_MISSING_CONFIG:-0}" == 1 &&
       "${1:-}" == '-q' && "${3:-}" == '-d' ]]; then
     "$REAL_UNZIP" "$@" || exit $?
+    if [[ -f "$4/doorstop_libs/libdoorstop.so" ]]; then
+        mv -- "$4/doorstop_libs/libdoorstop.so" "$4/libdoorstop.so"
+        rmdir -- "$4/doorstop_libs"
+    fi
     rm -f -- "$4/BepInEx/config/BepInEx.cfg"
+    exit 0
+fi
+if [[ "${1:-}" == '-q' && "${3:-}" == '-d' ]]; then
+    "$REAL_UNZIP" "$@" || exit $?
+    if [[ -f "$4/doorstop_libs/libdoorstop.so" ]]; then
+        mv -- "$4/doorstop_libs/libdoorstop.so" "$4/libdoorstop.so"
+        rmdir -- "$4/doorstop_libs"
+    fi
     exit 0
 fi
 exec "$REAL_UNZIP" "$@"
@@ -115,6 +127,7 @@ printf 'rebuildable patcher\n' > "$OLD_VERSION/BepInEx/patchers/patcher.dll"
 printf 'old shared log\n' > "$OLD_VERSION/BepInEx/LogOutput.log"
 ln -s "BepInEx_linux_x64_5.4.23.5/" "$BEPINEX_DIR/current"
 cp "$ROOT/bepinex_upgrade.sh" "$TEST_ROOT/bepinex_upgrade.sh"
+cp "$ROOT/bepinex/install_bepinex.sh" "$TEST_ROOT/bepinex/install_bepinex.sh"
 mkdir -p "$TEST_ROOT/lib"
 cp "$ROOT/lib/config.sh" "$ROOT/lib/bepinex.sh" "$TEST_ROOT/lib/"
 sed -i 's/^vss_bepinex_prepare_profile() {/vss_bepinex_prepare_profile_original() {/' \
@@ -133,6 +146,7 @@ cat > "$TEST_ROOT/.env" <<EOF
 VSS_COMMON_CONFIG_VERSION=3
 VSSDIR="$TEST_ROOT"
 VALHEIMSERVERLOGDIR="$TEST_ROOT/valheim-logs.d"
+VHSERVERDIR="$TEST_ROOT/valheim"
 EOF
 
 create_profile() {
@@ -148,6 +162,12 @@ EOF
 create_profile Alpha 1
 create_profile Beta 1
 create_profile Disabled 0
+
+for profile in Alpha Beta; do
+    mkdir -p "$BEPINEX_DIR/profiles/$profile/doorstop_libs"
+    ln -s "$BEPINEX_DIR/current/doorstop_libs/libdoorstop.so" \
+        "$BEPINEX_DIR/profiles/$profile/doorstop_libs/libdoorstop.so"
+done
 
 make_fixture() {
     local version="$1"
@@ -193,7 +213,9 @@ for profile in Alpha Beta; do
     fi
     if [[ -L "$PROFILE_ROOT/BepInEx/core" || -L "$PROFILE_ROOT/BepInEx/plugins" ||
           -L "$PROFILE_ROOT/BepInEx/config" || ! -L "$PROFILE_ROOT/BepInEx/config/BepInEx.cfg" ||
-          ! -L "$PROFILE_ROOT/doorstop_libs/libdoorstop.so" ]]; then
+          ! -L "$PROFILE_ROOT/libdoorstop.so" ||
+          "$(readlink "$PROFILE_ROOT/libdoorstop.so")" != "$BEPINEX_DIR/current/libdoorstop.so" ||
+          -e "$PROFILE_ROOT/doorstop_libs" ]]; then
         printf 'FAIL: profile %s has a shared directory or missing shared-file links\n' "$profile" >&2
         exit 1
     fi
@@ -312,5 +334,38 @@ for expected in \
         exit 1
     fi
 done
+
+rm -f -- "$BEPINEX_DIR/current"
+make_fixture 5.4.23.11
+if ! VSS_SERVER_NAME=Alpha \
+    BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.11.json" \
+    "$TEST_ROOT/bepinex/install_bepinex.sh" \
+    > "$TMPDIR_UPGRADE/activation-download.out" 2> "$TMPDIR_UPGRADE/activation-download.err"; then
+    cat "$TMPDIR_UPGRADE/activation-download.err" >&2
+    echo "FAIL: enabling a profile did not download and install BepInEx" >&2
+    exit 1
+fi
+if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.11/' ||
+      ! -L "$BEPINEX_DIR/profiles/Alpha/libdoorstop.so" ||
+      "$(readlink "$BEPINEX_DIR/profiles/Alpha/libdoorstop.so")" != "$BEPINEX_DIR/current/libdoorstop.so" ]]; then
+    echo "FAIL: activation did not create current and profile-specific Doorstop links" >&2
+    exit 1
+fi
+
+rm -f -- "$BEPINEX_DIR/current"
+ln -s 'BepInEx_linux_x64_5.4.23.5/' "$BEPINEX_DIR/current"
+make_fixture 5.4.23.12
+if ! VSS_SERVER_NAME=Alpha \
+    BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.12.json" \
+    "$TEST_ROOT/bepinex/install_bepinex.sh" \
+    > "$TMPDIR_UPGRADE/broken-current.out" 2> "$TMPDIR_UPGRADE/broken-current.err"; then
+    cat "$TMPDIR_UPGRADE/broken-current.err" >&2
+    echo "FAIL: activation did not repair a broken current link" >&2
+    exit 1
+fi
+if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.12/' ]]; then
+    echo "FAIL: activation did not replace the broken current link" >&2
+    exit 1
+fi
 
 echo "BepInEx image upgrade OK"
