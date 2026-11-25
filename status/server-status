@@ -90,7 +90,7 @@ if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
 then
 	BEPINEX_UPDATE_TIME="$(display_recorded_date "${BEPINEXLASTUPDATE:-unknown}")"
 	[ "$BEPINEX_UPDATE_TIME" = 0 ] && BEPINEX_UPDATE_TIME="unknown"
-	BEPINEXVERSION_LABEL="$(json_escape "${BEPINEXVERSION:-unknown} ($(T bepinex_upgrade): ${BEPINEX_UPDATE_TIME})")"
+	BEPINEXVERSION_LABEL="$(json_escape "${BEPINEXVERSION:-unknown} (${BEPINEX_UPDATE_TIME})")"
 fi
 R2MODMANCODE_FIELD=""
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ] && [ -n "${R2MODMANCODE:-}" ];

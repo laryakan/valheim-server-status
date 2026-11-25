@@ -14,7 +14,6 @@ case "${VSS_LANG:-en}" in
     T_RAM="RAM"
     T_VERSION="Version"
     T_VERSION_UPDATED="Version mise à jour"
-    T_BEPINEX_UPGRADE="Mise à jour BepInEx"
     T_EVENT_TIME="Heure de l'événement"
     T_PLAYER="Joueur"
     T_STATUS="Statut"
@@ -76,7 +75,6 @@ case "${VSS_LANG:-en}" in
     T_RAM="RAM"
     T_VERSION="Version"
     T_VERSION_UPDATED="Version Updated"
-    T_BEPINEX_UPGRADE="BepInEx update"
     T_EVENT_TIME="Event Time"
     T_PLAYER="Player"
     T_STATUS="Status"
@@ -169,7 +167,6 @@ T() {
     ram) echo "$T_RAM" ;;
     version) echo "$T_VERSION" ;;
     version_updated) echo "$T_VERSION_UPDATED" ;;
-    bepinex_upgrade) echo "$T_BEPINEX_UPGRADE" ;;
     event_time) echo "$T_EVENT_TIME" ;;
     player) echo "$T_PLAYER" ;;
     status) echo "$T_STATUS" ;;

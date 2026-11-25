@@ -137,7 +137,7 @@ if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webh
     > "$TMPDIR_STATUS/webhook-online.out" ||
    ! grep -Fq '"title":"DisplayWorld","color":3066993' "$TMPDIR_STATUS/webhook-online.out" ||
    ! grep -Eq '"name":"Last Check","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-online.out" ||
-   ! grep -Fq '"value": "5.4.2202 (BepInEx update: 25/11/2026 17:30:07)"' "$TMPDIR_STATUS/webhook-online.out" ||
+   ! grep -Fq '"value": "5.4.2202 (25/11/2026 17:30:07)"' "$TMPDIR_STATUS/webhook-online.out" ||
    ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" > "$TMPDIR_STATUS/status-online.out" ||
    ! grep -Fq 'SERVER ONLINE !' "$TMPDIR_STATUS/status-online.out"; then
   echo 'FAIL: active service and opening did not report online' >&2
@@ -146,22 +146,22 @@ fi
 if ! VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-online-fr.out" ||
    ! grep -Eq '"name":"Dernière vérification","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-online-fr.out" ||
-   ! grep -Fq 'Mise à jour BepInEx: 25/11/2026 17:30:07' "$TMPDIR_STATUS/webhook-online-fr.out"; then
-  echo 'FAIL: French BepInEx update label was not displayed' >&2
+   ! grep -Fq '"value": "5.4.2202 (25/11/2026 17:30:07)"' "$TMPDIR_STATUS/webhook-online-fr.out"; then
+  echo 'FAIL: French BepInEx version and date were not displayed' >&2
   exit 1
 fi
 sed -i "s|^VALSERVERLASTUPDATE=.*|VALSERVERLASTUPDATE='05/06/2026 14:40:58'|; s|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE='11/25/2026 14:40:58'|" "$TMPDIR_STATUS/.env.StatusTest"
 if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-legacy.out" ||
    ! grep -Fq '0.221.0 (05/06/2026 14:40:58)' "$TMPDIR_STATUS/webhook-legacy.out" ||
-   ! grep -Fq '5.4.2202 (BepInEx update: 25/11/2026 14:40:58)' "$TMPDIR_STATUS/webhook-legacy.out"; then
+   ! grep -Fq '5.4.2202 (25/11/2026 14:40:58)' "$TMPDIR_STATUS/webhook-legacy.out"; then
   echo 'FAIL: ambiguous or legacy BepInEx date displayed incorrectly' >&2
   exit 1
 fi
 sed -i 's/^BEPINEXLASTUPDATE=.*/BEPINEXLASTUPDATE=0/' "$TMPDIR_STATUS/.env.StatusTest"
 if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-no-upgrade.out" ||
-   ! grep -Fq '"value": "5.4.2202 (BepInEx update: unknown)"' "$TMPDIR_STATUS/webhook-no-upgrade.out"; then
+   ! grep -Fq '"value": "5.4.2202 (unknown)"' "$TMPDIR_STATUS/webhook-no-upgrade.out"; then
   echo 'FAIL: unknown profile date did not override stale image metadata' >&2
   exit 1
 fi
