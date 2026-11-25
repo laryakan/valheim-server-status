@@ -1421,6 +1421,31 @@ function valid_valheim_steam_branch() {
   esac
 }
 
+function update_maintenance_discord() (
+  local profile="$1"
+  local message_id
+  export VSS_SERVER_NAME="$profile"
+  unset VSS_ENV_FILE VSS_CONFIG_LOADED VHSERVERWORLD VHSERVERSERVICENAME
+  unset VSSBEPINEXDIR VSSBEPINEXLOGOUTPUT
+  unset STATUSMESSAGEID LASTLOGMESSAGEID SERVERCONNECTIONINFOMESSAGEID
+  unset WEBHOOKURL WEBHOOKID WEBHOOKTOKEN
+  if ! vss_load_config "$CWD"; then
+    printf 'Could not load profile %s for the maintenance Discord update.\n' "$profile" >&2
+    return 1
+  fi
+  [ "$(setup_ui_discord_webhook_state)" = configured ] || return 0
+  message_id="$(setup_ui_profile_webhook_message_id)"
+  if [[ ! "$message_id" =~ ^[0-9]+$ ]]; then
+    printf 'No valid Discord status message ID for profile %s; skipping maintenance update.\n' "$profile" >&2
+    return 1
+  fi
+  if ! timeout --kill-after=2s 15s env -u VSS_ENV_FILE -u VSS_CONFIG_LOADED \
+      VSS_SERVER_NAME="$profile" "$CWD/discord/update"; then
+    printf 'Discord maintenance update failed or timed out for profile %s; see crash.log for details.\n' "$profile" >&2
+    return 1
+  fi
+)
+
 function run_server_maintenance() {
   local branch="${1:-${VSSSTEAMBRANCH-default_old}}"
   local profile
@@ -1477,6 +1502,12 @@ function run_server_maintenance() {
       restart_maintenance_services "${active_units[@]}" || true
       return 1
     fi
+  done
+
+  for unit in "${installed_units[@]}"; do
+    profile="${unit#valheim-server.}"
+    profile="${profile%.service}"
+    update_maintenance_discord "$profile" || true
   done
 
   printf 'Updating Valheim server files in %s with SteamCMD (branch: %s).\n' "$VHSERVERDIR" "$branch"

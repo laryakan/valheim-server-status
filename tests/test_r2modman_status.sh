@@ -35,9 +35,9 @@ VALHEIMSERVERLOGPATH="$TMPDIR_STATUS/logs/*.log"
 VSSBEPINEXENABLED=1
 R2MODMANCODE=01a1eaf3-9be3-9083-b9b4-26768368368e
 BEPINEXVERSION=5.4.2202
-BEPINEXLASTUPDATE=2026-01-01
+BEPINEXLASTUPDATE='11/25/2026 14:40:58'
 VALSERVERVERSION=0.221.0
-VALSERVERLASTUPDATE=2026-01-01
+VALSERVERLASTUPDATE='11/25/2026 14:40:58'
 VHSERVERSEED=InformationalSeed
 LASTWORLDSAVEFILE="$TMPDIR_STATUS/data/last-world-save.StatusTest"
 CONNECTEDPLAYERSFILE="$TMPDIR_STATUS/data/online-players.StatusTest"
@@ -45,6 +45,7 @@ OFFLINEPLAYERSFILE="$TMPDIR_STATUS/data/offline-players.StatusTest"
 VHSERVERLAUNCHERARGS="$TMPDIR_STATUS/launcher/launcher-args.StatusTest"
 EOF
 printf '%s\n' 'unknown' > "$TMPDIR_STATUS/data/last-world-save"
+printf '%s\n' '11/25/2026 14:40:58' > "$TMPDIR_STATUS/data/last-world-save.StatusTest"
 touch "$TMPDIR_STATUS/data/online-players" "$TMPDIR_STATUS/data/offline-players"
 touch "$TMPDIR_STATUS/launcher/launcher-args.StatusTest"
 printf 'first log line\nsecond "quoted" log line\nthird log line\n' > "$TMPDIR_STATUS/logs/server.log"
@@ -62,10 +63,17 @@ if ! grep -Fq 'R2Modman code' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '203.0.113.1:2456' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq 'test-password' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '"inline":false' "$TMPDIR_STATUS/webhook-enabled.out" ||
+   ! grep -Fq '0.221.0 (25/11/2026 14:40:58)' "$TMPDIR_STATUS/webhook-enabled.out" ||
+   ! grep -Fq '"name":"Last save","value": "25/11/2026 14:40:58"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Eq '"name":"Last Check","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '"title":"Last Logs"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq 'second \"quoted\" log line' "$TMPDIR_STATUS/webhook-enabled.out"; then
   echo "FAIL: enabled BepInEx status did not include the R2Modman code" >&2
+  exit 1
+fi
+if ! grep -Fxq "VALSERVERLASTUPDATE='11/25/2026 14:40:58'" "$TMPDIR_STATUS/.env.StatusTest" ||
+   ! grep -Fxq '11/25/2026 14:40:58' "$TMPDIR_STATUS/data/last-world-save.StatusTest"; then
+  echo 'FAIL: displaying legacy dates modified stored state' >&2
   exit 1
 fi
 
@@ -89,6 +97,7 @@ if VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" \
   exit 1
 fi
 if ! grep -Fq 'R2Modman profile code' "$TMPDIR_STATUS/status-enabled.out" ||
+   ! grep -Fq '0.221.0 (25/11/2026 14:40:58)' "$TMPDIR_STATUS/status-enabled.out" ||
    ! grep -Fq '01a1eaf3-9be3-9083-b9b4-26768368368e' "$TMPDIR_STATUS/status-enabled.out"; then
   echo "FAIL: offline status output did not include the R2Modman code" >&2
   exit 1
@@ -139,6 +148,14 @@ if ! VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status
    ! grep -Eq '"name":"Dernière vérification","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-online-fr.out" ||
    ! grep -Fq 'Mise à jour BepInEx: 25/11/2026 17:30:07' "$TMPDIR_STATUS/webhook-online-fr.out"; then
   echo 'FAIL: French BepInEx update label was not displayed' >&2
+  exit 1
+fi
+sed -i "s|^VALSERVERLASTUPDATE=.*|VALSERVERLASTUPDATE='05/06/2026 14:40:58'|; s|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE='11/25/2026 14:40:58'|" "$TMPDIR_STATUS/.env.StatusTest"
+if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
+    > "$TMPDIR_STATUS/webhook-legacy.out" ||
+   ! grep -Fq '0.221.0 (05/06/2026 14:40:58)' "$TMPDIR_STATUS/webhook-legacy.out" ||
+   ! grep -Fq '5.4.2202 (BepInEx update: 25/11/2026 14:40:58)' "$TMPDIR_STATUS/webhook-legacy.out"; then
+  echo 'FAIL: ambiguous or legacy BepInEx date displayed incorrectly' >&2
   exit 1
 fi
 sed -i 's/^BEPINEXLASTUPDATE=.*/BEPINEXLASTUPDATE=0/' "$TMPDIR_STATUS/.env.StatusTest"

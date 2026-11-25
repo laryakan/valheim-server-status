@@ -54,11 +54,28 @@ json_escape() {
 	printf '%s' "$value"
 }
 
+display_recorded_date() {
+	local value="$1" month day year time
+	if [[ "$value" =~ ^([0-9]{2})/([0-9]{2})/([0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})$ ]]; then
+		month="${BASH_REMATCH[1]}"
+		day="${BASH_REMATCH[2]}"
+		year="${BASH_REMATCH[3]}"
+		time="${BASH_REMATCH[4]}"
+		if (( 10#$month >= 1 && 10#$month <= 12 && 10#$day >= 13 && 10#$day <= 31 )) &&
+		   LC_ALL=C date -d "$year-$month-$day $time" +%s >/dev/null 2>&1; then
+			printf '%s/%s/%s %s' "$day" "$month" "$year" "$time"
+			return
+		fi
+	fi
+	printf '%s' "$value"
+}
+
 CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
-CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
+CURRENT_VERSION_TS="$(display_recorded_date "${VALSERVERLASTUPDATE:-unknown}")"
 [ "$CURRENT_VERSION_TS" = 0 ] && CURRENT_VERSION_TS="unknown"
 CURRENT_START_TS="0"
 LAST_WORLD_SAVE_TS="$(cat "$LASTWORLDSAVEFILE" 2>/dev/null || echo "unknown")"
+LAST_WORLD_SAVE_TS="$(display_recorded_date "$LAST_WORLD_SAVE_TS")"
 BEPINEXVERSION_LABEL="Disabled"
 if [ -n "$PROCESS_START_TS" ] && [ "$PROCESS_START_TS" != "unknown" ]; then
 	CURRENT_START_TS="$PROCESS_START_TS"
@@ -71,7 +88,7 @@ if [ "$CURRENT_START_TS" = "unknown" ]; then
 fi
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
 then
-	BEPINEX_UPDATE_TIME="${BEPINEXLASTUPDATE:-unknown}"
+	BEPINEX_UPDATE_TIME="$(display_recorded_date "${BEPINEXLASTUPDATE:-unknown}")"
 	[ "$BEPINEX_UPDATE_TIME" = 0 ] && BEPINEX_UPDATE_TIME="unknown"
 	BEPINEXVERSION_LABEL="$(json_escape "${BEPINEXVERSION:-unknown} ($(T bepinex_upgrade): ${BEPINEX_UPDATE_TIME})")"
 fi

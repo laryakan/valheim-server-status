@@ -6,11 +6,13 @@ TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
 MOCK_BIN="$TEST_DIR/bin"
-mkdir -p "$MOCK_BIN" "$TEST_DIR/server"
+mkdir -p "$MOCK_BIN" "$TEST_DIR/server" "$TEST_DIR/discord" "$TEST_DIR/lib"
+cp "$ROOT/lib/config.sh" "$TEST_DIR/lib/config.sh"
 export MOCK_BIN TEST_DIR
 export INSTALLED_UNITS="$TEST_DIR/installed-units"
 export ACTIVE_UNITS="$TEST_DIR/active-units"
 export MAINTENANCE_EVENTS="$TEST_DIR/events"
+export REAL_TIMEOUT="$(command -v timeout)"
 
 cat > "$MOCK_BIN/sudo" <<'EOF'
 #!/bin/bash
@@ -59,12 +61,49 @@ cat > "$MOCK_BIN/steamcmd" <<'EOF'
 printf 'steamcmd %s\n' "$*" >> "$MAINTENANCE_EVENTS"
 [ "${FAIL_UPDATE:-0}" -eq 0 ]
 EOF
+cat > "$MOCK_BIN/timeout" <<'EOF'
+#!/bin/bash
+if [ "${FAIL_DISCORD_TIMEOUT:-0}" -eq 1 ]; then
+  exit 124
+fi
+exec "$REAL_TIMEOUT" "$@"
+EOF
+cat > "$TEST_DIR/discord/update" <<'EOF'
+#!/bin/bash
+if [ -n "${VSS_ENV_FILE:-}" ] || [ -n "${VSS_CONFIG_LOADED:-}" ]; then
+  echo 'Inherited a previously loaded profile' >&2
+  exit 1
+fi
+unit="valheim-server.$VSS_SERVER_NAME.service"
+if grep -Fxq "$unit" "$ACTIVE_UNITS"; then
+  echo 'Discord update ran before the service stopped' >&2
+  exit 1
+fi
+source "$TEST_DIR/lib/config.sh"
+vss_load_config "$TEST_DIR" || exit 1
+printf 'discord %s %s\n' "$VSS_SERVER_NAME" "$STATUSMESSAGEID" >> "$MAINTENANCE_EVENTS"
+[ "${FAIL_DISCORD:-0}" -eq 0 ]
+EOF
 chmod +x "$MOCK_BIN/"*
+chmod +x "$TEST_DIR/discord/update"
 export PATH="$MOCK_BIN:$PATH"
 
 source "$ROOT/setup" >/dev/null
 CWD="$TEST_DIR"
-touch "$CWD/.env.Alpha" "$CWD/.env.Beta"
+cat > "$CWD/.env" <<'EOF'
+VSS_COMMON_CONFIG_VERSION=3
+WEBHOOKURL='https://discord.com/api/webhooks/123456/fake-token'
+WEBHOOKID=123456
+WEBHOOKTOKEN=fake-token
+EOF
+cat > "$CWD/.env.Alpha" <<'EOF'
+VHSERVERWORLD=Alpha
+STATUSMESSAGEID=111
+EOF
+cat > "$CWD/.env.Beta" <<'EOF'
+VHSERVERWORLD=Beta
+STATUSMESSAGEID=222
+EOF
 printf '%s\n' valheim-server.Alpha.service valheim-server.Beta.service > "$INSTALLED_UNITS"
 printf '%s\n' valheim-server.Alpha.service > "$ACTIVE_UNITS"
 : > "$MAINTENANCE_EVENTS"
@@ -94,6 +133,18 @@ steam_line="$(grep -n '^steamcmd ' "$MAINTENANCE_EVENTS" | cut -d: -f1)"
 start_line="$(grep -n '^start ' "$MAINTENANCE_EVENTS" | cut -d: -f1)"
 if [ "$stop_line" -ge "$steam_line" ] || [ "$steam_line" -ge "$start_line" ]; then
   echo "FAIL: maintenance update was not ordered after stops and before restarts" >&2
+  exit 1
+fi
+for profile in Alpha Beta; do
+  case "$profile" in Alpha) id=111 ;; Beta) id=222 ;; esac
+  discord_line="$(grep -n "^discord $profile $id$" "$MAINTENANCE_EVENTS" | cut -d: -f1)"
+  if [ -z "$discord_line" ] || [ "$discord_line" -le "$stop_line" ] || [ "$discord_line" -ge "$steam_line" ]; then
+    echo "FAIL: Discord was not updated once for $profile after stopping and before SteamCMD" >&2
+    exit 1
+  fi
+done
+if [ "$(grep -c '^discord ' "$MAINTENANCE_EVENTS")" -ne 2 ]; then
+  echo 'FAIL: maintenance duplicated Discord updates' >&2
   exit 1
 fi
 if ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta default_old validate +exit" "$MAINTENANCE_EVENTS"; then
@@ -163,6 +214,26 @@ if [ "$(cat "$ACTIVE_UNITS")" != 'valheim-server.Beta.service' ] ||
    ! grep -Fxq 'start valheim-server.Beta.service' "$MAINTENANCE_EVENTS" ||
    ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta public validate +exit" "$MAINTENANCE_EVENTS"; then
   echo "FAIL: previously active instances were not restored after an update failure" >&2
+  exit 1
+fi
+
+sed -i 's/^STATUSMESSAGEID=.*/STATUSMESSAGEID=/' "$TEST_DIR/.env.Beta"
+export STATUSMESSAGEID=111 VSS_ENV_FILE="$TEST_DIR/.env.Alpha" VSS_CONFIG_LOADED=1
+: > "$MAINTENANCE_EVENTS"
+if ! FAIL_DISCORD=1 run_server_maintenance public > "$TEST_DIR/discord-failure.out" 2>&1 ||
+   ! grep -Fxq 'discord Alpha 111' "$MAINTENANCE_EVENTS" ||
+   grep -q '^discord Beta ' "$MAINTENANCE_EVENTS" ||
+   ! grep -Fq 'Discord maintenance update failed or timed out for profile Alpha' "$TEST_DIR/discord-failure.out" ||
+   ! grep -Fq 'No valid Discord status message ID for profile Beta' "$TEST_DIR/discord-failure.out" ||
+   ! grep -Fxq 'start valheim-server.Beta.service' "$MAINTENANCE_EVENTS"; then
+  echo 'FAIL: Discord failure or missing message ID affected maintenance restoration' >&2
+  exit 1
+fi
+: > "$MAINTENANCE_EVENTS"
+if ! FAIL_DISCORD_TIMEOUT=1 run_server_maintenance public > "$TEST_DIR/discord-timeout.out" 2>&1 ||
+   ! grep -Fq 'Discord maintenance update failed or timed out for profile Alpha' "$TEST_DIR/discord-timeout.out" ||
+   ! grep -Fxq 'start valheim-server.Beta.service' "$MAINTENANCE_EVENTS"; then
+  echo 'FAIL: Discord timeout prevented maintenance or service restoration' >&2
   exit 1
 fi
 
