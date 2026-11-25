@@ -17,6 +17,8 @@ printf '#!/bin/sh\nexit 0\n' > "$CWD/bin/dig"
 chmod +x "$CWD/bin/dig"
 PATH="$CWD/bin:$PATH"
 cp "$ROOT/lib/config.sh" "$CWD/lib/config.sh"
+cp "$ROOT/lib/validation.sh" "$CWD/lib/validation.sh"
+cp "$ROOT/setup" "$CWD/setup"
 cp "$ROOT/.env.server.dist" "$CWD/.env.server.dist"
 cp "$ROOT/.env.common.dist" "$CWD/.env.common.dist"
 cp "$ROOT/examples/launcher-args" "$CWD/examples/launcher-args"
@@ -77,6 +79,47 @@ fi
 if ! replace_env_value R2MODMANCODE 01a1eaf3-9be3-9083-b9b4-26768368368e ||
    ! grep -Fq 'R2MODMANCODE="01a1eaf3-9be3-9083-b9b4-26768368368e"' "$CWD/.env.CliWorld"; then
   echo "FAIL: setup did not save a valid R2Modman code" >&2
+  exit 1
+fi
+
+cp "$ROOT/.env.server.dist" "$CWD/.env.OtherWorld"
+write_env_value "$CWD/.env.OtherWorld" VHSERVERWORLD 'OtherWorld'
+write_env_value "$CWD/.env.OtherWorld" VHSERVERPORT 2460
+other_before="$(sha256sum "$CWD/.env.OtherWorld")"
+called_action='not called'
+if ! setup_main --set-r2modman-code CliWorld 12345678-1234-abcd-9876-123456789abc ||
+   ! grep -Fxq 'R2MODMANCODE="12345678-1234-abcd-9876-123456789abc"' "$CWD/.env.CliWorld" ||
+   [ "$other_before" != "$(sha256sum "$CWD/.env.OtherWorld")" ] ||
+   [ "$called_action" != 'not called' ]; then
+  echo "FAIL: direct R2Modman update changed the wrong profile or invoked another action" >&2
+  exit 1
+fi
+
+profile_before="$(sha256sum "$CWD/.env.CliWorld")"
+for invalid_code in not-a-uuid 'invalid|code'; do
+  if setup_main --set-r2modman-code CliWorld "$invalid_code" > "$TMPDIR_CLI/r2-invalid.out" 2>&1 ||
+     ! grep -Fq 'R2MODMANCODE must be a UUID' "$TMPDIR_CLI/r2-invalid.out" ||
+     [ "$profile_before" != "$(sha256sum "$CWD/.env.CliWorld")" ]; then
+    echo "FAIL: invalid direct R2Modman code was accepted or changed the profile" >&2
+    exit 1
+  fi
+done
+if setup_main --set-r2modman-code CliWorld > "$TMPDIR_CLI/r2-args.out" 2>&1 ||
+   setup_main --set-r2modman-code CliWorld code extra > "$TMPDIR_CLI/r2-args.out" 2>&1 ||
+   setup_main --set-r2modman-code MissingWorld 12345678-1234-abcd-9876-123456789abc > "$TMPDIR_CLI/r2-missing.out" 2>&1; then
+  echo "FAIL: direct R2Modman command accepted invalid arguments or a missing profile" >&2
+  exit 1
+fi
+if ! setup_main --set-r2modman-code CliWorld '' ||
+   ! grep -Fxq 'R2MODMANCODE=' "$CWD/.env.CliWorld" ||
+   [ "$other_before" != "$(sha256sum "$CWD/.env.OtherWorld")" ]; then
+  echo "FAIL: direct R2Modman command did not clear the selected profile's code" >&2
+  exit 1
+fi
+if ! VSS_SERVER_NAME=OtherWorld "$CWD/setup" --set-r2modman-code CliWorld 12345678-1234-abcd-9876-123456789abc ||
+   ! grep -Fxq 'R2MODMANCODE="12345678-1234-abcd-9876-123456789abc"' "$CWD/.env.CliWorld" ||
+   [ "$other_before" != "$(sha256sum "$CWD/.env.OtherWorld")" ]; then
+  echo "FAIL: executable R2Modman command did not use the explicitly named profile" >&2
   exit 1
 fi
 

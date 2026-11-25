@@ -1064,9 +1064,9 @@ function replace_env_value() {
   fi
   if [ "$env_file" = "$VSS_ENV_FILE" ]; then
     if [[ "$value" == *[!0-9]* ]] && [[ "$value" != "" ]]; then
-      sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$VSS_ENV_FILE"
+      sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$VSS_ENV_FILE" || return 1
     else
-      sed -i "s|^${key}=.*|${key}=${value}|" "$VSS_ENV_FILE"
+      sed -i "s|^${key}=.*|${key}=${value}|" "$VSS_ENV_FILE" || return 1
     fi
   fi
 
@@ -2672,6 +2672,7 @@ Usage:
   ./setup --status-server SERVER_NAME
   ./setup --check-firewall SERVER_NAME
   ./setup --discord-update SERVER_NAME
+  ./setup --set-r2modman-code SERVER_NAME CODE
   ./migrate-v2-to-v3
 EOF
 }
@@ -2694,6 +2695,13 @@ function run_server_cli_action() {
     --status-server) status_valheim_service 2>&1 ;;
     --check-firewall) check_ufw_profile_rules 2>&1 ;;
     --discord-update) run_discord_update 2>&1 ;;
+    --set-r2modman-code)
+      if ! replace_env_value R2MODMANCODE "$2"; then
+        printf 'Could not update the R2Modman code for profile %s.\n' "$VSS_SERVER_NAME" >&2
+        return 1
+      fi
+      printf 'R2Modman code updated for profile %s.\n' "$VSS_SERVER_NAME"
+      ;;
     *) printf 'Unsupported direct action: %s\n' "$action"; return 2 ;;
   esac
 }
@@ -2736,6 +2744,17 @@ function setup_main() {
       fi
       direct_action="$1"
       ;;
+    --set-r2modman-code)
+      if [ "$#" -ne 3 ] || [ -z "$2" ]; then
+        printf 'Option %s requires a server name and a code (use an empty string to clear it).\n' "$1" >&2
+        return 2
+      fi
+      if [ -n "$3" ] && ! validate_r2modman_code "$3"; then
+        printf 'R2MODMANCODE must be a UUID such as 01a1eaf3-9be3-9083-b9b4-26768368368e.\n' >&2
+        return 1
+      fi
+      direct_action="$1"
+      ;;
   esac
 
   if [ -f "$CWD/.env" ] && ! grep -Fxq 'VSS_COMMON_CONFIG_VERSION=3' "$CWD/.env"; then
@@ -2768,7 +2787,7 @@ function setup_main() {
       printf "Setup could not load profile '%s'. Review the error above and check its configuration.\n" "$2" >&2
       return 1
     fi
-    run_server_cli_action "$direct_action"
+    run_server_cli_action "$direct_action" "${3:-}"
     return $?
   fi
 

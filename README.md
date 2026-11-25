@@ -155,7 +155,14 @@ Cron jobs for Discord updates are generated per profile, but their frequency and
 
 Set the shared `SENDSERVERCONNECTIONINFO` to `1` to include connection details in the profile status message. Set `SENDLASTLOGS` to a positive number to include that many recent log lines in the same message. Set the shared `CRONTABWEBHOOKFREQ` to a positive number of minutes to enable updates for all profiles; set it to `0` to disable all profile update jobs. Older separate connection/log messages are not deleted automatically; remove those manually after confirming the combined message works.
 
-For modded servers, set `VSSBEPINEXENABLED=1` and put the profile's R2Modman/Thunderstore UUID share code (for example `01a1eaf3-9be3-9083-b9b4-26768368368e`) in `R2MODMANCODE` in that world's `.env`. The code is shown in Discord and the server status output (including the HTTP status endpoint), including while the server is offline. It is omitted when BepInEx is disabled or no code is configured. VSS does not generate or synchronize the mod profile; maintain the share code from the mod manager.
+For modded servers, set `VSSBEPINEXENABLED=1` and configure the profile's R2Modman/Thunderstore UUID share code in the BepInEx setup menu or directly:
+
+```bash
+./setup --set-r2modman-code MyWorld 01a1eaf3-9be3-9083-b9b4-26768368368e
+./setup --set-r2modman-code MyWorld '' # Clear the code
+```
+
+The command sets `R2MODMANCODE` for the named profile and performs normal setup configuration synchronization; it does not send a Discord update or restart the server. The code is shown in Discord and the server status output (including the HTTP status endpoint), including while the server is offline. It is omitted when BepInEx is disabled or no code is configured. VSS does not generate or synchronize the mod profile; maintain the share code from the mod manager.
 
 Each profile has its own BepInEx root under `bepinex/profiles/<world-name>/`. Plugins, plugin configuration, patchers, cache, and `LogOutput.log` are profile-local. `BepInEx/core` is a real per-profile directory whose shared files are symlinked to `bepinex/current`; the root-level `libdoorstop.so` and `BepInEx.cfg` are also file symlinks to the current shared image. The Valheim server files are not populated with shared BepInEx links.
 
