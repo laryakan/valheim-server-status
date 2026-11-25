@@ -132,7 +132,7 @@ then
 		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
 		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},
 		${R2MODMANCODE_FIELD}
-		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}
+		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%d/%m/%Y %H:%M:%S')\"}
 		]
 		}${LOGS_EMBED}]}"
 		exit 0
@@ -154,7 +154,7 @@ then
 		{\"name\":\"seed\",\"value\": \"||${CURRENT_SEED}||\",\"inline\":true},
 		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
 		${R2MODMANCODE_FIELD}
-		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},
+		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%d/%m/%Y %H:%M:%S')\"},
 		{\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST}\",\"inline\":true},
 		{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST}\",\"inline\":true}
 		]

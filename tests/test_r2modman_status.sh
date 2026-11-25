@@ -62,6 +62,7 @@ if ! grep -Fq 'R2Modman code' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '203.0.113.1:2456' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq 'test-password' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '"inline":false' "$TMPDIR_STATUS/webhook-enabled.out" ||
+   ! grep -Eq '"name":"Last Check","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq '"title":"Last Logs"' "$TMPDIR_STATUS/webhook-enabled.out" ||
    ! grep -Fq 'second \"quoted\" log line' "$TMPDIR_STATUS/webhook-enabled.out"; then
   echo "FAIL: enabled BepInEx status did not include the R2Modman code" >&2
@@ -126,6 +127,7 @@ export MOCK_SERVICE_STATE=active MOCK_SERVICE_STARTED='11/25/2026 16:00:00'
 if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-online.out" ||
    ! grep -Fq '"title":"DisplayWorld","color":3066993' "$TMPDIR_STATUS/webhook-online.out" ||
+   ! grep -Eq '"name":"Last Check","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-online.out" ||
    ! grep -Fq '"value": "5.4.2202 (BepInEx update: 25/11/2026 17:30:07)"' "$TMPDIR_STATUS/webhook-online.out" ||
    ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" > "$TMPDIR_STATUS/status-online.out" ||
    ! grep -Fq 'SERVER ONLINE !' "$TMPDIR_STATUS/status-online.out"; then
@@ -134,6 +136,7 @@ if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webh
 fi
 if ! VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-online-fr.out" ||
+   ! grep -Eq '"name":"Dernière vérification","value": "[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}"' "$TMPDIR_STATUS/webhook-online-fr.out" ||
    ! grep -Fq 'Mise à jour BepInEx: 25/11/2026 17:30:07' "$TMPDIR_STATUS/webhook-online-fr.out"; then
   echo 'FAIL: French BepInEx update label was not displayed' >&2
   exit 1
