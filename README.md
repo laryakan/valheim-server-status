@@ -56,9 +56,17 @@ Valheim updates are explicit because all profiles share the same server files. D
 
 ```bash
 ./setup --maintenance-update
+# Or select a Steam branch for this update:
+./setup --maintenance-update public
 ```
 
 The command stops every installed profile's Valheim service, runs SteamCMD once against the shared `VHSERVERDIR`, then starts only the services that were active before the request, sequentially. Services that were already stopped remain stopped. `vss.maintenance` checks connected-player state across all profiles, sends one warning when needed, then calls the same operation. The warning title and description use the shared `VSS_LANG` setting (`en` or `fr`). Setup can schedule it as one global job; do not schedule it separately per profile.
+
+The branch is passed to SteamCMD as `-beta <branch>` ([SteamCMD documentation](https://developer.valvesoftware.com/wiki/SteamCMD)). Without an argument, setup uses `VSSSTEAMBRANCH` from the shared `.env`, including for scheduled maintenance. New installations and existing shared configurations missing this setting default to `default_old` (the previous stable release); set it to `public` for the current stable release. An argument overrides the setting for that update only.
+
+Accepted names are `public`, `default_old`, `default_pre1_0`, `default_preml`, `default_precta`, `default_prebw`, `default_preal`, and `public-test`. Invalid names stop maintenance before services are stopped. This list must be updated if Valve changes the available branches. The command does not support `-betapassword` for password-protected branches such as `public-test`.
+
+**Back up your worlds before changing branches**, especially when reverting to an older version. The branch affects the shared server installation and every profile; clients must use a compatible version.
 
 Schedule or remove the global planned maintenance job from setup:
 

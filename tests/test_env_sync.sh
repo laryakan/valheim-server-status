@@ -29,10 +29,20 @@ source ./lib/config.sh
 CWD="$TEST_DIR"
 cp .env.common.dist "$CWD/.env.common.dist"
 cp .env.common.dist "$CWD/.env"
-sed -i '/^VSS_LANG=/d' "$CWD/.env"
+sed -i '/^VSS_LANG=/d; /^VSSSTEAMBRANCH=/d' "$CWD/.env"
 ensure_common_config
 if ! grep -q '^VSS_LANG=' "$CWD/.env"; then
   echo "FAIL: shared configuration did not synchronize new template settings" >&2
+  exit 1
+fi
+if ! grep -Fxq 'VSSSTEAMBRANCH=default_old' "$CWD/.env"; then
+  echo "FAIL: shared configuration did not add the default Steam branch" >&2
+  exit 1
+fi
+write_env_value "$CWD/.env" VSSSTEAMBRANCH public
+ensure_common_config
+if ! grep -Fxq 'VSSSTEAMBRANCH=public' "$CWD/.env"; then
+  echo "FAIL: shared configuration overwrote the configured Steam branch" >&2
   exit 1
 fi
 

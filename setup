@@ -375,7 +375,7 @@ function ensure_common_config() {
   local candidate
   local index
   local -a common_keys=(
-    STEAMCMDPATH VHSERVERDIR VHSERVERSAVEDIR USERSERVICE VALHEIMSERVERLOGDIR
+    STEAMCMDPATH VSSSTEAMBRANCH VHSERVERDIR VHSERVERSAVEDIR USERSERVICE VALHEIMSERVERLOGDIR
     VSSLOGFILTER VSSERRFILTER VHSERVERLAUNCHER VSSHTTP VSSPIPE WEBHOOKUPDATE
     PUBLICIP WEBHOOKURL WEBHOOKID WEBHOOKTOKEN SENDLASTLOGS SENDSERVERCONNECTIONINFO
     CRONTABWEBHOOKFREQ EVENTREALTIME VSS_LANG
@@ -995,7 +995,7 @@ function reload_profile_config() {
 
 function is_common_setting() {
   case "$1" in
-    VSSDIR|STEAMCMDPATH|VHSERVERDIR|VHSERVERSAVEDIR|USERSERVICE|VALHEIMSERVERLOGDIR|\
+    VSSDIR|STEAMCMDPATH|VSSSTEAMBRANCH|VHSERVERDIR|VHSERVERSAVEDIR|USERSERVICE|VALHEIMSERVERLOGDIR|\
     VSSLOGFILTER|VSSERRFILTER|PUBLICIP|VHSERVERLAUNCHER|VHSERVERLAUNCHERDIR|\
     VSSHTTP|VSSHTTPDIR|VSSPIPE|VSSPIPEDIR|WEBHOOKUPDATE|WEBHOOKURL|WEBHOOKID|\
     WEBHOOKTOKEN|SENDLASTLOGS|SENDSERVERCONNECTIONINFO|CRONTABWEBHOOKFREQ|\
@@ -1298,7 +1298,15 @@ function restart_maintenance_services() {
   return "$failed"
 }
 
+function valid_valheim_steam_branch() {
+  case "$1" in
+    public|default_old|default_pre1_0|default_preml|default_precta|default_prebw|default_preal|public-test) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 function run_server_maintenance() {
+  local branch="${1:-${VSSSTEAMBRANCH-default_old}}"
   local profile
   local unit
   local update_status=0
@@ -1306,6 +1314,10 @@ function run_server_maintenance() {
   local -a profiles=()
   local -a installed_units=()
   local -a active_units=()
+  if ! valid_valheim_steam_branch "$branch"; then
+    printf 'Invalid Valheim Steam branch: %s; maintenance was not run.\n' "${branch:-<empty>}" >&2
+    return 1
+  fi
 
   while IFS= read -r profile; do
     [ -n "$profile" ] && profiles+=("$profile")
@@ -1351,9 +1363,9 @@ function run_server_maintenance() {
     fi
   done
 
-  printf 'Updating Valheim server files in %s with SteamCMD.\n' "$VHSERVERDIR"
+  printf 'Updating Valheim server files in %s with SteamCMD (branch: %s).\n' "$VHSERVERDIR" "$branch"
   if ! sudo -u "$USERSERVICE" "$STEAMCMDPATH" +force_install_dir "$VHSERVERDIR" \
-      +login anonymous +app_update 896660 validate +exit; then
+      +login anonymous +app_update 896660 -beta "$branch" validate +exit; then
     echo "SteamCMD update failed." >&2
     update_status=1
   fi
@@ -2665,7 +2677,7 @@ Usage:
   ./setup --create SERVER_NAME
   ./setup --schedule-maintenance
   ./setup --remove-maintenance-schedule
-  ./setup --maintenance-update
+  ./setup --maintenance-update [STEAM_BRANCH]
   ./setup --start-server SERVER_NAME
   ./setup --stop-server SERVER_NAME
   ./setup --restart-server SERVER_NAME
@@ -2721,9 +2733,12 @@ function setup_main() {
       return 0
       ;;
     --maintenance-update)
-      if [ -n "${2:-}" ]; then
-        printf 'Option --maintenance-update does not accept a server name.\n'
-        setup_usage
+      if [ "$#" -gt 2 ] || { [ "$#" -eq 2 ] && [ -z "$2" ]; }; then
+        printf 'Option --maintenance-update accepts at most one non-empty Steam branch name.\n' >&2
+        return 2
+      fi
+      if [ "$#" -eq 2 ] && ! valid_valheim_steam_branch "$2"; then
+        printf 'Invalid Valheim Steam branch: %s\n' "$2" >&2
         return 2
       fi
       direct_action="$1"
@@ -2778,7 +2793,7 @@ function setup_main() {
       printf 'No valid server profile is available for maintenance.\n' >&2
       return 1
     fi
-    run_server_maintenance
+    run_server_maintenance "${2:-}"
     return $?
   fi
 

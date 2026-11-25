@@ -71,6 +71,7 @@ printf '%s\n' valheim-server.Alpha.service > "$ACTIVE_UNITS"
 VHSERVERDIR="$TEST_DIR/server"
 STEAMCMDPATH="$MOCK_BIN/steamcmd"
 USERSERVICE='valheim'
+unset VSSSTEAMBRANCH
 
 if ! run_server_maintenance > "$TEST_DIR/success.out" 2>&1; then
   cat "$TEST_DIR/success.out"
@@ -95,15 +96,72 @@ if [ "$stop_line" -ge "$steam_line" ] || [ "$steam_line" -ge "$start_line" ]; th
   echo "FAIL: maintenance update was not ordered after stops and before restarts" >&2
   exit 1
 fi
+if ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta default_old validate +exit" "$MAINTENANCE_EVENTS"; then
+  echo "FAIL: maintenance did not use the default branch" >&2
+  exit 1
+fi
+
+VSS_SERVER_NAME=Alpha
+load_server_profile() { [ "$1" = Alpha ]; }
+VSSSTEAMBRANCH=default_pre1_0
+: > "$MAINTENANCE_EVENTS"
+if ! setup_main --maintenance-update > "$TEST_DIR/configured-branch.out" 2>&1 ||
+   ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta default_pre1_0 validate +exit" "$MAINTENANCE_EVENTS"; then
+  echo "FAIL: direct maintenance did not use the configured shared branch" >&2
+  exit 1
+fi
+
+: > "$MAINTENANCE_EVENTS"
+if ! setup_main --maintenance-update public-test > "$TEST_DIR/branch.out" 2>&1 ||
+   ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta public-test validate +exit" "$MAINTENANCE_EVENTS" ||
+   [ "$(cat "$ACTIVE_UNITS")" != 'valheim-server.Alpha.service' ]; then
+  echo "FAIL: direct maintenance did not pass the branch or restore the active service" >&2
+  exit 1
+fi
+
+: > "$MAINTENANCE_EVENTS"
+if setup_main --maintenance-update typo > "$TEST_DIR/invalid.out" 2>&1 ||
+   ! grep -Fq 'Invalid Valheim Steam branch' "$TEST_DIR/invalid.out" ||
+   [ -s "$MAINTENANCE_EVENTS" ]; then
+  echo "FAIL: invalid Steam branch was accepted or maintenance started" >&2
+  exit 1
+fi
+VSSSTEAMBRANCH=unknown
+if setup_main --maintenance-update > "$TEST_DIR/invalid-config.out" 2>&1 ||
+   ! grep -Fq 'Invalid Valheim Steam branch: unknown' "$TEST_DIR/invalid-config.out" ||
+   [ -s "$MAINTENANCE_EVENTS" ]; then
+  echo "FAIL: invalid configured branch was accepted or maintenance started" >&2
+  exit 1
+fi
+if ! setup_main --maintenance-update public > "$TEST_DIR/override.out" 2>&1 ||
+   ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta public validate +exit" "$MAINTENANCE_EVENTS"; then
+  echo "FAIL: explicit branch did not override the invalid shared setting" >&2
+  exit 1
+fi
+: > "$MAINTENANCE_EVENTS"
+VSSSTEAMBRANCH=''
+if run_server_maintenance > "$TEST_DIR/invalid-config.out" 2>&1 ||
+   ! grep -Fq 'Invalid Valheim Steam branch: <empty>' "$TEST_DIR/invalid-config.out" ||
+   [ -s "$MAINTENANCE_EVENTS" ]; then
+  echo "FAIL: empty configured branch was accepted or maintenance started" >&2
+  exit 1
+fi
+if setup_main --maintenance-update '' > "$TEST_DIR/invalid.out" 2>&1 ||
+   setup_main --maintenance-update public extra > "$TEST_DIR/invalid.out" 2>&1 ||
+   [ -s "$MAINTENANCE_EVENTS" ]; then
+  echo "FAIL: invalid maintenance arguments were accepted or maintenance started" >&2
+  exit 1
+fi
 
 printf '%s\n' valheim-server.Beta.service > "$ACTIVE_UNITS"
 : > "$MAINTENANCE_EVENTS"
-if FAIL_UPDATE=1 run_server_maintenance > "$TEST_DIR/failure.out" 2>&1; then
+if FAIL_UPDATE=1 run_server_maintenance public > "$TEST_DIR/failure.out" 2>&1; then
   echo "FAIL: maintenance reported success after SteamCMD failed" >&2
   exit 1
 fi
 if [ "$(cat "$ACTIVE_UNITS")" != 'valheim-server.Beta.service' ] ||
-   ! grep -Fxq 'start valheim-server.Beta.service' "$MAINTENANCE_EVENTS"; then
+   ! grep -Fxq 'start valheim-server.Beta.service' "$MAINTENANCE_EVENTS" ||
+   ! grep -Fxq "steamcmd +force_install_dir $VHSERVERDIR +login anonymous +app_update 896660 -beta public validate +exit" "$MAINTENANCE_EVENTS"; then
   echo "FAIL: previously active instances were not restored after an update failure" >&2
   exit 1
 fi
