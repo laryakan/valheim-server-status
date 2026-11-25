@@ -93,6 +93,29 @@ if ! grep -Fxq 'VALSERVERLASTOPEN="2026-11-25 17:30:03"' "$TEST_DIR/.env.Akanhei
   echo 'FAIL: BepInEx-prefixed Steam opening was not recorded in its profile' >&2
   exit 1
 fi
+printf '%s\n' \
+  '[Info   : Unity Log] 11/25/2026 18:28:48: ZSteamSocket  UnregisterGlobalCallbacks, existing sockets:0' \
+  '[Warning: Unity Log] 1/5/2026 18:28:48: Warning with date 11/25/2026 18:00:00: in content' \
+  '[Info   : Unity Log] Unity message without a timestamp' \
+  '[Message:   BepInEx] 11/25/2026 18:28:48: Plugin message' |
+  env -u VSS_ENV_FILE -u VSS_CONFIG_LOADED VSS_SERVER_NAME=Akanheim "$TEST_DIR/vss.log-filter"
+LOG_FILE="$TEST_DIR/valheim-logs.d/$(date +%Y-%m-%d).Akanheim.stdout.log"
+for expected in \
+  '25/11/2026 17:30:03: [Info   : Unity Log] Opened Steam server' \
+  '25/11/2026 17:30:03: [Info   : Unity Log] ZSteamSocket  UnregisterGlobalCallbacks, existing sockets:0' \
+  '25/11/2026 17:30:03: [Warning: Unity Log] Warning with date 11/25/2026 18:00:00: in content' \
+  '25/11/2026 17:30:03: [Info   : Unity Log] Unity message without a timestamp' \
+  '25/11/2026 17:30:03: [Message:   BepInEx] 11/25/2026 18:28:48: Plugin message'; do
+  if ! grep -Fxq "$expected" "$LOG_FILE"; then
+    printf 'FAIL: incorrect Unity or BepInEx log output: %s\n' "$expected" >&2
+    exit 1
+  fi
+done
+if ! grep -Fxq '25/11/2026 17:30:01: Opened Steam server' \
+    "$TEST_DIR/valheim-logs.d/$(date +%Y-%m-%d).Steam.stdout.log"; then
+  echo 'FAIL: vanilla Unity timestamp was not removed from the VSS log' >&2
+  exit 1
+fi
 MOCK_NOW='2026-11-25 17:30:04'
 printf '%s\n' '11/25/2026  17:08:00: Opened   Steam  server' |
   env -u VSS_ENV_FILE -u VSS_CONFIG_LOADED VSS_SERVER_NAME=Akanheim "$TEST_DIR/vss.log-filter"
@@ -179,6 +202,7 @@ fi
 MOCK_NOW='2026-11-25 17:30:08'
 printf '%s\n' \
   'Opened Steam server' \
+  '[Info   : Unity Log] 11/25/2026 18:28:48: Clock failure message' \
   'Valheim version: l-1.0.16' \
   '[Message:   BepInEx] BepInEx 5.4.23.7 - valheim_server (07/10/2020 23:14:40)' \
   'World save (5/5) done. Total time [319ms]' |
@@ -199,6 +223,7 @@ fi
 LOG_FILE="$TEST_DIR/valheim-logs.d/$(date +%Y-%m-%d).Akanheim.stdout.log"
 if ! grep -Fxq '25/11/2026 17:30:07: [Info   : Unity Log] Valheim version: l-1.0.14 (network version 40)' "$LOG_FILE" ||
    ! grep -Fxq '25/11/2026 17:30:07: [Message:   BepInEx] BepInEx 5.4.23.5 - valheim_server (07/09/2020 23:14:40)' "$LOG_FILE" ||
+   ! grep -Fxq '[Info   : Unity Log] 11/25/2026 18:28:48: Clock failure message' "$LOG_FILE" ||
    ! grep -Fxq 'Opened Steam server' "$LOG_FILE"; then
   echo 'FAIL: captured lines were not timestamped or preserved on clock failure' >&2
   exit 1
