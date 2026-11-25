@@ -157,6 +157,44 @@ vss_bepinex_remove_legacy_doorstop_link() {
   fi
 }
 
+vss_bepinex_link_profile_config() (
+  local config="$1"
+  local target="$2"
+  local policy="${3:-strict}"
+  local tmp_dir
+
+  case "$policy" in
+    strict|defer|replace) ;;
+    *) printf 'Invalid BepInEx configuration link policy: %s\n' "$policy" >&2; return 1 ;;
+  esac
+  if [[ -L "$config" && "$(readlink -- "$config")" == "$target" ]]; then
+    return 0
+  fi
+  if [[ -e "$config" || -L "$config" ]]; then
+    if [[ ! -f "$config" && ! -L "$config" ]]; then
+      printf 'Refusing to replace non-file BepInEx configuration: %s\n' "$config" >&2
+      return 1
+    fi
+    case "$policy" in
+      strict) printf 'Refusing to replace profile-specific BepInEx.cfg: %s\n' "$config" >&2; return 1 ;;
+      defer) return 0 ;;
+    esac
+    if ! tmp_dir="$(mktemp -d "${config%/*}/.vss-bepinex-link.XXXXXX")"; then
+      printf 'Could not prepare BepInEx configuration link: %s\n' "$config" >&2
+      return 1
+    fi
+    trap 'rm -f -- "$tmp_dir/BepInEx.cfg"; rmdir -- "$tmp_dir"' EXIT
+    if ! ln -s -- "$target" "$tmp_dir/BepInEx.cfg" ||
+       ! mv -fT -- "$tmp_dir/BepInEx.cfg" "$config"; then
+      printf 'Could not replace BepInEx configuration with a link: %s\n' "$config" >&2
+      return 1
+    fi
+    printf 'Replaced profile-specific BepInEx configuration with the shared link: %s\n' "$config" >&2
+  else
+    ln -s -- "$target" "$config" || return 1
+  fi
+)
+
 vss_bepinex_prepare_profile() {
   local profile_root="$1"
   local image_root="$2"
@@ -234,14 +272,7 @@ vss_bepinex_prepare_profile() {
     "$current_doorstop_library" || return 1
   vss_bepinex_remove_legacy_doorstop_link "$profile_root" || return 1
 
-  if [[ -e "$profile_cfg" || -L "$profile_cfg" ]]; then
-    if [[ ! -L "$profile_cfg" || "$(readlink -- "$profile_cfg")" != "$expected_cfg" ]]; then
-      printf 'Refusing to replace profile-specific BepInEx.cfg: %s\n' "$profile_cfg" >&2
-      return 1
-    fi
-  else
-    ln -s -- "$expected_cfg" "$profile_cfg" || return 1
-  fi
+  vss_bepinex_link_profile_config "$profile_cfg" "$expected_cfg" "${4:-strict}" || return 1
 
   [[ -f "$profile_marker" ]] || : > "$profile_marker" || return 1
 }

@@ -100,6 +100,118 @@ function list_server_profiles() {
   done
 }
 
+function load_bepinex_profile_config() {
+  VSS_SERVER_NAME="$1"
+  unset VSS_ENV_FILE VSS_CONFIG_LOADED VHSERVERWORLD VSSBEPINEXDIR VSSBEPINEXENABLED
+  source "$CWD/lib/config.sh"
+  if ! vss_load_config "$CWD"; then
+    printf 'Could not load profile %s for BepInEx configuration.\n' "$1" >&2
+    return 1
+  fi
+}
+
+function bepinex_config_link_state() {
+  local config="$VSSBEPINEXDIR/BepInEx/config/BepInEx.cfg"
+  local expected="$CWD/bepinex/current/BepInEx/config/BepInEx.cfg"
+  local target
+
+  if [ ! -L "$config" ]; then
+    printf 'not-link'
+  elif ! target="$(readlink -- "$config")"; then
+    printf 'unreadable-link'
+  elif [ "$target" != "$expected" ]; then
+    printf 'wrong-target'
+  elif [ ! -f "$expected" ] || [ ! -r "$expected" ]; then
+    printf 'missing-target'
+  else
+    printf 'valid'
+  fi
+}
+
+function check_bepinex_profile_config() (
+  local name="$1"
+  local expected="$CWD/bepinex/current/BepInEx/config/BepInEx.cfg"
+  local config state target
+
+  load_bepinex_profile_config "$name" || return 1
+  config="$VSSBEPINEXDIR/BepInEx/config/BepInEx.cfg"
+  if [ "${VSSBEPINEXENABLED:-0}" = 0 ] && [ ! -e "$config" ] && [ ! -L "$config" ]; then
+    printf '%s: BepInEx disabled, no configuration to check.\n' "$name"
+    return 0
+  fi
+  state="$(bepinex_config_link_state)" || return 1
+  case "$state" in
+    not-link)
+      printf '%s: BepInEx configuration is missing or is not a symbolic link: %s\n' "$name" "$config" >&2 ;;
+    unreadable-link)
+      printf '%s: Could not read BepInEx configuration link: %s\n' "$name" "$config" >&2 ;;
+    wrong-target)
+      if ! target="$(readlink -- "$config")"; then
+        printf '%s: Could not read BepInEx configuration link: %s\n' "$name" "$config" >&2
+        return 1
+      fi
+      printf '%s: BepInEx configuration link points to %s; expected %s.\n' "$name" "$target" "$expected" >&2 ;;
+    missing-target)
+      printf '%s: Shared BepInEx configuration is missing or inaccessible: %s\n' "$name" "$expected" >&2 ;;
+    valid)
+      printf '%s: BepInEx configuration link OK.\n' "$name"
+      return 0 ;;
+    *)
+      printf '%s: Could not determine BepInEx configuration link state.\n' "$name" >&2 ;;
+  esac
+  return 1
+)
+
+function check_bepinex_config_links() {
+  local profile count=0 failed=0
+  while IFS= read -r profile; do
+    count=$((count + 1))
+    check_bepinex_profile_config "$profile" || failed=1
+  done < <(list_server_profiles)
+  if [ "$count" -eq 0 ]; then
+    printf 'No server profiles found for the BepInEx configuration check.\n' >&2
+    return 1
+  fi
+  return "$failed"
+}
+
+function recreate_bepinex_config_link() (
+  local name="$1"
+  local expected="$CWD/bepinex/current/BepInEx/config/BepInEx.cfg"
+  local config_dir config path
+
+  load_bepinex_profile_config "$name" || return 1
+  if [ ! -f "$expected" ] || [ ! -r "$expected" ]; then
+    printf '%s: Shared BepInEx configuration is missing or inaccessible: %s\n' "$name" "$expected" >&2
+    return 1
+  fi
+  config_dir="$VSSBEPINEXDIR/BepInEx/config"
+  config="$config_dir/BepInEx.cfg"
+  for path in "$VSSBEPINEXDIR" "$VSSBEPINEXDIR/BepInEx" "$config_dir"; do
+    if [ -L "$path" ] || [ ! -d "$path" ]; then
+      printf '%s: BepInEx profile directory is missing or is a symbolic link: %s\n' "$name" "$path" >&2
+      return 1
+    fi
+  done
+  if [ -e "$config" ] && [ ! -f "$config" ] && [ ! -L "$config" ]; then
+    printf '%s: Refusing to replace non-file BepInEx configuration: %s\n' "$name" "$config" >&2
+    return 1
+  fi
+  if [ -L "$config" ] && [ "$(readlink -- "$config")" = "$expected" ]; then
+    printf '%s: BepInEx configuration link already points to the shared configuration.\n' "$name"
+    return 0
+  fi
+  if ! source "$CWD/lib/bepinex.sh"; then
+    printf '%s: Could not load the BepInEx helpers.\n' "$name" >&2
+    return 1
+  fi
+  if ! vss_bepinex_link_profile_config "$config" "$expected" replace; then
+    printf '%s: Could not recreate BepInEx configuration link: %s\n' "$name" "$config" >&2
+    return 1
+  fi
+  printf '%s: BepInEx configuration link recreated: %s\n' "$name" "$config"
+)
+
 function setup_ui_read_menu_choice() {
   local maximum="$1"
   local selected_choice="${2:-1}"
@@ -307,7 +419,7 @@ function setup_ui_profile_card() (
   VSS_SERVER_NAME="$profile"
   export VSS_SERVER_NAME
   unset VSS_ENV_FILE VSS_CONFIG_LOADED
-  unset VHSERVERWORLD VHSERVERNAME VHSERVERSEED VHSERVERPORT VSSBEPINEXENABLED VALSERVERPID
+  unset VHSERVERWORLD VHSERVERNAME VHSERVERSEED VHSERVERPORT VSSBEPINEXENABLED VSSBEPINEXDIR VALSERVERPID
   unset STATUSMESSAGEID LASTLOGMESSAGEID SERVERCONNECTIONINFOMESSAGEID
   source "$CWD/lib/config.sh" || {
     printf '  +-- %s --+\n  | Configuration unavailable\n  +----------------------+\n' "$profile"
@@ -850,7 +962,7 @@ function setup_ui_logrotate_state() {
 function setup_ui_status_color() {
   case "$1" in
     installed|scheduled|configured|enabled|online) setup_ui_color '32' ;;
-    unknown) setup_ui_color '33' ;;
+    unknown|starting|warning) setup_ui_color '33' ;;
     *) setup_ui_color '31' ;;
   esac
 }
@@ -872,11 +984,11 @@ function setup_ui_profile_summary() {
   local prefix="$1"
   local profile="${VSS_SERVER_NAME:-}"
   local server_name="${VHSERVERNAME:-${VHSERVERWORLD:-unknown}}"
-  local server_pid
   local server_state='offline'
   local player_count
   local seed="${VHSERVERSEED:-not set}"
   local bepinex_state='disabled'
+  local bepinex_label='BepInEx'
   local cron_state
   local server_service_state
   local http_service_state
@@ -884,11 +996,8 @@ function setup_ui_profile_summary() {
   local logrotate_state
   local discord_message_state='missing'
 
-  server_pid="$(vss_find_server_pid || true)"
-  if [ -n "$server_pid" ] && ps -p "$server_pid" >/dev/null 2>&1; then
-    server_state='online'
-  fi
-  if [ "$server_state" = 'offline' ]; then
+  server_state="$(vss_server_state)" || return 1
+  if [ "$server_state" != 'online' ]; then
     player_count='0 connected'
   elif [ -r "${CONNECTEDPLAYERSFILE:-}" ]; then
     player_count="$(awk -F';' 'NF >= 3 && $2 != "" { count++ } END { print count+0 }' "$CONNECTEDPLAYERSFILE")"
@@ -900,7 +1009,14 @@ function setup_ui_profile_summary() {
   else
     player_count='unknown'
   fi
-  [ "${VSSBEPINEXENABLED:-0}" != 1 ] || bepinex_state='enabled'
+  if [ "${VSSBEPINEXENABLED:-0}" = 1 ]; then
+    if [ "$(bepinex_config_link_state)" = 'valid' ]; then
+      bepinex_state='enabled'
+    else
+      bepinex_state='warning'
+      bepinex_label='BepInEx (config link invalid)'
+    fi
+  fi
   cron_state="$(setup_ui_discord_cron_state "$profile")"
   server_service_state="$(setup_ui_unit_state "${VHSERVERSERVICENAME:-}")"
   http_service_state="$(setup_ui_unit_state "${VSSHTTPSERVICENAME:-}")"
@@ -922,7 +1038,7 @@ function setup_ui_profile_summary() {
   printf ' '
   setup_ui_status_item "$pipe_service_state" 'pipe'
   printf ' '
-  setup_ui_status_item "$bepinex_state" 'BepInEx'
+  setup_ui_status_item "$bepinex_state" "$bepinex_label"
   printf ' '
   setup_ui_status_item "$logrotate_state" 'logrotate'
   printf '\n'
@@ -2683,6 +2799,9 @@ Usage:
   ./setup --restart-server SERVER_NAME
   ./setup --status-server SERVER_NAME
   ./setup --check-firewall SERVER_NAME
+  ./setup --check-bepinex-config
+  ./setup --recreate-bepinex-config-link SERVER_NAME
+  ./setup --upgrade-bepinex
   ./setup --discord-update SERVER_NAME
   ./setup --set-r2modman-code SERVER_NAME CODE
   ./migrate-v2-to-v3
@@ -2732,6 +2851,28 @@ function setup_main() {
       list_server_profiles
       return 0
       ;;
+    --upgrade-bepinex)
+      if [ "$#" -ne 1 ]; then
+        printf 'Option --upgrade-bepinex does not accept arguments.\n' >&2
+        return 2
+      fi
+      "$CWD/bepinex_upgrade.sh"
+      return $?
+      ;;
+    --check-bepinex-config)
+      if [ "$#" -ne 1 ]; then
+        printf 'Option --check-bepinex-config does not accept arguments.\n' >&2
+        return 2
+      fi
+      direct_action="$1"
+      ;;
+    --recreate-bepinex-config-link)
+      if [ "$#" -ne 2 ] || [ -z "$2" ]; then
+        printf 'Option %s requires exactly one server name.\n' "$1" >&2
+        return 2
+      fi
+      direct_action="$1"
+      ;;
     --maintenance-update)
       if [ "$#" -gt 2 ] || { [ "$#" -eq 2 ] && [ -z "$2" ]; }; then
         printf 'Option --maintenance-update accepts at most one non-empty Steam branch name.\n' >&2
@@ -2780,6 +2921,8 @@ function setup_main() {
   case "$direct_action" in
     --schedule-maintenance) set_maintenance_cron; return $? ;;
     --remove-maintenance-schedule) remove_maintenance_cron; return $? ;;
+    --check-bepinex-config) check_bepinex_config_links; return $? ;;
+    --recreate-bepinex-config-link) recreate_bepinex_config_link "$2"; return $? ;;
   esac
 
   if [ "$direct_action" = "--maintenance-update" ]; then

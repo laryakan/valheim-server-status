@@ -23,6 +23,8 @@ VHSERVERWORLD='UiWorld'
 VHSERVERPORT=2456
 STATUSPORT=8181
 vss_find_server_pid() { return 1; }
+vss_server_state() { printf 'offline'; }
+systemctl() { printf 'LoadState=not-found\nActiveState=inactive\n'; }
 setup_ui_unit_state() { printf 'not installed'; }
 
 menu_output="$(printf 'invalid\n0\n' | NO_COLOR=1 new_menu)"
@@ -92,6 +94,7 @@ VSSBEPINEXENABLED=0
 VALSERVERPID=''
 EOF
 printf 'VALSERVERPID=%s\n' "$$" >> "$PROFILE_OVERVIEW_DIR/.env.OverviewA"
+printf 'VALSERVERLASTOPEN="11/25/2026 14:56:25"\nVALSERVERLASTSHUTDOWN="11/25/2026 13:56:25"\n' >> "$PROFILE_OVERVIEW_DIR/.env.OverviewA"
 printf 'steamid;PlayerA;zdoid\n' > "$PROFILE_OVERVIEW_DIR/data/online-players.OverviewA"
 touch "$PROFILE_OVERVIEW_DIR/data/online-players.OverviewB"
 CWD="$PROFILE_OVERVIEW_DIR"
@@ -105,7 +108,7 @@ for expected in \
   'Ports: game 2456  |  HTTP 8181' \
   'Seed: SeedA' \
   'Players: 1 connected' \
-  'Setup: ● server ● HTTP ● pipe ● BepInEx ● logrotate' \
+  'Setup: ● server ● HTTP ● pipe ● BepInEx (config link invalid) ● logrotate' \
   'Discord: ● message ID ● update cron' \
   'OverviewB' \
   'World: OverviewB  |  Valheim: offline' \
@@ -119,6 +122,60 @@ for expected in \
     exit 1
   fi
 done
+cat > "$TMPDIR_UI/bepinex-overview.sh" <<EOF
+source "$ROOT/setup" >/dev/null
+CWD="$PROFILE_OVERVIEW_DIR"
+VSS_SERVER_NAME=OverviewA
+VSSBEPINEXDIR="$TMPDIR_UI/unrelated-profile"
+systemctl() { printf 'LoadState=not-found\\nActiveState=inactive\\n'; }
+crontab() { return 1; }
+setup_ui_profiles_overview
+EOF
+color_output="$(script -qec "bash '$TMPDIR_UI/bepinex-overview.sh'" /dev/null)"
+if [[ "$color_output" != *$'\033[33m●\033[0m BepInEx (config link invalid)'* ||
+      "$color_output" != *$'\033[31m●\033[0m BepInEx'* ]]; then
+  echo 'FAIL: overview did not show yellow for a missing enabled config and red for disabled BepInEx' >&2
+  exit 1
+fi
+bepinex_config="$PROFILE_OVERVIEW_DIR/bepinex/profiles/OverviewA/BepInEx/config/BepInEx.cfg"
+shared_config="$PROFILE_OVERVIEW_DIR/bepinex/current/BepInEx/config/BepInEx.cfg"
+mkdir -p "$(dirname "$bepinex_config")" "$(dirname "$shared_config")"
+printf 'shared configuration\n' > "$shared_config"
+ln -s "$PROFILE_OVERVIEW_DIR/wrong-config" "$bepinex_config"
+color_output="$(script -qec "bash '$TMPDIR_UI/bepinex-overview.sh'" /dev/null)"
+if [[ "$color_output" != *$'\033[33m●\033[0m BepInEx (config link invalid)'* ]]; then
+  echo 'FAIL: overview did not show yellow for an incorrect BepInEx link' >&2
+  exit 1
+fi
+rm "$bepinex_config"
+ln -s "$shared_config" "$bepinex_config"
+color_output="$(script -qec "bash '$TMPDIR_UI/bepinex-overview.sh'" /dev/null)"
+if [[ "$color_output" != *$'\033[32m●\033[0m BepInEx'* ||
+      "$color_output" == *'config link invalid'* ||
+      "$color_output" != *$'\033[31m●\033[0m BepInEx'* ]]; then
+  echo 'FAIL: overview did not show green for a valid link independently of other profiles' >&2
+  exit 1
+fi
+rm "$shared_config"
+color_output="$(script -qec "bash '$TMPDIR_UI/bepinex-overview.sh'" /dev/null)"
+if [[ "$color_output" != *$'\033[33m●\033[0m BepInEx (config link invalid)'* ]]; then
+  echo 'FAIL: overview did not show yellow for a broken shared link' >&2
+  exit 1
+fi
+systemctl() {
+  if [ "${2:-}" = 'valheim-server.OverviewB.service' ]; then
+    printf 'LoadState=loaded\nActiveState=active\nActiveEnterTimestamp=2000-01-01 00:00:00\n'
+  else
+    printf 'LoadState=not-found\nActiveState=inactive\n'
+  fi
+}
+overview_output="$(setup_ui_profiles_overview)"
+if [[ "$overview_output" != *'World: OverviewA  |  Valheim: online'* ||
+      "$overview_output" != *'World: OverviewB  |  Valheim: starting'* ]]; then
+  echo 'FAIL: profile overview did not display starting independently' >&2
+  exit 1
+fi
+systemctl() { printf 'LoadState=not-found\nActiveState=inactive\n'; }
 CRONTABWEBHOOKFREQ=0
 if [ "$(setup_ui_discord_cron_state OverviewA)" != 'disabled' ]; then
   echo "FAIL: disabled Discord cron frequency was not reflected in the profile state" >&2

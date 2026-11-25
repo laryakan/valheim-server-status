@@ -64,16 +64,17 @@ prepare_enabled_profile() (
     local profile_name="$1"
     local image_root="$2"
     local legacy_image_root="${3:-}"
+    local config_policy="${4:-strict}"
 
     VSS_SERVER_NAME="$profile_name"
     export VSS_SERVER_NAME
-    unset VSS_ENV_FILE VSS_CONFIG_LOADED
+    unset VSS_ENV_FILE VSS_CONFIG_LOADED VHSERVERWORLD VSSBEPINEXENABLED VSSBEPINEXDIR VSSBEPINEXLOGOUTPUT
     if ! vss_load_config "$VSSDIR"; then
         exit 2
     fi
     case "${VSSBEPINEXENABLED:-0}" in
         1)
-            if ! vss_bepinex_prepare_profile "$VSSBEPINEXDIR" "$image_root" "$legacy_image_root"; then
+            if ! vss_bepinex_prepare_profile "$VSSBEPINEXDIR" "$image_root" "$legacy_image_root" "$config_policy"; then
                 exit 2
             fi
             exit 0
@@ -290,7 +291,8 @@ for profile_file in "$VSSDIR"/.env.*; do
 
     profile_name="${profile_file#"$VSSDIR"/.env.}"
     vss_validate_server_name "$profile_name" || continue
-    if prepare_enabled_profile "$profile_name" "$PROFILE_IMAGE_DIR" "$OLD_TARGET"; then
+    # Keep conflicting profile configs intact until the new image is active.
+    if prepare_enabled_profile "$profile_name" "$PROFILE_IMAGE_DIR" "$OLD_TARGET" defer; then
         ENABLED_PROFILE_COUNT=$((ENABLED_PROFILE_COUNT + 1))
     else
         profile_status=$?
@@ -323,7 +325,7 @@ for profile_file in "$VSSDIR"/.env.*; do
 
     profile_name="${profile_file#"$VSSDIR"/.env.}"
     vss_validate_server_name "$profile_name" || continue
-    if prepare_enabled_profile "$profile_name" "$INSTALL_DIR" ""; then
+    if prepare_enabled_profile "$profile_name" "$INSTALL_DIR" "" replace; then
         continue
     else
         profile_status=$?
@@ -350,7 +352,7 @@ if [[ -n "$PROFILE_SYNC_ERROR" ]]; then
             esac
             profile_name="${profile_file#"$VSSDIR"/.env.}"
             vss_validate_server_name "$profile_name" || continue
-            if prepare_enabled_profile "$profile_name" "$OLD_TARGET" ""; then
+            if prepare_enabled_profile "$profile_name" "$OLD_TARGET" "" defer; then
                 continue
             else
                 profile_status=$?

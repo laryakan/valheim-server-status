@@ -22,6 +22,15 @@ STEAMIDMAPFILE="${STEAMIDMAPFILE:-$CWD/data/steamid-player-map}"
 LASTWORLDSAVEFILE="${LASTWORLDSAVEFILE:-$CWD/data/last-world-save}"
 CURRENT_STEAMID=""
 
+record_profile_timestamp() {
+   local key="$1" value="$2"
+   if grep -q "^${key}=" "$VSS_ENV_FILE"; then
+      sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$VSS_ENV_FILE"
+   else
+      printf '\n%s="%s"\n' "$key" "$value" >> "$VSS_ENV_FILE"
+   fi
+}
+
 while read LINE; do
    case "$LINE" in
    "Failed to hook dlsym, ignoring it. Error: no such function: dlsym"|"Failed to hook dup2, ignoring it. Error: no such function: dup2")
@@ -59,6 +68,20 @@ while read LINE; do
 
    if [[ "$LINE" =~ Got[[:space:]]handshake[[:space:]]from[[:space:]]client.*SteamID[[:space:]]+([^[:space:]]+) ]]; then
       CURRENT_STEAMID="${BASH_REMATCH[1]}"
+   fi
+
+   if [[ "$LINE" =~ ([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2}):?[[:space:]]+Opened[[:space:]](Steam|PlayFab)[[:space:]]server[[:space:]]*$ ]]; then
+      OPEN_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+      if ! record_profile_timestamp VALSERVERLASTOPEN "$OPEN_TS"; then
+         printf 'Could not record server opening for profile %s.\n' "$VSS_SERVER_NAME" >&2
+      fi
+   fi
+
+   if [[ "$LINE" =~ ([0-9]{2}/[0-9]{2}/[0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2}):?.*System[[:space:]]module[[:space:]]state[[:space:]]changed[[:space:]]to:[[:space:]]Shutdown\"?[[:space:]]*$ ]]; then
+      SHUTDOWN_TS="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+      if ! record_profile_timestamp VALSERVERLASTSHUTDOWN "$SHUTDOWN_TS"; then
+         printf 'Could not record server shutdown for profile %s.\n' "$VSS_SERVER_NAME" >&2
+      fi
    fi
 
    # Detect Valheim server version update

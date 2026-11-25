@@ -13,6 +13,7 @@ TOTALCPU=$(( TOTALCPU > 0 ? TOTALCPU : 1 ))
 TOTALRAM=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | cut -d' ' -f9 || echo 0) / 1024 ))
 
 VALHEIM_PID="$(vss_find_server_pid || true)"
+SERVER_STATE="$(vss_server_state)" || exit 1
 
 if [ -n "$VALHEIM_PID" ]
 then
@@ -111,11 +112,18 @@ fi
 
 if [ "$1" = '--for-webhook' ]
 then
-	if [ -z "$VALHEIM_PID" ]
+	if [ "$SERVER_STATE" != 'online' ]
 	then
+		STATUS_COLOR=15158332
+		STARTING_FIELD=''
+		if [ "$SERVER_STATE" = 'starting' ]; then
+			STATUS_COLOR=16776960
+			STARTING_FIELD="{\"name\":\"$(T status)\",\"value\":\"$(T starting)\"},"
+		fi
 		echo -n "{\"title\":\"$(T server_status_title)\",
-		\"embeds\":[{\"title\":\"${SERVER_NAME_TITLE}\",\"color\":15158332,
+		\"embeds\":[{\"title\":\"${SERVER_NAME_TITLE}\",\"color\":${STATUS_COLOR},
 		\"fields\":[
+		${STARTING_FIELD}
 		${CONNECTION_FIELDS}
 		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},
 		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
@@ -153,9 +161,13 @@ then
 fi
 
 echo -e ">=VALHEIM SERVER STATUS @ `date +'%F.%T'`=<"
-if [ -z "$VALHEIM_PID" ]
+if [ "$SERVER_STATE" != 'online' ]
 then
-       echo -e "SERVER OFFLINE !"
+       if [ "$SERVER_STATE" = 'starting' ]; then
+	       echo -e "SERVER STARTING !"
+       else
+	       echo -e "SERVER OFFLINE !"
+       fi
        echo -e "\n**Server version**"
        echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
        echo -e "\n**$(T last_start)**"
@@ -174,7 +186,11 @@ else
 fi
 
 echo -e "\n**Server session running since**"
-ps -p "$VALHEIM_PID" -o lstart,etime
+if [ -n "$VALHEIM_PID" ]; then
+	ps -p "$VALHEIM_PID" -o lstart,etime
+else
+	echo "unknown"
+fi
 
 echo -e "\n**Server version**"
 echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"

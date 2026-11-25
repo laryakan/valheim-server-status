@@ -25,6 +25,55 @@ vss_find_server_pid() {
   printf '%s\n' "$server_pid"
 }
 
+vss_service_start_time() {
+  local unit="${VHSERVERSERVICENAME:-valheim-server.$VSS_SERVER_NAME.service}"
+  local info line load_state='' active_state='' started=''
+  if ! info="$(systemctl show "$unit" --property=LoadState --property=ActiveState --property=ActiveEnterTimestamp)"; then
+    printf 'Could not inspect service %s; using the recorded log timestamps.\n' "$unit" >&2
+    return 1
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      LoadState=*) load_state="${line#*=}" ;;
+      ActiveState=*) active_state="${line#*=}" ;;
+      ActiveEnterTimestamp=*) started="${line#*=}" ;;
+    esac
+  done <<< "$info"
+  [ "$load_state" = 'loaded' ] && [ "$active_state" = 'active' ] || return 1
+  if [ -z "$started" ] || ! date -d "$started" +%s; then
+    printf 'Could not determine start time of service %s.\n' "$unit" >&2
+    return 1
+  fi
+}
+
+vss_server_state() (
+  local open_time='' shutdown_time='' service_start=''
+  local VALSERVERLASTOPEN='' VALSERVERLASTSHUTDOWN=''
+
+  if ! source "$VSS_ENV_FILE"; then
+    printf 'Could not read server status for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    return 1
+  fi
+  if [ -n "$VALSERVERLASTOPEN" ] && ! open_time="$(date -d "$VALSERVERLASTOPEN" +%s)"; then
+    printf 'Invalid server opening timestamp for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    open_time=''
+  fi
+  if [ -n "$VALSERVERLASTSHUTDOWN" ] && ! shutdown_time="$(date -d "$VALSERVERLASTSHUTDOWN" +%s)"; then
+    printf 'Invalid server shutdown timestamp for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    shutdown_time=''
+  fi
+  service_start="$(vss_service_start_time || true)"
+  if [ -n "$service_start" ] &&
+     { [ -z "$open_time" ] || (( open_time < service_start )); } &&
+     { [ -z "$shutdown_time" ] || (( shutdown_time < service_start )); }; then
+    printf 'starting'
+  elif [ -n "$open_time" ] && [ -n "$shutdown_time" ] && (( open_time > shutdown_time )); then
+    printf 'online'
+  else
+    printf 'offline'
+  fi
+)
+
 vss_load_config() {
   local root="${1:?VSS root directory is required}"
   local config_file="${VSS_ENV_FILE:-}"

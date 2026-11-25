@@ -6,6 +6,7 @@ case "${VSS_LANG:-en}" in
     T_SERVER_STATUS_TITLE="Statut du serveur Valheim"
     T_ONLINE="ONLINE"
     T_OFFLINE="OFFLINE"
+    T_STARTING="DÉMARRAGE"
     T_LAST_CHECK="Dernière vérification"
     T_LAST_START="Dernier démarrage"
     T_LAST_SAVE="Dernière sauvegarde"
@@ -66,6 +67,7 @@ case "${VSS_LANG:-en}" in
     T_SERVER_STATUS_TITLE="Valheim server status"
     T_ONLINE="ONLINE"
     T_OFFLINE="OFFLINE"
+    T_STARTING="STARTING"
     T_LAST_CHECK="Last Check"
     T_LAST_START="Last start"
     T_LAST_SAVE="Last save"
@@ -157,6 +159,7 @@ T() {
     server_status_title) echo "$T_SERVER_STATUS_TITLE" ;;
     online) echo "$T_ONLINE" ;;
     offline) echo "$T_OFFLINE" ;;
+    starting) echo "$T_STARTING" ;;
     last_check) echo "$T_LAST_CHECK" ;;
     last_start) echo "$T_LAST_START" ;;
     last_save) echo "$T_LAST_SAVE" ;;

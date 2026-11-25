@@ -134,7 +134,8 @@ sed -i 's/^vss_bepinex_prepare_profile() {/vss_bepinex_prepare_profile_original(
     "$TEST_ROOT/lib/bepinex.sh"
 cat >> "$TEST_ROOT/lib/bepinex.sh" <<'HELPER'
 vss_bepinex_prepare_profile() {
-    if [[ -n "${VSS_TEST_FAIL_IMAGE:-}" && "$2" == "$VSS_TEST_FAIL_IMAGE" ]]; then
+    if [[ -n "${VSS_TEST_FAIL_IMAGE:-}" && "$2" == "$VSS_TEST_FAIL_IMAGE" ]] &&
+       [[ -z "${VSS_TEST_FAIL_PROFILE:-}" || "$1" == */"$VSS_TEST_FAIL_PROFILE" ]]; then
         printf 'Injected post-switch profile sync failure\n' >&2
         return 1
     fi
@@ -161,13 +162,19 @@ EOF
 }
 create_profile Alpha 1
 create_profile Beta 1
+create_profile Gamma 1
 create_profile Disabled 0
+sed -i '/^VSSBEPINEXDIR=/d; /^VSSBEPINEXLOGOUTPUT=/d' "$TEST_ROOT/.env.Gamma"
 
-for profile in Alpha Beta; do
+for profile in Alpha Beta Gamma; do
     mkdir -p "$BEPINEX_DIR/profiles/$profile/doorstop_libs"
     ln -s "$BEPINEX_DIR/current/doorstop_libs/libdoorstop.so" \
         "$BEPINEX_DIR/profiles/$profile/doorstop_libs/libdoorstop.so"
 done
+mkdir -p "$BEPINEX_DIR/profiles/"{Alpha,Beta,Disabled}"/BepInEx/config"
+printf 'profile-specific configuration\n' > "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg"
+ln -s "$TMPDIR_UPGRADE/wrong-config" "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+printf 'disabled configuration\n' > "$BEPINEX_DIR/profiles/Disabled/BepInEx/config/BepInEx.cfg"
 
 make_fixture() {
     local version="$1"
@@ -179,7 +186,8 @@ make_fixture() {
 }
 
 make_fixture 5.4.23.6
-if ! BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.6.json" \
+if ! VSSBEPINEXDIR="$BEPINEX_DIR/profiles/Alpha" VSSBEPINEXENABLED=0 \
+    BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.6.json" \
     "$TEST_ROOT/bepinex_upgrade.sh" > "$TMPDIR_UPGRADE/upgrade.out" 2> "$TMPDIR_UPGRADE/upgrade.err"; then
     cat "$TMPDIR_UPGRADE/upgrade.err" >&2
     exit 1
@@ -193,7 +201,7 @@ if [[ -e "$OLD_VERSION" ]]; then
     echo "FAIL: the previous active BepInEx image was not removed" >&2
     exit 1
 fi
-for profile in Alpha Beta; do
+for profile in Alpha Beta Gamma; do
     PROFILE_ROOT="$BEPINEX_DIR/profiles/$profile"
     if [[ ! -f "$PROFILE_ROOT/BepInEx/plugins/example.dll" ]] ||
        [[ "$(cat "$PROFILE_ROOT/BepInEx/plugins/example.dll")" != 'keep plugin' ]]; then
@@ -213,6 +221,7 @@ for profile in Alpha Beta; do
     fi
     if [[ -L "$PROFILE_ROOT/BepInEx/core" || -L "$PROFILE_ROOT/BepInEx/plugins" ||
           -L "$PROFILE_ROOT/BepInEx/config" || ! -L "$PROFILE_ROOT/BepInEx/config/BepInEx.cfg" ||
+          "$(readlink "$PROFILE_ROOT/BepInEx/config/BepInEx.cfg")" != "$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg" ||
           ! -L "$PROFILE_ROOT/libdoorstop.so" ||
           "$(readlink "$PROFILE_ROOT/libdoorstop.so")" != "$BEPINEX_DIR/current/libdoorstop.so" ||
           -e "$PROFILE_ROOT/doorstop_libs" ]]; then
@@ -232,8 +241,9 @@ for profile in Alpha Beta; do
         exit 1
     fi
 done
-if [[ -e "$BEPINEX_DIR/profiles/Disabled" ]]; then
-    echo "FAIL: a disabled profile was prepared for BepInEx" >&2
+if [[ -e "$BEPINEX_DIR/profiles/Disabled/BepInEx/core" ]] ||
+   [[ "$(cat "$BEPINEX_DIR/profiles/Disabled/BepInEx/config/BepInEx.cfg")" != 'disabled configuration' ]]; then
+    echo "FAIL: a disabled profile was changed during the BepInEx upgrade" >&2
     exit 1
 fi
 printf 'profile-specific change\n' >> "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/Example.cfg"
@@ -261,8 +271,33 @@ if find "$BEPINEX_DIR" -maxdepth 1 -name '.upgrade.*' -print -quit | grep -q .; 
     exit 1
 fi
 
+rm "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg" \
+   "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+printf 'retain on failure\n' > "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg"
+mkdir "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+make_fixture 5.4.23.13
+if BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.13.json" \
+    "$TEST_ROOT/bepinex_upgrade.sh" > "$TMPDIR_UPGRADE/invalid-profile.out" 2> "$TMPDIR_UPGRADE/invalid-profile.err"; then
+    echo 'FAIL: upgrade accepted a directory as a profile configuration' >&2
+    exit 1
+fi
+if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]] ||
+   [[ "$(cat "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg")" != 'retain on failure' ]] ||
+   [[ ! -d "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg" ]]; then
+    echo 'FAIL: failed pre-switch preparation replaced a profile configuration or switched the image' >&2
+    exit 1
+fi
+rm "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg"
+rmdir "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+ln -s "$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg" "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg"
+ln -s "$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg" "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+
 make_fixture 5.4.23.9
-if VSS_TEST_FAIL_IMAGE="$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.9" \
+rm "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg" \
+   "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+printf 'replace during switch\n' > "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg"
+ln -s "$TMPDIR_UPGRADE/wrong-config" "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+if VSS_TEST_FAIL_IMAGE="$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.9" VSS_TEST_FAIL_PROFILE=Beta \
     BEPINEX_RELEASES_LATEST_URL="$FIXTURE_BASE_URL/release-5.4.23.9.json" \
     "$TEST_ROOT/bepinex_upgrade.sh" > "$TMPDIR_UPGRADE/rollback.out" 2> "$TMPDIR_UPGRADE/rollback.err"; then
     echo "FAIL: post-switch profile synchronization failure did not fail the upgrade" >&2
@@ -279,6 +314,13 @@ if ! grep -Fq 'previous image was retained' "$TMPDIR_UPGRADE/rollback.err"; then
     echo "FAIL: post-switch synchronization failure did not report the rollback outcome" >&2
     exit 1
 fi
+if [[ "$(readlink "$BEPINEX_DIR/profiles/Alpha/BepInEx/config/BepInEx.cfg")" != "$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg" ]] ||
+   [[ "$(readlink "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg")" != "$TMPDIR_UPGRADE/wrong-config" ]]; then
+    echo 'FAIL: rollback did not preserve the outcomes of already and not-yet synchronized profiles' >&2
+    exit 1
+fi
+rm "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
+ln -s "$BEPINEX_DIR/current/BepInEx/config/BepInEx.cfg" "$BEPINEX_DIR/profiles/Beta/BepInEx/config/BepInEx.cfg"
 
 NEW_VERSION="$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.7"
 cp -a "$BEPINEX_DIR/BepInEx_linux_x64_5.4.23.6" "$NEW_VERSION"
@@ -294,7 +336,7 @@ if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]]; 
     exit 1
 fi
 
-for profile in Alpha Beta Disabled; do
+for profile in Alpha Beta Gamma Disabled; do
     sed -i 's/^VSSBEPINEXENABLED=.*/VSSBEPINEXENABLED=0/' "$TEST_ROOT/.env.$profile"
 done
 mkdir -p "$BEPINEX_DIR/current/BepInEx/plugins"

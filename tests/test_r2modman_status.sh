@@ -5,11 +5,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMPDIR_STATUS="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_STATUS"' EXIT
 
-mkdir -p "$TMPDIR_STATUS"/{status,lib,data,launcher}
+mkdir -p "$TMPDIR_STATUS"/{status,lib,data,launcher,bin}
 mkdir -p "$TMPDIR_STATUS/logs"
 cp "$ROOT/status/server-status" "$TMPDIR_STATUS/status/"
 cp "$ROOT/lib/config.sh" "$ROOT/lib/validation.sh" "$TMPDIR_STATUS/lib/"
 cp "$ROOT/i18n.sh" "$TMPDIR_STATUS/"
+cat > "$TMPDIR_STATUS/bin/systemctl" <<'EOF'
+#!/bin/bash
+if [ "$1" != show ] || [ "$2" != 'valheim-server.StatusTest.service' ]; then
+  printf 'Unexpected systemctl request: %s\n' "$*" >&2
+  exit 1
+fi
+printf 'LoadState=loaded\nActiveState=%s\nActiveEnterTimestamp=%s\n' \
+  "${MOCK_SERVICE_STATE:-inactive}" "${MOCK_SERVICE_STARTED:-}"
+EOF
+chmod +x "$TMPDIR_STATUS/bin/systemctl"
+export PATH="$TMPDIR_STATUS/bin:$PATH"
 
 cat > "$TMPDIR_STATUS/.env.StatusTest" <<EOF
 VSSDIR="$TMPDIR_STATUS"
@@ -103,6 +114,31 @@ fi
 if grep -Fq 'R2Modman code' "$TMPDIR_STATUS/webhook-disabled.out" ||
    grep -Fq '01a1eaf3-9be3-9083-b9b4-26768368368e' "$TMPDIR_STATUS/webhook-disabled.out"; then
   echo "FAIL: R2Modman code was exposed while BepInEx was disabled" >&2
+  exit 1
+fi
+
+printf 'VALSERVERLASTOPEN="11/25/2026 16:21:00"\nVALSERVERLASTSHUTDOWN="11/25/2026 16:20:00"\n' >> "$TMPDIR_STATUS/.env.StatusTest"
+if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
+    > "$TMPDIR_STATUS/webhook-online.out" ||
+   ! grep -Fq '"title":"DisplayWorld","color":3066993' "$TMPDIR_STATUS/webhook-online.out" ||
+   ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" > "$TMPDIR_STATUS/status-online.out" ||
+   ! grep -Fq 'SERVER ONLINE !' "$TMPDIR_STATUS/status-online.out"; then
+  echo 'FAIL: status did not use opening and shutdown dates for Discord and HTTP text' >&2
+  exit 1
+fi
+
+sed -i 's/^VALSERVERLASTOPEN=.*/VALSERVERLASTOPEN="12\/31\/1999 23:58:00"/; s/^VALSERVERLASTSHUTDOWN=.*/VALSERVERLASTSHUTDOWN="12\/31\/1999 23:59:00"/' "$TMPDIR_STATUS/.env.StatusTest"
+export MOCK_SERVICE_STATE=active MOCK_SERVICE_STARTED='2000-01-01 00:00:00'
+if ! VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
+    > "$TMPDIR_STATUS/webhook-starting.out" ||
+   ! grep -Fq '"title":"DisplayWorld","color":16776960' "$TMPDIR_STATUS/webhook-starting.out" ||
+   ! grep -Fq '"value":"DÉMARRAGE"' "$TMPDIR_STATUS/webhook-starting.out"; then
+  echo 'FAIL: starting webhook did not show the localized yellow status' >&2
+  exit 1
+fi
+if VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" > "$TMPDIR_STATUS/status-starting.out" ||
+   ! grep -Fq 'SERVER STARTING !' "$TMPDIR_STATUS/status-starting.out"; then
+  echo 'FAIL: starting text status was not displayed' >&2
   exit 1
 fi
 
