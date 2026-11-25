@@ -24,7 +24,13 @@ VHSERVERPORT=2456
 STATUSPORT=8181
 vss_find_server_pid() { return 1; }
 vss_server_state() { printf 'offline'; }
-systemctl() { printf 'LoadState=not-found\nActiveState=inactive\n'; }
+systemctl() {
+  if [ "${2:-}" = 'valheim-server.OverviewA.service' ]; then
+    printf 'LoadState=loaded\nActiveState=active\nActiveEnterTimestamp=11/25/2026 14:00:00\n'
+  else
+    printf 'LoadState=not-found\nActiveState=inactive\n'
+  fi
+}
 setup_ui_unit_state() { printf 'not installed'; }
 
 menu_output="$(printf 'invalid\n0\n' | NO_COLOR=1 new_menu)"
@@ -94,7 +100,7 @@ VSSBEPINEXENABLED=0
 VALSERVERPID=''
 EOF
 printf 'VALSERVERPID=%s\n' "$$" >> "$PROFILE_OVERVIEW_DIR/.env.OverviewA"
-printf 'VALSERVERLASTOPEN="11/25/2026 14:56:25"\nVALSERVERLASTSHUTDOWN="11/25/2026 13:56:25"\n' >> "$PROFILE_OVERVIEW_DIR/.env.OverviewA"
+printf 'VALSERVERLASTOPEN="11/25/2026 14:56:25"\n' >> "$PROFILE_OVERVIEW_DIR/.env.OverviewA"
 printf 'steamid;PlayerA;zdoid\n' > "$PROFILE_OVERVIEW_DIR/data/online-players.OverviewA"
 touch "$PROFILE_OVERVIEW_DIR/data/online-players.OverviewB"
 CWD="$PROFILE_OVERVIEW_DIR"
@@ -165,6 +171,8 @@ fi
 systemctl() {
   if [ "${2:-}" = 'valheim-server.OverviewB.service' ]; then
     printf 'LoadState=loaded\nActiveState=active\nActiveEnterTimestamp=2000-01-01 00:00:00\n'
+  elif [ "${2:-}" = 'valheim-server.OverviewA.service' ]; then
+    printf 'LoadState=loaded\nActiveState=active\nActiveEnterTimestamp=11/25/2026 14:00:00\n'
   else
     printf 'LoadState=not-found\nActiveState=inactive\n'
   fi
@@ -221,6 +229,7 @@ VHSERVERWORLD=UiWorld
 VHSERVERPORT=2456
 STATUSPORT=8181
 vss_find_server_pid() { return 1; }
+vss_server_state() { printf 'offline'; }
 setup_ui_unit_state() { printf 'not installed'; }
 new_menu
 EOF
@@ -347,6 +356,9 @@ TEST_PIPE_ACTIVE=0
 TEST_PIPE_ENABLED=0
 systemctl() {
   case "$1" in
+    show)
+      printf 'LoadState=loaded\nActiveState=inactive\n'
+      ;;
     is-active)
       case "$3" in
         "$VHSERVERSERVICENAME") [[ "$TEST_SERVER_ACTIVE" -eq 1 ]] ;;

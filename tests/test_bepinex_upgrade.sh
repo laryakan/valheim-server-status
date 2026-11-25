@@ -197,6 +197,10 @@ if [[ "$(readlink "$BEPINEX_DIR/current")" != 'BepInEx_linux_x64_5.4.23.6/' ]]; 
     echo "FAIL: current symlink was not switched to the downloaded image" >&2
     exit 1
 fi
+if [[ -e "$BEPINEX_DIR/current/.vss-updated-at" ]]; then
+    echo 'FAIL: upgrade recorded an image timestamp instead of waiting for log detection' >&2
+    exit 1
+fi
 if [[ -e "$OLD_VERSION" ]]; then
     echo "FAIL: the previous active BepInEx image was not removed" >&2
     exit 1

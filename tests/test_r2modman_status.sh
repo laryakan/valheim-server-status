@@ -117,17 +117,55 @@ if grep -Fq 'R2Modman code' "$TMPDIR_STATUS/webhook-disabled.out" ||
   exit 1
 fi
 
-printf 'VALSERVERLASTOPEN="11/25/2026 16:21:00"\nVALSERVERLASTSHUTDOWN="11/25/2026 16:20:00"\n' >> "$TMPDIR_STATUS/.env.StatusTest"
+sed -i 's/^VSSBEPINEXENABLED=0$/VSSBEPINEXENABLED=1/' "$TMPDIR_STATUS/.env.StatusTest"
+sed -i 's|^BEPINEXLASTUPDATE=.*|BEPINEXLASTUPDATE="25/11/2026 17:30:07"|' "$TMPDIR_STATUS/.env.StatusTest"
+mkdir -p "$TMPDIR_STATUS/bepinex/current"
+printf '01/01/2000 00:00:00\n' > "$TMPDIR_STATUS/bepinex/current/.vss-updated-at"
+printf 'VALSERVERLASTOPEN="11/25/2026 16:21:00"\n' >> "$TMPDIR_STATUS/.env.StatusTest"
+export MOCK_SERVICE_STATE=active MOCK_SERVICE_STARTED='11/25/2026 16:00:00'
 if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-online.out" ||
    ! grep -Fq '"title":"DisplayWorld","color":3066993' "$TMPDIR_STATUS/webhook-online.out" ||
+   ! grep -Fq '"value": "5.4.2202 (BepInEx update: 25/11/2026 17:30:07)"' "$TMPDIR_STATUS/webhook-online.out" ||
    ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" > "$TMPDIR_STATUS/status-online.out" ||
    ! grep -Fq 'SERVER ONLINE !' "$TMPDIR_STATUS/status-online.out"; then
-  echo 'FAIL: status did not use opening and shutdown dates for Discord and HTTP text' >&2
+  echo 'FAIL: active service and opening did not report online' >&2
+  exit 1
+fi
+if ! VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
+    > "$TMPDIR_STATUS/webhook-online-fr.out" ||
+   ! grep -Fq 'Mise à jour BepInEx: 25/11/2026 17:30:07' "$TMPDIR_STATUS/webhook-online-fr.out"; then
+  echo 'FAIL: French BepInEx update label was not displayed' >&2
+  exit 1
+fi
+sed -i 's/^BEPINEXLASTUPDATE=.*/BEPINEXLASTUPDATE=0/' "$TMPDIR_STATUS/.env.StatusTest"
+if ! VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
+    > "$TMPDIR_STATUS/webhook-no-upgrade.out" ||
+   ! grep -Fq '"value": "5.4.2202 (BepInEx update: unknown)"' "$TMPDIR_STATUS/webhook-no-upgrade.out"; then
+  echo 'FAIL: unknown profile date did not override stale image metadata' >&2
   exit 1
 fi
 
-sed -i 's/^VALSERVERLASTOPEN=.*/VALSERVERLASTOPEN="12\/31\/1999 23:58:00"/; s/^VALSERVERLASTSHUTDOWN=.*/VALSERVERLASTSHUTDOWN="12\/31\/1999 23:59:00"/' "$TMPDIR_STATUS/.env.StatusTest"
+if MOCK_SERVICE_STATE=inactive VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" \
+    > "$TMPDIR_STATUS/status-stopped.out" ||
+   ! grep -Fq 'SERVER OFFLINE !' "$TMPDIR_STATUS/status-stopped.out"; then
+  echo 'FAIL: stopped service with a previously detected opening did not report offline' >&2
+  exit 1
+fi
+if ! MOCK_SERVICE_STARTED='' VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
+    > "$TMPDIR_STATUS/webhook-no-start.out" ||
+   ! grep -Fq '"color":15158332' "$TMPDIR_STATUS/webhook-no-start.out"; then
+  echo 'FAIL: unavailable service start time did not report offline in Discord' >&2
+  exit 1
+fi
+if MOCK_SERVICE_STARTED='' VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" \
+    > "$TMPDIR_STATUS/status-no-start.out" ||
+   ! grep -Fq 'SERVER OFFLINE !' "$TMPDIR_STATUS/status-no-start.out"; then
+  echo 'FAIL: unavailable service start time did not report offline in text' >&2
+  exit 1
+fi
+
+sed -i 's/^VALSERVERLASTOPEN=.*/VALSERVERLASTOPEN="12\/31\/1999 23:58:00"/' "$TMPDIR_STATUS/.env.StatusTest"
 export MOCK_SERVICE_STATE=active MOCK_SERVICE_STARTED='2000-01-01 00:00:00'
 if ! VSS_LANG=fr VSS_SERVER_NAME=StatusTest "$TMPDIR_STATUS/status/server-status" --for-webhook \
     > "$TMPDIR_STATUS/webhook-starting.out" ||

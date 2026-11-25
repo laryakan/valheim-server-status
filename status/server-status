@@ -56,6 +56,7 @@ json_escape() {
 
 CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
 CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
+[ "$CURRENT_VERSION_TS" = 0 ] && CURRENT_VERSION_TS="unknown"
 CURRENT_START_TS="0"
 LAST_WORLD_SAVE_TS="$(cat "$LASTWORLDSAVEFILE" 2>/dev/null || echo "unknown")"
 BEPINEXVERSION_LABEL="Disabled"
@@ -70,7 +71,9 @@ if [ "$CURRENT_START_TS" = "unknown" ]; then
 fi
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
 then
-	BEPINEXVERSION_LABEL="${BEPINEXVERSION} ${BEPINEXLASTUPDATE:-not_installed}"
+	BEPINEX_UPDATE_TIME="${BEPINEXLASTUPDATE:-unknown}"
+	[ "$BEPINEX_UPDATE_TIME" = 0 ] && BEPINEX_UPDATE_TIME="unknown"
+	BEPINEXVERSION_LABEL="$(json_escape "${BEPINEXVERSION:-unknown} ($(T bepinex_upgrade): ${BEPINEX_UPDATE_TIME})")"
 fi
 R2MODMANCODE_FIELD=""
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ] && [ -n "${R2MODMANCODE:-}" ];
