@@ -2,7 +2,9 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/../crash.log"
+if [ "${1:-}" != "--notification" ]; then
+	exec 2>>"$CWD/../crash.log"
+fi
 source "$CWD/../lib/config.sh"
 vss_load_config "$CWD/.." || exit 1
 source "$CWD/../i18n.sh"
@@ -38,6 +40,15 @@ then
 		''|*[!0-9]*) MESSAGEID='' ;;
 		*) ;;
 	esac
+fi
+
+if [ "$1" = "--notification" ]; then
+	if [ "${DEBUGMODE:-0}" = 1 ]; then
+		echo "Discord notification not sent: debug mode is enabled." >&2
+		exit 1
+	fi
+	curl -sS --fail --max-time 15 -o /dev/null -H "Content-Type: application/json" -X POST -d "$CONTENT" "$WHURL"
+	exit $?
 fi
 
 if [ -n "${MESSAGEID:-}" ]

@@ -148,6 +148,121 @@ if ! VSS_SERVER_NAME=OtherWorld "$CWD/setup" --set-r2modman-code CliWorld 123456
   exit 1
 fi
 
+mkdir -p "$CWD/discord"
+cp "$ROOT/discord/webhook.json-sender" "$CWD/discord/"
+cp "$ROOT/i18n.sh" "$CWD/i18n.sh"
+cat > "$CWD/bin/curl" <<'EOF'
+#!/bin/bash
+method='' payload='' url=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -X) method="$2"; shift 2 ;;
+    -d) payload="$2"; shift 2 ;;
+    -H|-o|--max-time) shift 2 ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+printf '%s|%s|%s\n' "$method" "$url" "$payload" >> "$MOCK_CURL_CALLS"
+if [ -f "$MOCK_CURL_FAILURE" ]; then exit 22; fi
+EOF
+chmod +x "$CWD/bin/curl"
+export MOCK_CURL_CALLS="$TMPDIR_CLI/curl-calls" MOCK_CURL_FAILURE="$TMPDIR_CLI/curl-failure"
+write_env_value "$CWD/.env" WEBHOOKURL 'https://discord.com/api/webhooks/123/fake-token'
+write_env_value "$CWD/.env" WEBHOOKID 123
+write_env_value "$CWD/.env" WEBHOOKTOKEN fake-token
+write_env_value "$CWD/.env" VSS_LANG fr
+
+# The setting is off by default, then can be enabled using the modding menu.
+setup_main --set-r2modman-code CliWorld aaaaaaaa-1234-abcd-9876-123456789abc >/dev/null
+if [ -e "$MOCK_CURL_CALLS" ]; then
+  echo 'FAIL: default R2Modman notification setting sent a message' >&2
+  exit 1
+fi
+printf '4\n1\n0\n' | bepinex_menu > "$TMPDIR_CLI/r2-menu.out"
+if ! grep -Fxq 'R2MODMANNOTIFY=1' "$CWD/.env.CliWorld"; then
+  echo 'FAIL: modding menu did not enable R2Modman notifications' >&2
+  exit 1
+fi
+printf '3\nbbbbbbbb-1234-abcd-9876-123456789abc\n0\n' | bepinex_menu > "$TMPDIR_CLI/r2-menu-code.out"
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 1 ] ||
+   ! grep -Fq 'POST|https://discord.com/api/webhooks/123/fake-token|{"content":"CliWorld: Le code de partage R2Modman a été mis à jour: `bbbbbbbb-1234-abcd-9876-123456789abc`"}' "$MOCK_CURL_CALLS"; then
+  echo 'FAIL: menu did not send exactly one localized new R2Modman notification' >&2
+  exit 1
+fi
+setup_main --set-r2modman-code CliWorld bbbbbbbb-1234-abcd-9876-123456789abc >/dev/null
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 1 ]; then
+  echo 'FAIL: unchanged code sent a notification' >&2
+  exit 1
+fi
+setup_main --set-r2modman-code CliWorld '' >/dev/null
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 2 ] ||
+   ! grep -Fq 'CliWorld: Le code de partage R2Modman a été supprimé.' "$MOCK_CURL_CALLS"; then
+  echo 'FAIL: clearing the code did not send a localized removal notice' >&2
+  exit 1
+fi
+write_env_value "$CWD/.env" VSS_LANG en
+setup_main --set-r2modman-code CliWorld cccccccc-1234-abcd-9876-123456789abc >/dev/null
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 3 ] ||
+   ! grep -Fq 'CliWorld: The R2Modman share code has been updated: `cccccccc-1234-abcd-9876-123456789abc`' "$MOCK_CURL_CALLS"; then
+  echo 'FAIL: English R2Modman notification missing' >&2
+  exit 1
+fi
+touch "$MOCK_CURL_FAILURE"
+if setup_main --set-r2modman-code CliWorld dddddddd-1234-abcd-9876-123456789abc > "$TMPDIR_CLI/r2-failed.out" 2>&1 ||
+   ! grep -Fq 'code saved, but Discord notification failed' "$TMPDIR_CLI/r2-failed.out" ||
+   ! grep -Fq 'dddddddd-1234-abcd-9876-123456789abc' "$CWD/.env.CliWorld"; then
+  echo 'FAIL: notification failure did not preserve the code and report the failure' >&2
+  exit 1
+fi
+rm -f "$MOCK_CURL_FAILURE"
+sed -i '/^R2MODMANNOTIFY=/d' "$CWD/.env.OtherWorld"
+setup_main --set-r2modman-code OtherWorld eeeeeeee-1234-abcd-9876-123456789abc >/dev/null
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 4 ] ||
+   ! grep -Fxq 'R2MODMANNOTIFY=0' "$CWD/.env.OtherWorld"; then
+  echo 'FAIL: existing profile did not receive the disabled default or inherited another profile setting' >&2
+  exit 1
+fi
+setup_main --set-r2modman-code CliWorld invalid > "$TMPDIR_CLI/r2-invalid-notify.out" 2>&1 && {
+  echo 'FAIL: invalid code was accepted with notifications enabled' >&2
+  exit 1
+}
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 4 ]; then
+  echo 'FAIL: invalid code sent a notification' >&2
+  exit 1
+fi
+setup_main --set-r2modman-code CliWorld dddddddd-1234-abcd-9876-123456789abc >/dev/null
+write_env_value "$CWD/.env.CliWorld" DEBUGMODE 1
+if setup_main --set-r2modman-code CliWorld 11111111-1234-abcd-9876-123456789abc > "$TMPDIR_CLI/r2-debug.out" 2>&1 ||
+   ! grep -Fq 'debug mode is enabled' "$TMPDIR_CLI/r2-debug.out" ||
+   [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 4 ]; then
+  echo 'FAIL: debug mode did not visibly prevent the notification' >&2
+  exit 1
+fi
+write_env_value "$CWD/.env.CliWorld" DEBUGMODE 0
+write_env_value "$CWD/.env" WEBHOOKTOKEN ''
+if setup_main --set-r2modman-code CliWorld 22222222-1234-abcd-9876-123456789abc > "$TMPDIR_CLI/r2-missing-webhook.out" 2>&1 ||
+   ! grep -Fq 'code saved, but Discord notification failed: webhook is not configured' "$TMPDIR_CLI/r2-missing-webhook.out" ||
+   [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 4 ]; then
+  echo 'FAIL: missing webhook did not visibly report the saved code' >&2
+  exit 1
+fi
+write_env_value "$CWD/.env" WEBHOOKTOKEN fake-token
+if ! VSS_SERVER_NAME=OtherWorld VSS_ENV_FILE="$CWD/.env.OtherWorld" VSS_CONFIG_LOADED=1 \
+    "$CWD/setup" --set-r2modman-code CliWorld 33333333-1234-abcd-9876-123456789abc > "$TMPDIR_CLI/r2-executable.out" 2>&1 ||
+   [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 5 ] ||
+   ! grep -Fq 'CliWorld: The R2Modman share code has been updated: `33333333-1234-abcd-9876-123456789abc`' "$MOCK_CURL_CALLS"; then
+  echo 'FAIL: executable notification used the wrong profile' >&2
+  exit 1
+fi
+setup_main --set-r2modman-code CliWorld 33333333-1234-abcd-9876-123456789abc >/dev/null
+printf '4\n0\n0\n' | bepinex_menu > "$TMPDIR_CLI/r2-disable.out"
+setup_main --set-r2modman-code CliWorld ffffffff-1234-abcd-9876-123456789abc >/dev/null
+if [ "$(wc -l < "$MOCK_CURL_CALLS")" -ne 5 ]; then
+  echo 'FAIL: disabled R2Modman notification sent a message' >&2
+  exit 1
+fi
+
 write_env_value "$CWD/.env.CliWorld" VSSBEPINEXENABLED 1
 write_env_value "$CWD/.env.OtherWorld" VSSBEPINEXENABLED 1
 write_env_value "$CWD/.env.OtherWorld" VSSBEPINEXDIR "$CWD/custom-bepinex"

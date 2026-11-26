@@ -60,7 +60,8 @@ for expected in \
   'BepInEx and modding' \
   'Enable BepInEx for this profile' \
   'Disable BepInEx for this profile' \
-  'Set optional R2Modman/Thunderstore share code'; do
+  'Set optional R2Modman/Thunderstore share code' \
+  'Notify Discord when the R2Modman share code changes'; do
   if [[ "$modding_menu_output" != *"$expected"* ]]; then
     printf 'FAIL: BepInEx menu is missing "%s"\n' "$expected" >&2
     exit 1

@@ -1160,6 +1160,10 @@ function replace_env_value() {
     echo "Invalid integer value for $key: '$value'; using default $fallback" >&2
     value="$fallback"
   fi
+  if [ "$key" = R2MODMANNOTIFY ] && [ "$value" != 0 ] && [ "$value" != 1 ]; then
+    printf 'Invalid value for R2MODMANNOTIFY: %s; using default 0\n' "$value" >&2
+    value=0
+  fi
 
   case "$key" in
     VHSERVERPORT) candidate_game_port="$value" ;;
@@ -1187,6 +1191,39 @@ function replace_env_value() {
   fi
 
   reload_profile_config || return 1
+}
+
+function set_r2modman_code() {
+  local old_code="${R2MODMANCODE:-}" new_code="${1:-}" payload
+  if ! replace_env_value R2MODMANCODE "$new_code"; then
+    return 1
+  fi
+  [ "$old_code" != "$new_code" ] || return 0
+  case "${R2MODMANNOTIFY:-0}" in
+    0|'') return 0 ;;
+    1) ;;
+    *) printf 'R2Modman code saved, but R2MODMANNOTIFY is invalid for profile %s; notification disabled.\n' "$VSS_SERVER_NAME" >&2; return 1 ;;
+  esac
+  if [ "$(setup_ui_discord_webhook_state)" != configured ]; then
+    printf 'R2Modman code saved, but Discord notification failed: webhook is not configured for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    return 1
+  fi
+  if ! payload="$(
+    source "$CWD/i18n.sh" || exit 1
+    if [ -n "$new_code" ]; then
+      printf '{"content":"%s: %s: `%s`"}' "$VSS_SERVER_NAME" "$(T r2modman_updated)" "$new_code"
+    else
+      printf '{"content":"%s: %s."}' "$VSS_SERVER_NAME" "$(T r2modman_cleared)"
+    fi
+  )"; then
+    printf 'R2Modman code saved, but could not prepare the Discord notification for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    return 1
+  fi
+  if ! printf '%s' "$payload" | env -u VSS_ENV_FILE -u VSS_CONFIG_LOADED VSS_SERVER_NAME="$VSS_SERVER_NAME" \
+      "$CWD/discord/webhook.json-sender" --notification; then
+    printf 'R2Modman code saved, but Discord notification failed for profile %s.\n' "$VSS_SERVER_NAME" >&2
+    return 1
+  fi
 }
 
 # param1=value_label, param2=value_variable_in_.env
@@ -1219,7 +1256,9 @@ function setup_value_prompt() {
     echo "value unchanged"
     return 0
   fi
-  if ! replace_env_value "$2" "$new_value"; then
+  if [ "$2" = R2MODMANCODE ]; then
+    set_r2modman_code "$new_value" || return 1
+  elif ! replace_env_value "$2" "$new_value"; then
     echo "value unchanged" >&2
     return 1
   fi
@@ -2649,17 +2688,18 @@ function bepinex_menu() {
     setup_ui_menu_option "$selected" 1 'Enable BepInEx for this profile'
     setup_ui_menu_option "$selected" 2 'Disable BepInEx for this profile'
     setup_ui_menu_option "$selected" 3 'Set optional R2Modman/Thunderstore share code'
+    setup_ui_menu_option "$selected" 4 'Notify Discord when the R2Modman share code changes'
     printf '\n'
     setup_ui_menu_option "$selected" 0 'Return'
     printf '\n'
     printf 'Select an action: '
-    setup_ui_read_menu_choice 3 "$selected" || return 0
+    setup_ui_read_menu_choice 4 "$selected" || return 0
     choice="$SETUP_UI_CHOICE"
     if [ "$choice" = '__redraw__' ]; then
       selected="$SETUP_UI_SELECTED_CHOICE"
       continue
     fi
-    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 3 )) && selected="$choice"
+    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice <= 4 )) && selected="$choice"
     case "$choice" in
       1)
         if enable_bepinex_profile; then
@@ -2679,7 +2719,14 @@ function bepinex_menu() {
         if setup_value_prompt 'Optional R2Modman/Thunderstore share code' R2MODMANCODE; then
           notice='Mod-manager share code updated.'
         else
-          notice='Mod-manager share code was not changed.'
+          notice='Could not complete the code update or notification; review the diagnostic above.'
+        fi
+        ;;
+      4)
+        if setup_value_prompt 'Notify Discord on share-code changes (1=yes, 0=no)' R2MODMANNOTIFY; then
+          notice='Mod-manager notification setting updated.'
+        else
+          notice='Could not update the mod-manager notification setting.'
         fi
         ;;
       0) return 0 ;;
@@ -2898,8 +2945,8 @@ function run_server_cli_action() {
     --check-firewall) check_ufw_profile_rules 2>&1 ;;
     --discord-update) run_discord_update 2>&1 ;;
     --set-r2modman-code)
-      if ! replace_env_value R2MODMANCODE "$2"; then
-        printf 'Could not update the R2Modman code for profile %s.\n' "$VSS_SERVER_NAME" >&2
+      if ! set_r2modman_code "$2"; then
+        printf 'Could not complete the R2Modman code update or notification for profile %s.\n' "$VSS_SERVER_NAME" >&2
         return 1
       fi
       printf 'R2Modman code updated for profile %s.\n' "$VSS_SERVER_NAME"

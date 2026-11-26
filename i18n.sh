@@ -34,6 +34,8 @@ case "${VSS_LANG:-en}" in
     T_NO_LOG_TO_SEND="aucun journal à envoyer"
     T_MAINTENANCE_TITLE="Maintenance planifiée"
     T_MAINTENANCE_WARNING="Une maintenance planifiée est prévue. Des joueurs sont connectés sur les serveurs configurés ; la maintenance est reportée de 5 minutes. Préparez-vous à vous déconnecter !"
+    T_R2MODMAN_UPDATED="Le code de partage R2Modman a été mis à jour"
+    T_R2MODMAN_CLEARED="Le code de partage R2Modman a été supprimé"
     T_STATUS_MESSAGE_DELETED="Le message de statut a été supprimé du serveur, un nouveau message sera envoyé, veuillez vérifier le profil .env.$VSS_SERVER_NAME"
     T_PATCH_FAILED="Échec de la requête PATCH Discord avec HTTP %s ; le message existant est conservé sans en créer un nouveau."
     T_USAGE="usage:\njson_to_send | ./script <--status|message_id>"
@@ -95,6 +97,8 @@ case "${VSS_LANG:-en}" in
     T_NO_LOG_TO_SEND="no log to send"
     T_MAINTENANCE_TITLE="Planned maintenance"
     T_MAINTENANCE_WARNING="A planned maintenance has been scheduled. We detected connected players across the configured servers, so maintenance is delayed for 5 minutes. Get your things in order!"
+    T_R2MODMAN_UPDATED="The R2Modman share code has been updated"
+    T_R2MODMAN_CLEARED="The R2Modman share code has been cleared"
     T_STATUS_MESSAGE_DELETED="Status message has been deleted from the server, a new message will be sent, please check .env.$VSS_SERVER_NAME"
     T_PATCH_FAILED="Discord PATCH failed with HTTP %s; keeping existing message without creating a new one."
     T_USAGE="usage:\njson_to_send | ./script <--status|message_id>"
@@ -185,6 +189,8 @@ T() {
     password) echo "$T_PASSWORD" ;;
     last_logs) echo "$T_LAST_LOGS" ;;
     no_log_to_send) echo "$T_NO_LOG_TO_SEND" ;;
+    r2modman_updated) echo "$T_R2MODMAN_UPDATED" ;;
+    r2modman_cleared) echo "$T_R2MODMAN_CLEARED" ;;
     status_message_deleted) echo "$T_STATUS_MESSAGE_DELETED" ;;
     patch_failed)
       if [ -n "${2:-}" ]; then
