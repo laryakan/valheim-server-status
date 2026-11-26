@@ -45,6 +45,8 @@ for expected in \
   'BepInEx and modding' \
   'Switch server profile' \
   'Check global maintenance schedule (root crontab; sudo, read-only)' \
+  'Restart all previously active servers without updating (sudo)' \
+  'Schedule daily restart without updating at 05:00 (root crontab; sudo)' \
   'Select an action:' \
   'Unknown option: invalid' \
   'Exit'; do
@@ -75,6 +77,16 @@ if [[ "$menu_output" == *$'\033'* ]]; then
 fi
 if [[ "$menu_output" == *'PROFILES OVERVIEW'* ]]; then
   echo "FAIL: setup dashboard showed the profile overview outside profile selection" >&2
+  exit 1
+fi
+(
+  run_server_maintenance() { printf 'run %s\n' "$*" >> "$TMPDIR_UI/maintenance-actions"; }
+  set_maintenance_cron() { printf 'schedule %s\n' "$*" >> "$TMPDIR_UI/maintenance-actions"; }
+  printf '19\nRESTART\n20\nSCHEDULE\n0\n' | NO_COLOR=1 new_menu > "$TMPDIR_UI/restart-menu.out"
+)
+if ! grep -Fxq 'run --no-upgrade' "$TMPDIR_UI/maintenance-actions" ||
+   ! grep -Fxq 'schedule --no-upgrade' "$TMPDIR_UI/maintenance-actions"; then
+  echo 'FAIL: restart-only menu actions did not pass the no-upgrade option' >&2
   exit 1
 fi
 

@@ -3,6 +3,11 @@
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source "$CWD/lib/config.sh"
 
+if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ "$1" != '--no-upgrade' ]; }; then
+   printf 'Usage: %s [--no-upgrade]\n' "$0" >&2
+   exit 2
+fi
+
 # Bash file dedicated to planned maintenance (can be called through a crontab to make a Valheim server service restart/update)
 function profile_connected_count() (
    local profile="$1"
@@ -75,4 +80,4 @@ then
    sleep 5m
 fi
 
-exec "$CWD/setup" --maintenance-update
+exec "$CWD/setup" --maintenance-update "$@"

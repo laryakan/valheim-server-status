@@ -16,7 +16,7 @@ case "${1:-}" in
     printf 'Alpha\nBeta\n'
     ;;
   --maintenance-update)
-    printf 'maintenance update\n' >> "$MAINTENANCE_EVENTS"
+    printf 'maintenance update%s\n' "${2:+ $2}" >> "$MAINTENANCE_EVENTS"
     ;;
   *)
     exit 2
@@ -30,6 +30,7 @@ cat >> "$MAINTENANCE_EVENTS"
 EOF
 cat > "$TEST_DIR/bin/sleep" <<'EOF'
 #!/bin/sh
+printf 'sleep %s\n' "$*" >> "$MAINTENANCE_EVENTS"
 exit 0
 EOF
 chmod +x "$TEST_DIR/setup" "$TEST_DIR/discord/webhook.json-sender" "$TEST_DIR/bin/sleep"
@@ -59,6 +60,22 @@ if [ "$(grep -c '^maintenance update$' "$MAINTENANCE_EVENTS")" -ne 1 ] ||
    ! grep -Fq 'Préparez-vous à vous déconnecter !' "$MAINTENANCE_EVENTS"; then
   cat "$TEST_DIR/output" "$MAINTENANCE_EVENTS" >&2
   echo "FAIL: planned maintenance did not aggregate profiles and invoke one global update" >&2
+  exit 1
+fi
+
+: > "$MAINTENANCE_EVENTS"
+if ! "$TEST_DIR/vss.maintenance" --no-upgrade > "$TEST_DIR/output" 2>&1 ||
+   ! grep -Fxq 'maintenance update --no-upgrade' "$MAINTENANCE_EVENTS" ||
+   ! grep -Fxq 'webhook Alpha' "$MAINTENANCE_EVENTS" ||
+   ! grep -Fxq 'sleep 5m' "$MAINTENANCE_EVENTS"; then
+  echo 'FAIL: restart-only planned maintenance did not retain the player warning or pass the option' >&2
+  exit 1
+fi
+: > "$MAINTENANCE_EVENTS"
+if "$TEST_DIR/vss.maintenance" --unknown > "$TEST_DIR/output" 2>&1 ||
+   "$TEST_DIR/vss.maintenance" --no-upgrade extra > "$TEST_DIR/output" 2>&1 ||
+   [ -s "$MAINTENANCE_EVENTS" ]; then
+  echo 'FAIL: invalid planned maintenance options triggered side effects' >&2
   exit 1
 fi
 

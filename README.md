@@ -58,9 +58,15 @@ Valheim updates are explicit because all profiles share the same server files. D
 ./setup --maintenance-update
 # Or select a Steam branch for this update:
 ./setup --maintenance-update public
+# Restart without running SteamCMD:
+./setup --maintenance-update --no-upgrade
+# With the player warning and delay when players are connected:
+./vss.maintenance --no-upgrade
 ```
 
 The command stops every installed profile's Valheim service, refreshes each configured Discord status message to reflect the stopped service, runs SteamCMD once against the shared `VHSERVERDIR`, then starts only the services that were active before the request, sequentially. A Discord refresh is skipped if the webhook or a valid message ID is missing; a failed refresh or 15-second timeout is reported without preventing maintenance or restarts. After restart, the normal profile Discord cron updates the message; if that job is disabled, update it manually. Services that were already stopped remain stopped. `vss.maintenance` checks connected-player state across all profiles, sends one warning when needed, then calls the same operation. The warning title and description use the shared `VSS_LANG` setting (`en` or `fr`). Setup can schedule it as one global job; do not schedule it separately per profile.
+
+With `--no-upgrade`, the same stop, Discord refresh, and restart sequence runs without SteamCMD or a branch. It does not require a valid Steam branch, server directory, SteamCMD path, or SteamCMD service user. The setup menu also offers a restart without upgrade.
 
 The branch is passed to SteamCMD as `-beta <branch>` ([SteamCMD documentation](https://developer.valvesoftware.com/wiki/SteamCMD)). Without an argument, setup uses `VSSSTEAMBRANCH` from the shared `.env`, including for scheduled maintenance. New installations and existing shared configurations missing this setting default to `default_old` (the previous stable release); set it to `public` for the current stable release. An argument overrides the setting for that update only.
 
@@ -72,10 +78,12 @@ Schedule or remove the global planned maintenance job from setup:
 
 ```bash
 ./setup --schedule-maintenance
+# Or replace it with a daily restart without SteamCMD:
+./setup --schedule-maintenance --no-upgrade
 ./setup --remove-maintenance-schedule
 ```
 
-Scheduling adds one idempotent entry to root's crontab for daily 05:00 system-local time. It requires `sudo`; if an older manual `vss.maintenance` cron entry exists, remove it first to avoid duplicate updates. The scheduled job checks every profile for connected players, then performs one global update.
+Scheduling adds one idempotent entry to root's crontab for daily 05:00 system-local time. It requires `sudo`; if an older manual `vss.maintenance` cron entry exists, remove it first to avoid duplicate updates. The scheduled job checks every profile for connected players, then performs one global update or, with `--no-upgrade`, one global restart without updating. Scheduling either mode replaces the other; the setup menu offers both.
 
 Setup also rejects overlapping Valheim port ranges and HTTP ports across profiles. HTTP ports must not overlap any profile's Valheim range.
 

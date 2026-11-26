@@ -50,6 +50,20 @@ if [ "$(grep -Fxc "0 5 * * * $CWD/vss.maintenance # vss-maintenance" "$MOCK_ROOT
   echo "FAIL: schedule was not unique or unrelated root cron entries changed" >&2
   exit 1
 fi
+if ! setup_main --schedule-maintenance --no-upgrade ||
+   ! setup_main --schedule-maintenance --no-upgrade ||
+   [ "$(grep -Fxc "0 5 * * * $CWD/vss.maintenance --no-upgrade # vss-maintenance" "$MOCK_ROOT_CRON")" -ne 1 ] ||
+   [ "$(grep -Fc '# vss-maintenance' "$MOCK_ROOT_CRON")" -ne 1 ] ||
+   ! grep -Fxq '15 2 * * * /usr/local/bin/backup-world' "$MOCK_ROOT_CRON"; then
+  echo 'FAIL: restart-only schedule did not replace the previous entry idempotently' >&2
+  exit 1
+fi
+if setup_main --schedule-maintenance --no-upgrade extra ||
+   setup_main --schedule-maintenance invalid ||
+   ! grep -Fxq "0 5 * * * $CWD/vss.maintenance --no-upgrade # vss-maintenance" "$MOCK_ROOT_CRON"; then
+  echo 'FAIL: invalid scheduling arguments changed the cron entry' >&2
+  exit 1
+fi
 maintenance_check_output="$(check_maintenance_cron)"
 if [[ "$maintenance_check_output" != *"Global maintenance schedule is present in root's crontab."* ]]; then
   echo "FAIL: maintenance schedule check did not detect the configured root cron entry" >&2

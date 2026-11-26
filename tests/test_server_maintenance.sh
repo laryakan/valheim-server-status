@@ -44,11 +44,13 @@ case "$action" in
     ;;
   stop)
     printf 'stop %s\n' "$unit" >> "$MAINTENANCE_EVENTS"
+    [ "${FAIL_STOP_UNIT:-}" != "$unit" ] || exit 1
     grep -Fvx "$unit" "$ACTIVE_UNITS" > "$ACTIVE_UNITS.tmp" || true
     mv "$ACTIVE_UNITS.tmp" "$ACTIVE_UNITS"
     ;;
   start)
     printf 'start %s\n' "$unit" >> "$MAINTENANCE_EVENTS"
+    [ "${FAIL_START_UNIT:-}" != "$unit" ] || exit 1
     printf '%s\n' "$unit" >> "$ACTIVE_UNITS"
     ;;
   *)
@@ -199,8 +201,49 @@ if run_server_maintenance > "$TEST_DIR/invalid-config.out" 2>&1 ||
 fi
 if setup_main --maintenance-update '' > "$TEST_DIR/invalid.out" 2>&1 ||
    setup_main --maintenance-update public extra > "$TEST_DIR/invalid.out" 2>&1 ||
+   setup_main --maintenance-update public --no-upgrade > "$TEST_DIR/invalid.out" 2>&1 ||
+   setup_main --maintenance-update --no-upgrade public > "$TEST_DIR/invalid.out" 2>&1 ||
    [ -s "$MAINTENANCE_EVENTS" ]; then
   echo "FAIL: invalid maintenance arguments were accepted or maintenance started" >&2
+  exit 1
+fi
+
+printf '%s\n' valheim-server.Alpha.service > "$ACTIVE_UNITS"
+: > "$MAINTENANCE_EVENTS"
+if ! (VSSSTEAMBRANCH=invalid VHSERVERDIR='' STEAMCMDPATH='' USERSERVICE='' \
+    setup_main --maintenance-update --no-upgrade) > "$TEST_DIR/no-upgrade.out" 2>&1 ||
+   [ "$(cat "$ACTIVE_UNITS")" != 'valheim-server.Alpha.service' ] ||
+   [ "$(grep -c '^stop ' "$MAINTENANCE_EVENTS")" -ne 2 ] ||
+   [ "$(grep -c '^discord ' "$MAINTENANCE_EVENTS")" -ne 2 ] ||
+   [ "$(grep -c '^start ' "$MAINTENANCE_EVENTS")" -ne 1 ] ||
+   grep -q '^steamcmd ' "$MAINTENANCE_EVENTS" ||
+   ! grep -Fxq 'start valheim-server.Alpha.service' "$MAINTENANCE_EVENTS" ||
+   ! grep -Fq 'Skipping SteamCMD update.' "$TEST_DIR/no-upgrade.out"; then
+  echo 'FAIL: restart without upgrade did not preserve service and Discord behavior' >&2
+  exit 1
+fi
+stop_line="$(grep -n '^stop ' "$MAINTENANCE_EVENTS" | tail -n 1 | cut -d: -f1)"
+discord_line="$(grep -n '^discord ' "$MAINTENANCE_EVENTS" | head -n 1 | cut -d: -f1)"
+last_discord_line="$(grep -n '^discord ' "$MAINTENANCE_EVENTS" | tail -n 1 | cut -d: -f1)"
+start_line="$(grep -n '^start ' "$MAINTENANCE_EVENTS" | cut -d: -f1)"
+if [ "$stop_line" -ge "$discord_line" ] || [ "$last_discord_line" -ge "$start_line" ]; then
+  echo 'FAIL: restart without upgrade did not update Discord between stop and start' >&2
+  exit 1
+fi
+: > "$MAINTENANCE_EVENTS"
+if FAIL_STOP_UNIT=valheim-server.Beta.service setup_main --maintenance-update --no-upgrade \
+    > "$TEST_DIR/no-upgrade-stop-failure.out" 2>&1 ||
+   ! grep -Fxq 'start valheim-server.Alpha.service' "$MAINTENANCE_EVENTS" ||
+   grep -q '^steamcmd ' "$MAINTENANCE_EVENTS"; then
+  echo 'FAIL: restart-only stop failure did not restore previously active service' >&2
+  exit 1
+fi
+: > "$MAINTENANCE_EVENTS"
+if FAIL_START_UNIT=valheim-server.Alpha.service setup_main --maintenance-update --no-upgrade \
+    > "$TEST_DIR/no-upgrade-start-failure.out" 2>&1 ||
+   ! grep -Fq 'Failed to restart valheim-server.Alpha.service' "$TEST_DIR/no-upgrade-start-failure.out" ||
+   grep -q '^steamcmd ' "$MAINTENANCE_EVENTS"; then
+  echo 'FAIL: restart-only start failure was not reported' >&2
   exit 1
 fi
 

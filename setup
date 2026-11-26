@@ -1339,12 +1339,16 @@ function remove_profile_cron() {
 
 function set_maintenance_cron() {
   local script_command
+  local mode="${1:-}"
   local marker="# vss-maintenance"
   local entry
   local current_cron
   local updated_cron
 
   printf -v script_command '%q' "$CWD/vss.maintenance"
+  if [ "$mode" = '--no-upgrade' ]; then
+    script_command="$script_command --no-upgrade"
+  fi
   entry="0 5 * * * $script_command $marker"
   current_cron="$(sudo crontab -l 2>/dev/null || true)"
   updated_cron="$(printf '%s\n' "$current_cron" |
@@ -1354,7 +1358,11 @@ function set_maintenance_cron() {
     echo "Could not install the global maintenance schedule in root's crontab." >&2
     return 1
   fi
-  echo "Global maintenance is scheduled daily at 05:00 local time in root's crontab."
+  if [ "$mode" = '--no-upgrade' ]; then
+    echo "Global restart without upgrade is scheduled daily at 05:00 local time in root's crontab."
+  else
+    echo "Global maintenance is scheduled daily at 05:00 local time in root's crontab."
+  fi
   echo "Remove any older manual vss.maintenance cron entry to avoid running it twice."
 }
 
@@ -1448,6 +1456,7 @@ function update_maintenance_discord() (
 
 function run_server_maintenance() {
   local branch="${1:-${VSSSTEAMBRANCH-default_old}}"
+  local no_upgrade=0
   local profile
   local unit
   local update_status=0
@@ -1455,7 +1464,9 @@ function run_server_maintenance() {
   local -a profiles=()
   local -a installed_units=()
   local -a active_units=()
-  if ! valid_valheim_steam_branch "$branch"; then
+  if [ "$branch" = '--no-upgrade' ]; then
+    no_upgrade=1
+  elif ! valid_valheim_steam_branch "$branch"; then
     printf 'Invalid Valheim Steam branch: %s; maintenance was not run.\n' "${branch:-<empty>}" >&2
     return 1
   fi
@@ -1467,15 +1478,15 @@ function run_server_maintenance() {
     echo "No server profiles are configured; maintenance was not run." >&2
     return 1
   fi
-  if [ -z "${VHSERVERDIR:-}" ] || [ ! -d "$VHSERVERDIR" ]; then
+  if [ "$no_upgrade" -eq 0 ] && { [ -z "${VHSERVERDIR:-}" ] || [ ! -d "$VHSERVERDIR" ]; }; then
     echo "The shared Valheim server directory is missing or invalid; maintenance was not run." >&2
     return 1
   fi
-  if [ -z "${STEAMCMDPATH:-}" ] || [ ! -x "$STEAMCMDPATH" ]; then
+  if [ "$no_upgrade" -eq 0 ] && { [ -z "${STEAMCMDPATH:-}" ] || [ ! -x "$STEAMCMDPATH" ]; }; then
     echo "STEAMCMDPATH is missing or is not executable; maintenance was not run." >&2
     return 1
   fi
-  if [ -z "${USERSERVICE:-}" ]; then
+  if [ "$no_upgrade" -eq 0 ] && [ -z "${USERSERVICE:-}" ]; then
     echo "USERSERVICE is empty; maintenance was not run." >&2
     return 1
   fi
@@ -1494,8 +1505,11 @@ function run_server_maintenance() {
     return 1
   fi
 
-  printf 'Stopping all %s installed Valheim server instance(s) before updating the shared server files.\n' \
-    "${#installed_units[@]}"
+  if [ "$no_upgrade" -eq 1 ]; then
+    printf 'Stopping all %s installed Valheim server instance(s) for restart without upgrade.\n' "${#installed_units[@]}"
+  else
+    printf 'Stopping all %s installed Valheim server instance(s) before updating the shared server files.\n' "${#installed_units[@]}"
+  fi
   for unit in "${installed_units[@]}"; do
     if ! sudo systemctl stop "$unit"; then
       printf 'Failed to stop %s; restoring services that were active before maintenance.\n' "$unit" >&2
@@ -1510,11 +1524,15 @@ function run_server_maintenance() {
     update_maintenance_discord "$profile" || true
   done
 
-  printf 'Updating Valheim server files in %s with SteamCMD (branch: %s).\n' "$VHSERVERDIR" "$branch"
-  if ! sudo -u "$USERSERVICE" "$STEAMCMDPATH" +force_install_dir "$VHSERVERDIR" \
-      +login anonymous +app_update 896660 -beta "$branch" validate +exit; then
-    echo "SteamCMD update failed." >&2
-    update_status=1
+  if [ "$no_upgrade" -eq 0 ]; then
+    printf 'Updating Valheim server files in %s with SteamCMD (branch: %s).\n' "$VHSERVERDIR" "$branch"
+    if ! sudo -u "$USERSERVICE" "$STEAMCMDPATH" +force_install_dir "$VHSERVERDIR" \
+        +login anonymous +app_update 896660 -beta "$branch" validate +exit; then
+      echo "SteamCMD update failed." >&2
+      update_status=1
+    fi
+  else
+    echo "Skipping SteamCMD update."
   fi
 
   if ! restart_maintenance_services "${active_units[@]}"; then
@@ -2706,17 +2724,19 @@ new_menu(){
     setup_ui_menu_option "$selected" 16 'Schedule global maintenance daily at 05:00 local time (root crontab; sudo)'
     setup_ui_menu_option "$selected" 17 'Remove the global maintenance schedule (root crontab; sudo)'
     setup_ui_menu_option "$selected" 18 'Check global maintenance schedule (root crontab; sudo, read-only)'
+    setup_ui_menu_option "$selected" 19 'Restart all previously active servers without updating (sudo)'
+    setup_ui_menu_option "$selected" 20 'Schedule daily restart without updating at 05:00 (root crontab; sudo)'
     printf '\n'
     setup_ui_menu_option "$selected" 0 'Exit'
     printf '\n'
     printf 'Select an action: '
-    setup_ui_read_menu_choice 18 "$selected" || return 0
+    setup_ui_read_menu_choice 20 "$selected" || return 0
     a="$SETUP_UI_CHOICE"
     if [ "$a" = '__redraw__' ]; then
       selected="$SETUP_UI_SELECTED_CHOICE"
       continue
     fi
-    [[ "$a" =~ ^[0-9]+$ ]] && (( a <= 18 )) && selected="$a"
+    [[ "$a" =~ ^[0-9]+$ ]] && (( a <= 20 )) && selected="$a"
     case "$a" in
       1) setup_ui_clear; discord_menu ;;
       2) setup_ui_clear; launcher_menu ;;
@@ -2810,6 +2830,26 @@ new_menu(){
           notice="Could not inspect the root maintenance schedule; review the error above."
         fi
         ;;
+      19)
+        printf 'This stops all installed Valheim services and restarts only those previously active, without updating server files.\n'
+        printf 'Type RESTART to continue: '
+        read -r confirmation
+        if [ "$confirmation" = "RESTART" ]; then
+          run_server_maintenance --no-upgrade || notice="Maintenance failed; review the errors above and service status."
+        else
+          notice="Restart cancelled."
+        fi
+        ;;
+      20)
+        printf 'This replaces the global maintenance schedule with a daily restart without upgrade at 05:00 local time.\n'
+        printf 'Type SCHEDULE to continue: '
+        read -r confirmation
+        if [ "$confirmation" = "SCHEDULE" ]; then
+          set_maintenance_cron --no-upgrade || notice="Could not schedule restart; review the error above."
+        else
+          notice="Maintenance schedule was not changed."
+        fi
+        ;;
       0) exit 0 ;;
       *) notice="Unknown option: $a" ;;
     esac
@@ -2822,9 +2862,9 @@ Usage:
   ./setup [SERVER_NAME]
   ./setup --list
   ./setup --create SERVER_NAME
-  ./setup --schedule-maintenance
+  ./setup --schedule-maintenance [--no-upgrade]
   ./setup --remove-maintenance-schedule
-  ./setup --maintenance-update [STEAM_BRANCH]
+  ./setup --maintenance-update [STEAM_BRANCH|--no-upgrade]
   ./setup --start-server SERVER_NAME
   ./setup --stop-server SERVER_NAME
   ./setup --restart-server SERVER_NAME
@@ -2906,19 +2946,25 @@ function setup_main() {
       ;;
     --maintenance-update)
       if [ "$#" -gt 2 ] || { [ "$#" -eq 2 ] && [ -z "$2" ]; }; then
-        printf 'Option --maintenance-update accepts at most one non-empty Steam branch name.\n' >&2
+        printf 'Option --maintenance-update accepts one Steam branch or --no-upgrade, not both.\n' >&2
         return 2
       fi
-      if [ "$#" -eq 2 ] && ! valid_valheim_steam_branch "$2"; then
+      if [ "$#" -eq 2 ] && [ "$2" != '--no-upgrade' ] && ! valid_valheim_steam_branch "$2"; then
         printf 'Invalid Valheim Steam branch: %s\n' "$2" >&2
         return 2
       fi
       direct_action="$1"
       ;;
-    --schedule-maintenance|--remove-maintenance-schedule)
-      if [ -n "${2:-}" ]; then
-        printf 'Option %s does not accept a server name.\n' "$1"
-        setup_usage
+    --schedule-maintenance)
+      if [ "$#" -gt 2 ] || { [ "$#" -eq 2 ] && [ "$2" != '--no-upgrade' ]; }; then
+        printf 'Option --schedule-maintenance accepts only --no-upgrade.\n' >&2
+        return 2
+      fi
+      direct_action="$1"
+      ;;
+    --remove-maintenance-schedule)
+      if [ "$#" -ne 1 ]; then
+        printf 'Option %s does not accept arguments.\n' "$1" >&2
         return 2
       fi
       direct_action="$1"
@@ -2950,7 +2996,7 @@ function setup_main() {
   fi
 
   case "$direct_action" in
-    --schedule-maintenance) set_maintenance_cron; return $? ;;
+    --schedule-maintenance) set_maintenance_cron "${2:-}"; return $? ;;
     --remove-maintenance-schedule) remove_maintenance_cron; return $? ;;
     --check-bepinex-config) check_bepinex_config_links; return $? ;;
     --recreate-bepinex-config-link) recreate_bepinex_config_link "$2"; return $? ;;
