@@ -1,32 +1,43 @@
 #!/bin/bash
 
-# This script purpose is to activate BepInEx_Valheim packaged version (symlink ./current on the used version) for VSS
-# Other version can be downloaded from https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/versions
-# Manual installation here https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/
+# Prepare the active BepInEx image for this profile, downloading the latest release if needed.
 
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/../crash.log"
-if [ "${DEBUGMODE:-0}" -eq 1 ];
-then
-   source "$CWD/../.env.test"
-else
-   source "$CWD/../.env"
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/bepinex.sh"
+
+if [[ "${VSSBEPINEXENABLED:-0}" != "1" ]]; then
+    printf 'BepInEx is disabled for profile %s; enable it in .env.%s before installing.\n' \
+        "$VSS_SERVER_NAME" "$VSS_SERVER_NAME" >&2
+    exit 1
 fi
 
-BEPINEXFILES=$( ls -1tr "$VSSBEPINEXDIR/" 2>/dev/null )
-
-echo "BepInEx_Valheim files found in $VSSBEPINEXDIR:"
-for file in $BEPINEXFILES; do
-    if [ "${DEBUGMODE:-0}" -eq 1 ];
-    then
-        echo "DEBUG: Linking $VSSBEPINEXDIR/$file to $VHSERVERDIR/$file"
-        continue
+IMAGE_DIR="$VSSDIR/bepinex/current"
+if [[ -e "$IMAGE_DIR" && ! -L "$IMAGE_DIR" ]]; then
+    printf 'BepInEx current path is not a symbolic link: %s\n' "$IMAGE_DIR" >&2
+    exit 1
+fi
+if [[ ! -L "$IMAGE_DIR" || ! -e "$IMAGE_DIR" ]]; then
+    printf 'No active BepInEx image found; downloading the latest release.\n' >&2
+    if ! "$VSSDIR/bepinex_upgrade.sh"; then
+        printf 'Could not download or install the BepInEx image needed by profile %s.\n' \
+            "$VSS_SERVER_NAME" >&2
+        exit 1
     fi
-    if [ -e "$VHSERVERDIR/$file" ]; then
-        continue
-    fi
-    ln -s "$VSSBEPINEXDIR/$file" "$VHSERVERDIR/$file"
-done
+fi
+if [[ ! -L "$IMAGE_DIR" || ! -d "$IMAGE_DIR" ]]; then
+    printf 'BepInEx upgrade did not create a usable current image: %s\n' "$IMAGE_DIR" >&2
+    exit 1
+fi
 
-echo "Remember to set VSSBEPINEXENABLED=1 in your .env file to enable BepInEx_Valheim for VSS : Can be done through ./setup"
-echo "Plugins/Mods can be installed in $VSSBEPINEXDIR/BepInEx/plugins"
+LEGACY_IMAGE_DIR="${VSS_BEPINEX_LEGACY_IMAGE:-$IMAGE_DIR}"
+vss_bepinex_prepare_profile "$VSSBEPINEXDIR" "$IMAGE_DIR" "$LEGACY_IMAGE_DIR" || exit 1
+vss_bepinex_remove_legacy_server_links "$VHSERVERDIR" || {
+    printf 'Could not remove legacy VSS BepInEx links from %s\n' "$VHSERVERDIR" >&2
+    exit 1
+}
+
+printf 'BepInEx is prepared for profile %s.\n' "$VSS_SERVER_NAME"
+printf 'Plugins/mods: %s/BepInEx/plugins\n' "$VSSBEPINEXDIR"
+printf 'Plugin configuration: %s/BepInEx/config (BepInEx.cfg is shared)\n' "$VSSBEPINEXDIR"

@@ -3,20 +3,17 @@
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 exec 2>>"$CWD/../crash.log"
-source "$CWD/../.env"
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/validation.sh"
 
 # Stats
 TOTALCPU=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
 TOTALCPU=$(( TOTALCPU > 0 ? TOTALCPU : 1 ))
 TOTALRAM=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | cut -d' ' -f9 || echo 0) / 1024 ))
 
-VALHEIM_PID="${VALSERVERPID:-}"
-if [ -n "$VALHEIM_PID" ] && ps -p "$VALHEIM_PID" >/dev/null 2>&1
-then
-	:
-else
-	VALHEIM_PID=$(pgrep -f 'valheim_server' 2>/dev/null | head -n 1)
-fi
+VALHEIM_PID="$(vss_find_server_pid || true)"
+SERVER_STATE="$(vss_server_state)" || exit 1
 
 if [ -n "$VALHEIM_PID" ]
 then
@@ -47,10 +44,38 @@ fi
 
 source "$CWD/../i18n.sh"
 
+json_escape() {
+	local value="$1"
+	value="${value//\\/\\\\}"
+	value="${value//\"/\\\"}"
+	value="${value//$'\n'/\\n}"
+	value="${value//$'\r'/\\r}"
+	value="${value//$'\t'/\\t}"
+	printf '%s' "$value"
+}
+
+display_recorded_date() {
+	local value="$1" month day year time
+	if [[ "$value" =~ ^([0-9]{2})/([0-9]{2})/([0-9]{4})[[:space:]]([0-9]{2}:[0-9]{2}:[0-9]{2})$ ]]; then
+		month="${BASH_REMATCH[1]}"
+		day="${BASH_REMATCH[2]}"
+		year="${BASH_REMATCH[3]}"
+		time="${BASH_REMATCH[4]}"
+		if (( 10#$month >= 1 && 10#$month <= 12 && 10#$day >= 13 && 10#$day <= 31 )) &&
+		   LC_ALL=C date -d "$year-$month-$day $time" +%s >/dev/null 2>&1; then
+			printf '%s/%s/%s %s' "$day" "$month" "$year" "$time"
+			return
+		fi
+	fi
+	printf '%s' "$value"
+}
+
 CURRENT_VERSION="${VALSERVERVERSION:-unknown}"
-CURRENT_VERSION_TS="${VALSERVERLASTUPDATE:-unknown}"
+CURRENT_VERSION_TS="$(display_recorded_date "${VALSERVERLASTUPDATE:-unknown}")"
+[ "$CURRENT_VERSION_TS" = 0 ] && CURRENT_VERSION_TS="unknown"
 CURRENT_START_TS="0"
 LAST_WORLD_SAVE_TS="$(cat "$LASTWORLDSAVEFILE" 2>/dev/null || echo "unknown")"
+LAST_WORLD_SAVE_TS="$(display_recorded_date "$LAST_WORLD_SAVE_TS")"
 BEPINEXVERSION_LABEL="Disabled"
 if [ -n "$PROCESS_START_TS" ] && [ "$PROCESS_START_TS" != "unknown" ]; then
 	CURRENT_START_TS="$PROCESS_START_TS"
@@ -63,36 +88,81 @@ if [ "$CURRENT_START_TS" = "unknown" ]; then
 fi
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
 then
-	BEPINEXVERSION_LABEL="${BEPINEXVERSION} ${BEPINEXLASTUPDATE:-not_installed}"
+	BEPINEX_UPDATE_TIME="$(display_recorded_date "${BEPINEXLASTUPDATE:-unknown}")"
+	[ "$BEPINEX_UPDATE_TIME" = 0 ] && BEPINEX_UPDATE_TIME="unknown"
+	BEPINEXVERSION_LABEL="$(json_escape "${BEPINEXVERSION:-unknown} (${BEPINEX_UPDATE_TIME})")"
+fi
+R2MODMANCODE_FIELD=""
+if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ] && [ -n "${R2MODMANCODE:-}" ];
+then
+	if validate_r2modman_code "$R2MODMANCODE"; then
+		R2MODMANCODE_FIELD="{\"name\":\"R2Modman code\",\"value\":\"\`${R2MODMANCODE}\`\",\"inline\":false},"
+	else
+		printf 'R2MODMANCODE must be a UUID; omitting invalid code from status output.\n' >&2
+	fi
 fi
 
 CURRENT_SEED="${VHSERVERSEED:-unknown}"
 CURRENT_WORLD="${VHSERVERWORLD:-unknown}"
 VERSION_LABEL="${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
+SERVER_NAME_TITLE="$(json_escape "${VHSERVERNAME:-${VHSERVERWORLD:-unknown}}")"
+CONNECTION_FIELDS=""
+if [ "${SENDSERVERCONNECTIONINFO:-0}" -gt 0 ] 2>/dev/null
+then
+	CONNECTION_FIELDS="{\"name\":\"$(T connection_info_title)\",\"value\":\"$(T ip): ||$(json_escape "${PUBLICIP:-}:${VHSERVERPORT:-}")|| | $(T password): ||$(json_escape "${VHSERVERPASSWD:-}")||\",\"inline\":false},"
+fi
+LOGS_EMBED=""
+if [[ "${SENDLASTLOGS:-0}" =~ ^[0-9]+$ ]] && (( 10#$SENDLASTLOGS > 0 ))
+then
+	shopt -s nullglob
+	LOGFILES=( $VALHEIMSERVERLOGPATH )
+	shopt -u nullglob
+	LOG_BODY="$(T no_log_to_send)"
+	if [ "${#LOGFILES[@]}" -gt 0 ]
+	then
+		LAST_LOG="$(ls -1tr "${LOGFILES[@]}" 2>/dev/null | tail -1)"
+		if [ -n "$LAST_LOG" ]
+		then
+			LOG_BODY="$(tail -n "$SENDLASTLOGS" "$LAST_LOG" 2>/dev/null || true)"
+			[ -n "$LOG_BODY" ] || LOG_BODY="$(T no_log_to_send)"
+		fi
+	fi
+	LOGS_EMBED=",{\"title\":\"$(T last_logs)\",\"color\":10181046,\"description\":\"$(json_escape "$LOG_BODY")\"}"
+fi
 
 if [ "$1" = '--for-webhook' ]
 then
-	if [ -z "$VALHEIM_PID" ]
+	if [ "$SERVER_STATE" != 'online' ]
 	then
+		STATUS_COLOR=15158332
+		STARTING_FIELD=''
+		if [ "$SERVER_STATE" = 'starting' ]; then
+			STATUS_COLOR=16776960
+			STARTING_FIELD="{\"name\":\"$(T status)\",\"value\":\"$(T starting)\"},"
+		fi
 		echo -n "{\"title\":\"$(T server_status_title)\",
-		\"embeds\":[{\"title\":\"$(T offline)\",\"color\":15158332,
+		\"embeds\":[{\"title\":\"${SERVER_NAME_TITLE}\",\"color\":${STATUS_COLOR},
 		\"fields\":[
+		${STARTING_FIELD}
+		${CONNECTION_FIELDS}
 		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":true},
 		{\"name\":\"$(T last_start)\",\"value\": \"${CURRENT_START_TS}\",\"inline\":true},
 		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":true},
-		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"}
-		]}
-		]}"
+		${R2MODMANCODE_FIELD}
+		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%d/%m/%Y %H:%M:%S')\"}
+		]
+		}${LOGS_EMBED}]}"
 		exit 0
 	else
 		LIGHTONLINELIST=$(touch "$CONNECTEDPLAYERSFILE" && awk -F';' 'NF >= 3 && $2 != "" { print $2 }' "$CONNECTEDPLAYERSFILE" | paste -sd, - | sed 's/,/, /g')
 		LIGHTOFFLINELIST=$(touch "$OFFLINEPLAYERSFILE" && awk -F';' 'NF >= 3 && $2 != "" { print $2 }' "$OFFLINEPLAYERSFILE" | paste -sd, - | sed 's/,/, /g')
 		LIGHTONLINELIST=${LIGHTONLINELIST:-nobody}
 		LIGHTOFFLINELIST=${LIGHTOFFLINELIST:-nobody}
-		VSSCURRENTMODIFIER=$(cat $CWD/../launcher/launcher-args)
+		VSSCURRENTMODIFIER=$(cat "$VHSERVERLAUNCHERARGS")
 		echo -n "{\"title\":\"$(T server_status_title)\",
-		\"embeds\":[{\"title\":\"$(T online)\",\"color\":3066993,
+		\"embeds\":[{\"title\":\"${SERVER_NAME_TITLE}\",\"color\":3066993,
 		\"fields\":[
+		${CONNECTION_FIELDS}
 		{\"name\":\"$(T cpu)\",\"value\": \"${CPUUSAGE}%\",\"inline\":true},
 		{\"name\":\"$(T ram)\",\"value\": \"${RAMUSAGE}%\",\"inline\":true},
 		{\"name\":\"$(T version)\",\"value\": \"${VERSION_LABEL}\",\"inline\":false},
@@ -100,19 +170,24 @@ then
 		{\"name\":\"$(T last_save)\",\"value\": \"${LAST_WORLD_SAVE_TS}\",\"inline\":false},
 		{\"name\":\"seed\",\"value\": \"||${CURRENT_SEED}||\",\"inline\":true},
 		{\"name\":\"BepInEx\",\"value\": \"${BEPINEXVERSION_LABEL}\",\"inline\":true},
-		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%F.%T')\"},
+		${R2MODMANCODE_FIELD}
+		{\"name\":\"$(T last_check)\",\"value\": \"$(date +'%d/%m/%Y %H:%M:%S')\"},
 		{\"name\":\"$(T online)\",\"value\": \"${LIGHTONLINELIST}\",\"inline\":true},
 		{\"name\":\"$(T offline)\",\"value\": \"${LIGHTOFFLINELIST}\",\"inline\":true}
-		]}
-		]}"
+		]
+		}${LOGS_EMBED}]}"
 	fi
 	exit 0
 fi
 
 echo -e ">=VALHEIM SERVER STATUS @ `date +'%F.%T'`=<"
-if [ -z "$VALHEIM_PID" ]
+if [ "$SERVER_STATE" != 'online' ]
 then
-       echo -e "SERVER OFFLINE !"
+       if [ "$SERVER_STATE" = 'starting' ]; then
+	       echo -e "SERVER STARTING !"
+       else
+	       echo -e "SERVER OFFLINE !"
+       fi
        echo -e "\n**Server version**"
        echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
        echo -e "\n**$(T last_start)**"
@@ -121,13 +196,21 @@ then
        echo -e "${LAST_WORLD_SAVE_TS}"
        echo -e "\n**Server seed**"
        echo -e "${CURRENT_SEED}"
+       if [ -n "$R2MODMANCODE_FIELD" ]; then
+	       echo -e "\n**R2Modman profile code**"
+	       echo -e "${R2MODMANCODE}"
+       fi
        exit 1
 else
        echo -e "SERVER ONLINE !"
 fi
 
 echo -e "\n**Server session running since**"
-ps -p "$VALHEIM_PID" -o lstart,etime
+if [ -n "$VALHEIM_PID" ]; then
+	ps -p "$VALHEIM_PID" -o lstart,etime
+else
+	echo "unknown"
+fi
 
 echo -e "\n**Server version**"
 echo -e "${CURRENT_VERSION} (${CURRENT_VERSION_TS})"
@@ -137,6 +220,10 @@ echo -e "\n**$(T last_save)**"
 echo -e "${LAST_WORLD_SAVE_TS}"
 echo -e "\n**Server seed**"
 echo -e "${CURRENT_SEED}"
+if [ -n "$R2MODMANCODE_FIELD" ]; then
+	echo -e "\n**R2Modman profile code**"
+	echo -e "${R2MODMANCODE}"
+fi
 
 echo -e "\n**Server consumption**"
 echo -e "CPU ($TOTALCPU cores) : $CPUUSAGE%"

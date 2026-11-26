@@ -1,18 +1,12 @@
 #!/bin/bash
 # author: laryakan, date 2021/03/12
 
-# Checking .env init
-if [ -z "$VSSDIR" ]
-then
-   # Basic env init
-   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-   source "$CWD/.env"
-else
-   CWD="$VSSDIR"
-fi
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/lib/config.sh"
+vss_load_config "$CWD" || exit 1
 
 # Valheim Server log filter standalone pipe
-# This script brings take the logpath from .env, tail and pipe output on vss.log-filter to catch interesting logs
+# This script tails the selected server's log path and pipes output to vss.log-filter.
 # for status purpose
 
 if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];

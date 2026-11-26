@@ -2,14 +2,11 @@
 # author: laryakan, date 2021/03/12
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/../crash.log"
-# Test by-pass
-if [ "${DEBUGMODE:-0}" -eq 1 ];
-then
-   source "$CWD/../.env.test"
-else
-   source "$CWD/../.env"
+if [ "${1:-}" != "--notification" ]; then
+	exec 2>>"$CWD/../crash.log"
 fi
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
 source "$CWD/../i18n.sh"
 
 # Sending status messages on Discord script
@@ -26,9 +23,10 @@ then
 fi
 
 # Not status send
-if [ "$1" != "--status" ]
-then
+if [ "$1" != "--status" ]; then
 	MESSAGEID="$1"
+elif [ -z "${MESSAGEID:-}" ]; then
+	MESSAGEID="${LASTLOGMESSAGEID:-${SERVERCONNECTIONINFOMESSAGEID:-}}"
 fi
 CONTENT="$(</dev/stdin)"
 
@@ -42,6 +40,15 @@ then
 		''|*[!0-9]*) MESSAGEID='' ;;
 		*) ;;
 	esac
+fi
+
+if [ "$1" = "--notification" ]; then
+	if [ "${DEBUGMODE:-0}" = 1 ]; then
+		echo "Discord notification not sent: debug mode is enabled." >&2
+		exit 1
+	fi
+	curl -sS --fail --max-time 15 -o /dev/null -H "Content-Type: application/json" -X POST -d "$CONTENT" "$WHURL"
+	exit $?
 fi
 
 if [ -n "${MESSAGEID:-}" ]
@@ -61,7 +68,7 @@ then
 				if [ "$1" = "--status" ]
 				then
 					echo -e "Status message has been deleted from the server, \
-	a new message will be sent, please fill the .env file. | Content : "$CONTENT" "$WHURL/messages/$MESSAGEID"" >&2
+	a new message will be sent, please check .env.$VSS_SERVER_NAME. | Content : "$CONTENT" "$WHURL/messages/$MESSAGEID"" >&2
 				fi
 				MESSAGEID=''
 			else

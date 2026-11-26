@@ -5,27 +5,14 @@
 # Manual installation here https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/
 
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-exec 2>>"$CWD/../crash.log"
-if [ "${DEBUGMODE:-0}" -eq 1 ];
-then
-   source "$CWD/../.env.test"
-else
-   source "$CWD/../.env"
-fi
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/bepinex.sh"
 
-BEPINEXFILES=$( ls -1tr "$VSSBEPINEXDIR/" 2>/dev/null )
+vss_bepinex_remove_legacy_server_links "$VHSERVERDIR" || {
+    printf 'Could not remove legacy VSS BepInEx links from %s\n' "$VHSERVERDIR" >&2
+    exit 1
+}
 
-echo "BepInEx_Valheim files found in $VSSBEPINEXDIR:"
-for file in $BEPINEXFILES; do
-    if [ "${DEBUGMODE:-0}" -eq 1 ];
-    then
-        echo "DEBUG: Removed link to $VSSBEPINEXDIR/$file from $VHSERVERDIR/$file"
-        continue
-    fi
-    if [ ! -e "$VHSERVERDIR/$file" ]; then
-        continue
-    fi
-    rm "$VHSERVERDIR/$file"
-done
-
-echo "Remember to set VSSBEPINEXENABLED=0 in your .env file to disable BepInEx_Valheim for VSS : Can be done through ./setup"
+printf 'BepInEx is disabled for profile %s. Its profile files were retained at %s.\n' \
+    "$VSS_SERVER_NAME" "$VSSBEPINEXDIR"

@@ -1,15 +1,8 @@
 #!/bin/bash
 
-# Basic env init
-# Checking .env init
-if [ -z "$VSSDIR" ]
-then
-   # Basic env init
-   CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-   source "$CWD/.env"
-else
-   CWD="$VSSDIR"
-fi
+CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/lib/config.sh"
+vss_load_config "$CWD" || exit 1
 
 mkdir -p "$VALHEIMSERVERLOGDIR"
 
@@ -26,6 +19,6 @@ while read LINE; do
    # Remove debug and blank lines
    if [ "$1" != '--tail-pipe-input' ]
    then
-      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/`date +%Y-%m-%d`.stderr.log" 
+      echo ${LINE} |sed "$NO_DEBUG_FILTER" >> "$VALHEIMSERVERLOGDIR/$(date +%Y-%m-%d).$VSS_SERVER_NAME.stderr.log"
    fi
 done

@@ -1,4 +1,4 @@
-# ln -s </path/to/this/vss.pipe.service> /etc/systemd/system/vss.pipe.service
+# ln -s </path/to/this/vss.pipe.service> /etc/systemd/system/vss.pipe.<world>.service
 # sudo systemctl daemon-reload
 # sudo service vss.pipe start
 # systemctl enable vss.pipe.service -> this to auto-start at system reboot
@@ -15,6 +15,7 @@ StartLimitInterval=60s
 StartLimitBurst=3
 User=###EXECUSER###
 Group=###EXECUSER###
+Environment=VSS_SERVER_NAME=###VSSSERVERNAME###
 ExecStart=###VSSPIPE###
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s INT $MAINPID

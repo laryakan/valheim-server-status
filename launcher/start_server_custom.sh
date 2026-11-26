@@ -1,30 +1,15 @@
 #!/bin/bash
 # Basic env init
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+source "$CWD/../lib/config.sh"
+vss_load_config "$CWD/.." || exit 1
+source "$CWD/../lib/bepinex.sh"
 
-# Test by-pass
-if [ "${DEBUGMODE:-0}" -eq 0 ];
-then
-  source "$CWD/../.env"
-else
-  source "$CWD/../.env.test"
-fi
-
-export templdpath=$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=./linux64:$LD_LIBRARY_PATH
+export templdpath="${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="./linux64${templdpath:+:$templdpath}"
 export SteamAppId=892970
 
-if [ "${VSSBEPINEXENABLED:-0}" -eq 1 ];
-then
-  # BepInEx-specific settings
-  ####
-  export DOORSTOP_ENABLED=1
-  export DOORSTOP_TARGET_ASSEMBLY="$VHSERVERDIR/BepInEx/core/BepInEx.Preloader.dll"
-
-  export LD_LIBRARY_PATH="$VHSERVERDIR/doorstop_libs:$LD_LIBRARY_PATH"
-  export LD_PRELOAD="libdoorstop.so:$LD_PRELOAD"
-  ####
-fi
+vss_bepinex_configure_runtime || exit 1
 
 
 
@@ -33,13 +18,13 @@ TODAY=`date +%Y-%m-%d`
 echo "Server running through VSS custom launcher, you can find logs in $VALHEIMSERVERLOGPATH"
 echo "Starting server PRESS CTRL-C to exit (or stop the service if you have one)"
 
-if [ ! -f "$CWD/launcher-args" ]; then
-  cp "$CWD/../examples/launcher-args" "$CWD/launcher-args"
+if [ ! -f "$VHSERVERLAUNCHERARGS" ]; then
+  cp "$CWD/../examples/launcher-args" "$VHSERVERLAUNCHERARGS"
 fi
 
 # Tip: Make a local copy of this script to avoid it being overwritten by steam.
 # NOTE: Minimum password length is 5 characters & Password cant be in the server name.
-# NOTE: You need to make sure the ports 2456-2458 (or the one specified +2) is being forwarded to
+# NOTE: You need to make sure the ports 2456-2457 (or the one specified +1) is being forwarded to
 #   your server through your local router & firewall.
 # Redirect stdout to log-filter and stderr to another file
 LAUNCH_ARGS=(
@@ -52,7 +37,7 @@ LAUNCH_ARGS=(
   # -world_seed "$VHSERVERSEED"
   -savedir "$VHSERVERSAVEDIR"
   -password "$VHSERVERPASSWD"
-  $( cat $CWD/launcher-args)
+  $( cat "$VHSERVERLAUNCHERARGS")
   # Do not use -logfile "$VALHEIMSERVERLOGDIR/$TODAY.log" because it will break the log filter
   #-logFile "$VALHEIMSERVERLOGDIR/$TODAY.log"
 )
